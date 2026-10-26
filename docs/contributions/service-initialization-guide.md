@@ -17,6 +17,7 @@ Settings for every project:
 | Language | Java |
 | Java version | **21** |
 | Packaging | Jar |
+| Configuration (Initializr option) | **YAML**, not Properties |
 | Configuration file | `src/main/resources/application.yaml` |
 | Spring Boot | **4.1.2** (same exact version as the Identity service's `pom.xml`) |
 
@@ -189,12 +190,12 @@ Do not add Spring Web MVC, JPA, PostgreSQL Driver, Flyway or RabbitMQ to this ga
 
 1. Clone the shared repository and switch to `dev`.
 2. **Create a new setup branch for your assigned service** (`setup/<artifact>`, see Section 2). One service per branch.
-3. Open Spring Initializr and enter the shared settings and your exact names from Section 2.
+3. Open Spring Initializr and enter the shared settings and your exact names from Section 2. Set **Configuration** to **YAML** (not Properties) so Initializr generates `application.yaml` for you.
 4. Add your dependencies from Section 4.
 5. Click **Generate** and extract the ZIP **outside** the repository first.
 6. Move the generated application folder into `services/`.
 7. Check that `pom.xml` is directly inside `services/<artifact>/`; avoid an extra nested directory.
-8. The configuration file must be `src/main/resources/application.yaml` in YAML syntax. If Initializr generated `application.properties`, convert its contents and rename it to `application.yaml`. Do not just rename nonempty properties syntax.
+8. Check that the generated configuration file is `src/main/resources/application.yaml` and uses YAML syntax (nested keys, not `key=value`). If you forgot to select YAML and got `application.properties`, convert its contents to YAML and rename it to `application.yaml`. Do not just rename a file that still has properties syntax.
 9. Keep the generated main class (see Section 2) and the test class in the matching package.
 10. Review and commit the scaffold through a pull request into `dev`.
 
