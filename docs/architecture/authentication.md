@@ -44,6 +44,8 @@ Header: `alg: RS256` and `kid` (the key ID, used during key rotation).
 - No personal data in tokens: no email, phone, name or address. Tokens end up in logs and browser tools.
 - A role change (approval, suspension) takes effect at the user's next refresh, at most 15 minutes later. That delay is accepted; API keys of a suspended merchant stop working immediately because identity checks the merchant on every exchange.
 - Every user starts with `CUSTOMER`. Approval adds `MERCHANT` or `COURIER`. `DISPATCHER` accounts can only be created by another dispatcher (or the startup bootstrap).
+- A new dispatcher's tokens carry **no roles** until they replace the initial password, so a password someone else chose can't be used to act as a dispatcher.
+- With a single audience, `aud` is sent as a string (`"aud": "swiftdrop-api"`), which the JWT standard allows. Spring accepts both the string and the array form.
 
 ## How to verify tokens in your service
 

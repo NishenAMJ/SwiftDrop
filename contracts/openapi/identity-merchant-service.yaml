@@ -274,8 +274,11 @@ paths:
       operationId: changePassword
       summary: Change the signed-in user's password
       description: |
-        Revokes all of the user's refresh tokens (logs out every other device). For a user
-        who only has Google login, `currentPassword` is omitted and this sets a first password.
+        Revokes all of the user's refresh tokens, which logs out every other device, and sets a
+        new `sd_refresh` cookie so this device stays logged in. Clears `mustChangePassword`; call
+        `POST /api/v1/auth/refresh` afterwards to get an access token with the user's roles.
+        For a user who only has Google login, `currentPassword` is omitted and this sets a first
+        password. Not allowed with API-key tokens.
       requestBody:
         required: true
         content:
@@ -284,10 +287,14 @@ paths:
       responses:
         '204':
           description: Password changed
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403':
-          description: '`INVALID_CREDENTIALS`: current password is wrong'
+          description: |
+            `INVALID_CREDENTIALS`: current password is wrong. `FORBIDDEN`: called with an
+            API-key token.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -335,7 +342,8 @@ paths:
       summary: Create a dispatcher account (dispatcher only)
       description: |
         Creates an `ACTIVE` user with only the `DISPATCHER` role. The new dispatcher must change
-        the initial password at first login (`mustChangePassword: true`).
+        the initial password at first login (`mustChangePassword: true`); until then their access
+        tokens carry no roles, so they can only read their account and change the password.
       requestBody:
         required: true
         content:
@@ -344,10 +352,6 @@ paths:
       responses:
         '201':
           description: Dispatcher created
-          headers:
-            Location:
-              schema: { type: string }
-              description: URL of the new user
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
@@ -1025,7 +1029,9 @@ components:
         phoneNumber: { $ref: '#/components/schemas/PhoneNumber' }
         roles:
           type: array
-          description: Roles that are active right now (the same list the access token carries)
+          description: |
+            Roles that are active right now. Access tokens carry the same list, except that
+            while `mustChangePassword` is true they carry none.
           items: { $ref: '#/components/schemas/Role' }
           uniqueItems: true
         status: { $ref: '#/components/schemas/UserStatus' }
