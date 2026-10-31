@@ -88,6 +88,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/auth/login:
     post:
@@ -122,6 +123,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/auth/refresh:
     post:
@@ -152,6 +154,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/auth/logout:
     post:
@@ -179,6 +182,10 @@ paths:
         For merchant systems (server to server). Send the API key in `X-API-Key`; receive a
         short-lived access token with `roles: ["MERCHANT"]`, the `merchant_id` claim and
         `auth: "api_key"`. No refresh token: call this again when the token expires.
+
+        Within identity, that token is accepted only by `GET /api/v1/merchants/me`. Other
+        services treat it as a normal `MERCHANT` token and may refuse sensitive actions when
+        `auth` is `api_key`.
       security:
         - apiKeyAuth: []
       responses:
@@ -197,6 +204,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /oauth2/authorization/google:
     get:
@@ -213,6 +221,15 @@ paths:
         If Google reports a verified email that matches an existing password account, the
         Google login is linked to that account. A new Google user gets a `CUSTOMER` account
         and `user.registered` is published.
+
+        On failure the browser goes to `{FRONTEND_BASE_URL}/auth/callback?error=<reason>`, with no
+        cookie set:
+        - `email_not_verified`: Google didn't confirm the email address
+        - `account_suspended`: the SwiftDrop account is suspended
+        - `account_mismatch`: the email belongs to an account linked to a different Google account
+        - `google_login_failed`: cancelled at Google, timed out, or anything else
+
+        Only available when identity has Google credentials configured; otherwise `401`.
       security: []
       responses:
         '302':
@@ -274,8 +291,11 @@ paths:
       operationId: changePassword
       summary: Change the signed-in user's password
       description: |
-        Revokes all of the user's refresh tokens (logs out every other device). For a user
-        who only has Google login, `currentPassword` is omitted and this sets a first password.
+        Revokes all of the user's refresh tokens, which logs out every other device, and sets a
+        new `sd_refresh` cookie so this device stays logged in. Clears `mustChangePassword`; call
+        `POST /api/v1/auth/refresh` afterwards to get an access token with the user's roles.
+        For a user who only has Google login, `currentPassword` is omitted and this sets a first
+        password. Not allowed with API-key tokens.
       requestBody:
         required: true
         content:
@@ -284,13 +304,18 @@ paths:
       responses:
         '204':
           description: Password changed
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403':
-          description: '`INVALID_CREDENTIALS`: current password is wrong'
+          description: |
+            `INVALID_CREDENTIALS`: current password is wrong. `FORBIDDEN`: called with an
+            API-key token.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/v1/users:
     get:
@@ -335,7 +360,8 @@ paths:
       summary: Create a dispatcher account (dispatcher only)
       description: |
         Creates an `ACTIVE` user with only the `DISPATCHER` role. The new dispatcher must change
-        the initial password at first login (`mustChangePassword: true`).
+        the initial password at first login (`mustChangePassword: true`); until then their access
+        tokens carry no roles, so they can only read their account and change the password.
       requestBody:
         required: true
         content:
@@ -344,10 +370,6 @@ paths:
       responses:
         '201':
           description: Dispatcher created
-          headers:
-            Location:
-              schema: { type: string }
-              description: URL of the new user
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
@@ -370,6 +392,7 @@ paths:
         Creates a `PENDING` merchant application for the signed-in user. If the user's previous
         application was `REJECTED`, this replaces its details and sets it back to `PENDING`
         (same `merchantId`). Each user has at most one merchant. Publishes `merchant.submitted`.
+        Requires the `CUSTOMER` role, so dispatcher accounts can't apply (`403`).
       requestBody:
         required: true
         content:
@@ -392,6 +415,8 @@ paths:
       tags: [Merchants]
       operationId: listMerchants
       summary: List merchants (dispatcher only)
+      description: Oldest submission first by default (`sort=submittedAt,asc`), so the approval queue reads top-down.
+        Sortable by `submittedAt`, `createdAt`, `businessName`.
       parameters:
         - name: status
           in: query
@@ -426,6 +451,7 @@ paths:
       tags: [Merchants]
       operationId: getMyMerchant
       summary: The signed-in user's merchant application or account
+      description: The only identity endpoint that also accepts API-key tokens (from `POST /api/v1/auth/token`).
       responses:
         '200':
           description: The user's merchant
@@ -540,7 +566,10 @@ paths:
       tags: [API keys]
       operationId: listApiKeys
       summary: List the signed-in merchant's API keys
-      description: Never returns the secret part of a key, only its prefix.
+      description: |
+        Never returns the secret part of a key, only its prefix. Managing keys needs a person's
+        token (password or Google login); API-key tokens get `403`, so a leaked key can't be used to
+        create more keys.
       responses:
         '200':
           description: All keys, including revoked ones
@@ -605,7 +634,7 @@ paths:
       description: |
         Creates a `PENDING` courier application for the signed-in user. A courier is identified
         by their user ID. If the previous application was `REJECTED`, this replaces its details
-        and sets it back to `PENDING`. Publishes `courier.submitted`.
+        and sets it back to `PENDING`. Publishes `courier.submitted`. Requires the `CUSTOMER` role.
 
         Identity owns only what is needed to approve a courier. Operational courier data
         (availability, zones, assignments) belongs to delivery-operations-service, which
@@ -632,6 +661,7 @@ paths:
       tags: [Couriers]
       operationId: listCouriers
       summary: List couriers (dispatcher only)
+      description: Oldest submission first by default (`sort=submittedAt,asc`). Sortable by `submittedAt`, `createdAt`.
       parameters:
         - name: status
           in: query
@@ -826,6 +856,17 @@ components:
       schema: { type: string, format: uuid }
 
   responses:
+    TooManyRequests:
+      description: |
+        `RATE_LIMITED`: too many attempts. Wait the number of seconds in `Retry-After`. Login also
+        counts wrong passwords per account, across all addresses.
+      headers:
+        Retry-After:
+          description: Seconds to wait before trying again
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     ValidationFailed:
       description: '`VALIDATION_FAILED`: see `errors` for each field'
       content:
@@ -947,9 +988,11 @@ components:
           type: string
           description: |
             Machine-readable error code. Identity uses the shared codes plus:
+            `CONFLICT` (409: someone else changed the record at the same moment; reload and retry),
             `INVALID_CREDENTIALS`, `EMAIL_ALREADY_REGISTERED`, `ACCOUNT_SUSPENDED`,
             `REFRESH_TOKEN_INVALID`, `API_KEY_INVALID`, `API_KEY_LIMIT_REACHED`,
-            `MERCHANT_NOT_ACTIVE`, `APPLICATION_ALREADY_EXISTS`, `INVALID_STATUS_TRANSITION`.
+            `MERCHANT_NOT_ACTIVE`, `APPLICATION_ALREADY_EXISTS`, `INVALID_STATUS_TRANSITION`,
+            `RATE_LIMITED` (429).
         errors:
           type: array
           items:
@@ -1025,7 +1068,9 @@ components:
         phoneNumber: { $ref: '#/components/schemas/PhoneNumber' }
         roles:
           type: array
-          description: Roles that are active right now (the same list the access token carries)
+          description: |
+            Roles that are active right now. Access tokens carry the same list, except that
+            while `mustChangePassword` is true they carry none.
           items: { $ref: '#/components/schemas/Role' }
           uniqueItems: true
         status: { $ref: '#/components/schemas/UserStatus' }

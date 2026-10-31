@@ -1,4 +1,4 @@
-package com.swiftdrop.identity_merchant_service;
+package com.swiftdrop.identity;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

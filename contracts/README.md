@@ -51,7 +51,7 @@ contracts/
 
 Spring Boot supports this format through `ProblemDetail`. Never put stack traces, SQL or internal class names in `detail`.
 
-Common codes that all services share: `VALIDATION_FAILED` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `INTERNAL_ERROR` (500). Services add their own specific codes in their contract.
+Common codes that all services share: `VALIDATION_FAILED` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `RATE_LIMITED` (429, with a `Retry-After` header in seconds), `INTERNAL_ERROR` (500). Services add their own specific codes in their contract.
 
 ## Event conventions
 

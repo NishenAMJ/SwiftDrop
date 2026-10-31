@@ -44,6 +44,8 @@ Header: `alg: RS256` and `kid` (the key ID, used during key rotation).
 - No personal data in tokens: no email, phone, name or address. Tokens end up in logs and browser tools.
 - A role change (approval, suspension) takes effect at the user's next refresh, at most 15 minutes later. That delay is accepted; API keys of a suspended merchant stop working immediately because identity checks the merchant on every exchange.
 - Every user starts with `CUSTOMER`. Approval adds `MERCHANT` or `COURIER`. `DISPATCHER` accounts can only be created by another dispatcher (or the startup bootstrap).
+- A new dispatcher's tokens carry **no roles** until they replace the initial password, so a password someone else chose can't be used to act as a dispatcher.
+- With a single audience, `aud` is sent as a string (`"aud": "swiftdrop-api"`), which the JWT standard allows. Spring accepts both the string and the array form.
 
 ## How to verify tokens in your service
 
@@ -82,6 +84,13 @@ The **gateway** uses the same properties (they work for WebFlux too). It rejects
 3. Identity sets the refresh cookie and redirects to `{FRONTEND_BASE_URL}/auth/callback`.
 4. The Angular app calls `POST /api/v1/auth/refresh` to get its first access token. No token ever appears in a URL.
 
+On failure, step 3 redirects to `{FRONTEND_BASE_URL}/auth/callback?error=<reason>` instead (`email_not_verified`, `account_suspended`, `account_mismatch`, `google_login_failed`), and the Angular page shows a message. Rules:
+
+- Only emails Google marks as **verified** are used; otherwise anyone could claim an address and take over the account registered with it.
+- An account is linked to at most one Google account. A different Google account with the same email is refused (`account_mismatch`).
+- Linking keeps the existing name and password; the user can then log in either way. A Google-only user can set a password later (`POST /api/v1/users/me/password` without `currentPassword`).
+- The redirect-and-callback step uses a short-lived session on identity, ended when login finishes. With several identity instances this needs sticky sessions (or a cookie-based store later).
+
 ### Refresh and logout (Angular)
 - Keep the access token **in memory only** (a service/signal), never in `localStorage`.
 - The refresh token is an opaque random value in an `HttpOnly; Secure; SameSite=Strict` cookie named `sd_refresh`, sent only to `/api/v1/auth/*`. JavaScript cannot read it.
@@ -96,6 +105,8 @@ The **gateway** uses the same properties (they work for WebFlux too). It rejects
 4. The system calls other services with `Authorization: Bearer <token>`, exactly like the web app.
 
 So the gateway and other services only ever see JWTs; API keys are handled entirely inside identity.
+
+Inside identity, an API-key token is accepted only by `GET /api/v1/merchants/me`. It cannot manage API keys, change the password or edit the owner's account, so a leaked key can't be turned into more access. Keys stop working as soon as the merchant is suspended, because identity checks the merchant's status on every exchange.
 
 ## Signing keys
 
@@ -120,7 +131,18 @@ So the gateway and other services only ever see JWTs; API keys are handled entir
 
 - Passwords: BCrypt, 8–64 characters, at least one letter and one digit.
 - Login returns the same error for unknown email and wrong password (`INVALID_CREDENTIALS`).
-- Login and API-key exchange are rate limited per IP and per account (details in the implementation PR).
+- Rate limits (per identity instance, configurable under `swiftdrop.identity.rate-limit`). Over the limit: `429 RATE_LIMITED` with `Retry-After`.
+
+  | What | Default |
+  |---|---|
+  | Register | 10 per hour per IP |
+  | Login attempts | 30 per minute per IP |
+  | Wrong passwords for one account, from any IP | 10 per 15 minutes; a successful login clears the count |
+  | Refresh | 120 per minute per IP |
+  | API-key exchange | 60 per minute per IP |
+  | Wrong current password on password change | 5 per 15 minutes per user |
+
+  Behind the gateway, identity sees the gateway's address unless forwarded headers are configured (see the service README), so the per-IP limits need that before going through the gateway.
 - Never log passwords, tokens, refresh tokens or API keys. Log the user ID and `jti` instead.
 - Error responses never include stack traces or internal details.
 

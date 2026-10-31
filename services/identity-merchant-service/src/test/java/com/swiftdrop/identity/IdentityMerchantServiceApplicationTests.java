@@ -1,4 +1,4 @@
-package com.swiftdrop.identity_merchant_service;
+package com.swiftdrop.identity;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
