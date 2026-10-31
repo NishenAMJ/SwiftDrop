@@ -26,6 +26,31 @@ spring:
     create-schemas: false
     locations: classpath:db/migration
 
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+
+swiftdrop:
+  identity:
+    jwt:
+      issuer: swiftdrop-identity
+      audience: swiftdrop-api
+      access-token-ttl: 15m
+      # PKCS#8 PEM file. Empty: a temporary key is generated at startup (tokens die on restart).
+      private-key-path: ${IDENTITY_JWT_PRIVATE_KEY_PATH:}
+    refresh-token:
+      ttl: 14d
+      cookie-name: sd_refresh
+      cookie-path: /api/v1/auth
+      # Browsers accept Secure cookies on http://localhost, so this stays true locally too.
+      cookie-secure: ${IDENTITY_COOKIE_SECURE:true}
+      reuse-grace: 10s
+    bootstrap:
+      dispatcher-email: ${DISPATCHER_BOOTSTRAP_EMAIL:}
+      dispatcher-password: ${DISPATCHER_BOOTSTRAP_PASSWORD:}
+      dispatcher-name: ${DISPATCHER_BOOTSTRAP_NAME:SwiftDrop Dispatcher}
+
 management:
   endpoints:
     web:
