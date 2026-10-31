@@ -1,3 +1,27 @@
+server:
+  port: 8081
+
 spring:
- application:
-   name: identity-merchant-service
+  application:
+    name: identity-merchant-service
+
+  datasource:
+    url: ${IDENTITY_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
+    username: ${IDENTITY_DB_USER:identity_merchant_user}
+    password: ${IDENTITY_DB_PASSWORD}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: identity_merchant
+
+  flyway:
+    enabled: true
+    default-schema: identity_merchant
+    schemas:
+      - identity_merchant
+    create-schemas: false
+    locations: classpath:db/migration
