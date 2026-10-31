@@ -99,6 +99,12 @@ public class User {
         this.updatedAt = now;
     }
 
+    /** Remembers the Google account that may log in to this user. */
+    void linkGoogle(String googleSubject, Instant now) {
+        this.googleSubject = googleSubject;
+        this.updatedAt = now;
+    }
+
     void setMustChangePassword(boolean mustChangePassword) {
         this.mustChangePassword = mustChangePassword;
     }

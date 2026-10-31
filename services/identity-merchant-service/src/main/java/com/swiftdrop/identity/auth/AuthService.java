@@ -20,6 +20,7 @@ import com.swiftdrop.identity.user.UserService;
 public class AuthService {
 
     static final String PASSWORD = "password";
+    static final String GOOGLE = "google";
 
     private final UserService userService;
     private final AccessTokenService accessTokens;
@@ -55,6 +56,17 @@ public class AuthService {
         return new AuthResult(tokenResponse(user, rotation.authMethod()), rotation.rawToken());
     }
 
+    /**
+     * Finishes Google login. Returns only a refresh token: the browser is redirected to the
+     * frontend, which then calls /refresh for its first access token, so no token is put in a URL.
+     */
+    @Transactional
+    public String signInWithGoogle(String googleSubject, String verifiedEmail, String name) {
+        User user = userService.signInWithGoogle(googleSubject, verifiedEmail, name);
+        userService.requireActive(user);
+        return refreshTokens.create(user.getId(), GOOGLE);
+    }
+
     public void logout(String rawRefreshToken) {
         refreshTokens.revoke(rawRefreshToken);
     }
@@ -65,7 +77,7 @@ public class AuthService {
      */
     @Transactional
     public String changePassword(UUID userId, String authMethod, ChangePasswordRequest request) {
-        if (!PASSWORD.equals(authMethod) && !"google".equals(authMethod)) {
+        if (!PASSWORD.equals(authMethod) && !GOOGLE.equals(authMethod)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Sign in as a person to change the password.");
         }
         userService.changePassword(userId, request.currentPassword(), request.newPassword());

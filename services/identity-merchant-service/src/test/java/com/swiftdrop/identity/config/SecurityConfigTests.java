@@ -34,6 +34,12 @@ class SecurityConfigTests {
     }
 
     @Test
+    void googleLoginIsOffWithoutCredentials() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/google"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void otherActuatorEndpointsAreNotPublic() throws Exception {
         mockMvc.perform(get("/actuator/env"))
             .andExpect(status().isUnauthorized());

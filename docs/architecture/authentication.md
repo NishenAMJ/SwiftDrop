@@ -84,6 +84,13 @@ The **gateway** uses the same properties (they work for WebFlux too). It rejects
 3. Identity sets the refresh cookie and redirects to `{FRONTEND_BASE_URL}/auth/callback`.
 4. The Angular app calls `POST /api/v1/auth/refresh` to get its first access token. No token ever appears in a URL.
 
+On failure, step 3 redirects to `{FRONTEND_BASE_URL}/auth/callback?error=<reason>` instead (`email_not_verified`, `account_suspended`, `account_mismatch`, `google_login_failed`), and the Angular page shows a message. Rules:
+
+- Only emails Google marks as **verified** are used; otherwise anyone could claim an address and take over the account registered with it.
+- An account is linked to at most one Google account. A different Google account with the same email is refused (`account_mismatch`).
+- Linking keeps the existing name and password; the user can then log in either way. A Google-only user can set a password later (`POST /api/v1/users/me/password` without `currentPassword`).
+- The redirect-and-callback step uses a short-lived session on identity, ended when login finishes. With several identity instances this needs sticky sessions (or a cookie-based store later).
+
 ### Refresh and logout (Angular)
 - Keep the access token **in memory only** (a service/signal), never in `localStorage`.
 - The refresh token is an opaque random value in an `HttpOnly; Secure; SameSite=Strict` cookie named `sd_refresh`, sent only to `/api/v1/auth/*`. JavaScript cannot read it.

@@ -68,6 +68,8 @@ Everything else returns `401` without a token. Errors use Problem Details with a
 | `DISPATCHER_BOOTSTRAP_EMAIL`, `DISPATCHER_BOOTSTRAP_PASSWORD` | no | (none) | Creates the first dispatcher at startup if no dispatcher exists yet. It must change its password at first login. |
 | `DISPATCHER_BOOTSTRAP_NAME` | no | `SwiftDrop Dispatcher` | |
 | `IDENTITY_COOKIE_SECURE` | no | `true` | Keep `true`; browsers accept Secure cookies on `http://localhost`. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | (none) | Turns on Google login when both are set. See below. |
+| `FRONTEND_BASE_URL` | no | `http://localhost:4200` | After Google login the browser goes to `{FRONTEND_BASE_URL}/auth/callback`. |
 | `IDENTITY_RATE_LIMIT_ENABLED` | no | `true` | Turn off only for load tests. The limits themselves are in `application.yaml` under `swiftdrop.identity.rate-limit`. |
 
 Make a signing key (keep it outside the repository):
@@ -76,6 +78,15 @@ Make a signing key (keep it outside the repository):
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out ~/swiftdrop-jwt-key.pem
 export IDENTITY_JWT_PRIVATE_KEY_PATH=~/swiftdrop-jwt-key.pem
 ```
+
+## Google login
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application**.
+2. Add the authorized redirect URI `http://localhost:8081/login/oauth2/code/google`.
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (never commit them), then start the service.
+4. Open http://localhost:8081/oauth2/authorization/google in a browser. After signing in at Google you land on `http://localhost:4200/auth/callback` with the `sd_refresh` cookie set; the Angular page then calls `POST /api/v1/auth/refresh`.
+
+Errors arrive as `/auth/callback?error=email_not_verified | account_suspended | account_mismatch | google_login_failed`.
 
 ## How it works
 
@@ -87,11 +98,12 @@ export IDENTITY_JWT_PRIVATE_KEY_PATH=~/swiftdrop-jwt-key.pem
 - **Merchant tokens** carry `merchant_id`.
 - **API keys:** `sd_live_` + 32 random characters, shown once, stored as a SHA-256 hash, at most 5 active per merchant. `POST /api/v1/auth/token` exchanges a key for a 15-minute `MERCHANT` token (`auth: "api_key"`). Keys stop working immediately when the merchant is suspended or the key is revoked. Inside identity such a token can only read `GET /api/v1/merchants/me`.
 - **Rate limits:** per IP on register, login, refresh and API-key exchange, and per account on wrong passwords (login and password change), so guessing one person's password from many addresses is slowed down too. Over the limit: `429 RATE_LIMITED` with `Retry-After`. Defaults are in the [auth design](../../docs/architecture/authentication.md#security-rules). Counts are kept in memory per instance.
+- **Google login:** finds the user by Google ID, else links the account with the same verified email, else creates a CUSTOMER. Ends with the refresh cookie and a redirect; no token in the URL.
 - **Events** (`user.*`, `merchant.*`, `courier.*`) are written to the `outbox_events` table in the same transaction as the change. They are not sent anywhere yet (see below).
 
 ## Not done yet
 
-- Google login (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_BASE_URL`).
+- Trying Google login against real Google (needs the credentials above; the flow is covered by tests up to Google's own screen).
 - Publishing outbox events to RabbitMQ. Waits for a RabbitMQ container in `compose.yaml`; adding the dependency earlier would make `/actuator/health` report `DOWN`.
 - Rate limits shared across several instances (needs a shared store such as Redis; one instance is fine for now).
 

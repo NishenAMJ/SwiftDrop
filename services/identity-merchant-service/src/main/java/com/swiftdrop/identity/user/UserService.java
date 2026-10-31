@@ -53,6 +53,55 @@ public class UserService {
         return user;
     }
 
+    /**
+     * Google login, after Google has confirmed the email address. In order:
+     * <ol>
+     *   <li>the user who already logged in with this Google account;</li>
+     *   <li>otherwise the account with the same email, which gets linked to Google;</li>
+     *   <li>otherwise a new active CUSTOMER without a password ({@code user.registered}).</li>
+     * </ol>
+     * The caller must only pass emails that Google reports as verified; linking an unverified
+     * email would let anyone take over the account registered with it.
+     */
+    @Transactional
+    public User signInWithGoogle(String googleSubject, String verifiedEmail, String name) {
+        User known = users.findByGoogleSubject(googleSubject).orElse(null);
+        if (known != null) {
+            return known;
+        }
+        Instant now = clock.instant();
+        String email = normalizeEmail(verifiedEmail);
+        User sameEmail = users.findByEmail(email).orElse(null);
+        if (sameEmail != null) {
+            if (sameEmail.getGoogleSubject() != null) {
+                // The email belongs to an account already linked to a different Google account.
+                throw new ApiException(HttpStatus.CONFLICT, "GOOGLE_ACCOUNT_MISMATCH",
+                        "This email is linked to a different Google account.");
+            }
+            sameEmail.linkGoogle(googleSubject, now);
+            return users.saveAndFlush(sameEmail);
+        }
+
+        User user = new User(email, displayName(name, email), null, now);
+        user.linkGoogle(googleSubject, now);
+        user.addRole(roles.findByName(RoleName.CUSTOMER)
+            .orElseThrow(() -> new IllegalStateException("Role missing from database: CUSTOMER")));
+        try {
+            users.saveAndFlush(user);
+        }
+        catch (DataIntegrityViolationException ex) {
+            // The same person finishing Google login twice at once: the first one created the user.
+            return users.findByGoogleSubject(googleSubject).orElseThrow(() -> ex);
+        }
+        events.record("user.registered", eventData(user, "GOOGLE"));
+        return user;
+    }
+
+    private static String displayName(String name, String email) {
+        String value = name == null || name.isBlank() ? email.substring(0, email.indexOf('@')) : name.trim();
+        return value.length() > 100 ? value.substring(0, 100) : value;
+    }
+
     /** A dispatcher creating another dispatcher, or the startup bootstrap creating the first one. */
     @Transactional
     public User createDispatcher(String email, String fullName, String phoneNumber, String initialPassword) {

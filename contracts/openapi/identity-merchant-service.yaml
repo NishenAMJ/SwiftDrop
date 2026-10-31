@@ -221,6 +221,15 @@ paths:
         If Google reports a verified email that matches an existing password account, the
         Google login is linked to that account. A new Google user gets a `CUSTOMER` account
         and `user.registered` is published.
+
+        On failure the browser goes to `{FRONTEND_BASE_URL}/auth/callback?error=<reason>`, with no
+        cookie set:
+        - `email_not_verified`: Google didn't confirm the email address
+        - `account_suspended`: the SwiftDrop account is suspended
+        - `account_mismatch`: the email belongs to an account linked to a different Google account
+        - `google_login_failed`: cancelled at Google, timed out, or anything else
+
+        Only available when identity has Google credentials configured; otherwise `401`.
       security: []
       responses:
         '302':
