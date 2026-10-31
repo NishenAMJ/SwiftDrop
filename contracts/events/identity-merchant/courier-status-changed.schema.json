@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/identity-merchant/courier-status-changed.schema.json",
+  "title": "Courier status changed",
+  "description": "Exchange swiftdrop.identity. Published when a dispatcher decides on a courier, or the applicant (re)submits. delivery-operations-service creates its own courier profile on courier.approved and stops assigning work on courier.suspended. Bind courier.* to receive every courier event.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "enum": [
+            "courier.submitted",
+            "courier.approved",
+            "courier.rejected",
+            "courier.suspended",
+            "courier.reactivated"
+          ]
+        },
+        "version": { "const": 1 },
+        "producer": { "const": "identity-merchant-service" },
+        "data": {
+          "type": "object",
+          "required": ["userId", "fullName", "vehicleType", "status"],
+          "properties": {
+            "userId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The courier is identified by their user ID"
+            },
+            "fullName": { "type": "string" },
+            "vehicleType": {
+              "enum": ["BICYCLE", "MOTORCYCLE", "THREE_WHEELER", "CAR", "VAN", "TRUCK"]
+            },
+            "status": { "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"] },
+            "previousStatus": {
+              "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"],
+              "description": "Absent for a first submission"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Present for rejected and suspended"
+            },
+            "decidedBy": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Dispatcher's user ID. Absent for courier.submitted."
+            }
+          }
+        }
+      }
+    }
+  ]
+}
