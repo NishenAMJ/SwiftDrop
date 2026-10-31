@@ -3,6 +3,7 @@ package com.swiftdrop.identity.apikey;
 import java.util.List;
 import java.util.UUID;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import org.springframework.http.CacheControl;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.swiftdrop.identity.auth.TokenResponse;
+import com.swiftdrop.identity.ratelimit.RateLimits;
 
 /**
  * API keys tag of the contract, plus the key exchange. Managing keys needs a person's MERCHANT
@@ -31,9 +33,11 @@ import com.swiftdrop.identity.auth.TokenResponse;
 public class ApiKeyController {
 
     private final ApiKeyService apiKeys;
+    private final RateLimits rateLimits;
 
-    public ApiKeyController(ApiKeyService apiKeys) {
+    public ApiKeyController(ApiKeyService apiKeys, RateLimits rateLimits) {
         this.apiKeys = apiKeys;
+        this.rateLimits = rateLimits;
     }
 
     @GetMapping("/merchants/me/api-keys")
@@ -56,7 +60,9 @@ public class ApiKeyController {
     }
 
     @PostMapping("/auth/token")
-    ResponseEntity<TokenResponse> exchange(@RequestHeader(name = "X-API-Key", required = false) String apiKey) {
+    ResponseEntity<TokenResponse> exchange(@RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            HttpServletRequest http) {
+        rateLimits.beforeApiKeyExchange(http.getRemoteAddr());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(apiKeys.exchange(apiKey));
     }
 

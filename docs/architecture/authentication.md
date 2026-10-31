@@ -124,7 +124,18 @@ Inside identity, an API-key token is accepted only by `GET /api/v1/merchants/me`
 
 - Passwords: BCrypt, 8–64 characters, at least one letter and one digit.
 - Login returns the same error for unknown email and wrong password (`INVALID_CREDENTIALS`).
-- Login and API-key exchange are rate limited per IP and per account (details in the implementation PR).
+- Rate limits (per identity instance, configurable under `swiftdrop.identity.rate-limit`). Over the limit: `429 RATE_LIMITED` with `Retry-After`.
+
+  | What | Default |
+  |---|---|
+  | Register | 10 per hour per IP |
+  | Login attempts | 30 per minute per IP |
+  | Wrong passwords for one account, from any IP | 10 per 15 minutes; a successful login clears the count |
+  | Refresh | 120 per minute per IP |
+  | API-key exchange | 60 per minute per IP |
+  | Wrong current password on password change | 5 per 15 minutes per user |
+
+  Behind the gateway, identity sees the gateway's address unless forwarded headers are configured (see the service README), so the per-IP limits need that before going through the gateway.
 - Never log passwords, tokens, refresh tokens or API keys. Log the user ID and `jti` instead.
 - Error responses never include stack traces or internal details.
 

@@ -50,6 +50,15 @@ swiftdrop:
       dispatcher-email: ${DISPATCHER_BOOTSTRAP_EMAIL:}
       dispatcher-password: ${DISPATCHER_BOOTSTRAP_PASSWORD:}
       dispatcher-name: ${DISPATCHER_BOOTSTRAP_NAME:SwiftDrop Dispatcher}
+    # Per service instance, in memory. "requests per period", refilled smoothly.
+    rate-limit:
+      enabled: ${IDENTITY_RATE_LIMIT_ENABLED:true}
+      register-per-ip: { requests: 10, per: 1h }
+      login-per-ip: { requests: 30, per: 1m }
+      login-failures-per-account: { requests: 10, per: 15m }
+      refresh-per-ip: { requests: 120, per: 1m }
+      api-key-exchange-per-ip: { requests: 60, per: 1m }
+      password-failures-per-user: { requests: 5, per: 15m }
 
 management:
   endpoints:

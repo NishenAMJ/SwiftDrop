@@ -68,6 +68,7 @@ Everything else returns `401` without a token. Errors use Problem Details with a
 | `DISPATCHER_BOOTSTRAP_EMAIL`, `DISPATCHER_BOOTSTRAP_PASSWORD` | no | (none) | Creates the first dispatcher at startup if no dispatcher exists yet. It must change its password at first login. |
 | `DISPATCHER_BOOTSTRAP_NAME` | no | `SwiftDrop Dispatcher` | |
 | `IDENTITY_COOKIE_SECURE` | no | `true` | Keep `true`; browsers accept Secure cookies on `http://localhost`. |
+| `IDENTITY_RATE_LIMIT_ENABLED` | no | `true` | Turn off only for load tests. The limits themselves are in `application.yaml` under `swiftdrop.identity.rate-limit`. |
 
 Make a signing key (keep it outside the repository):
 
@@ -85,10 +86,22 @@ export IDENTITY_JWT_PRIVATE_KEY_PATH=~/swiftdrop-jwt-key.pem
 - **Merchant and courier applications:** customers apply; dispatchers approve, reject (with a reason), suspend (with a reason) or reactivate. Approval adds the `MERCHANT`/`COURIER` role and suspension removes it, effective at the user's next token refresh. Invalid moves return `409 INVALID_STATUS_TRANSITION`. Every submission and decision is kept in `application_decisions` (who, when, reason, internal note).
 - **Merchant tokens** carry `merchant_id`.
 - **API keys:** `sd_live_` + 32 random characters, shown once, stored as a SHA-256 hash, at most 5 active per merchant. `POST /api/v1/auth/token` exchanges a key for a 15-minute `MERCHANT` token (`auth: "api_key"`). Keys stop working immediately when the merchant is suspended or the key is revoked. Inside identity such a token can only read `GET /api/v1/merchants/me`.
+- **Rate limits:** per IP on register, login, refresh and API-key exchange, and per account on wrong passwords (login and password change), so guessing one person's password from many addresses is slowed down too. Over the limit: `429 RATE_LIMITED` with `Retry-After`. Defaults are in the [auth design](../../docs/architecture/authentication.md#security-rules). Counts are kept in memory per instance.
 - **Events** (`user.*`, `merchant.*`, `courier.*`) are written to the `outbox_events` table in the same transaction as the change. They are not sent anywhere yet (see below).
 
 ## Not done yet
 
 - Google login (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_BASE_URL`).
 - Publishing outbox events to RabbitMQ. Waits for a RabbitMQ container in `compose.yaml`; adding the dependency earlier would make `/actuator/health` report `DOWN`.
-- Rate limiting for login, refresh and API-key exchange.
+- Rate limits shared across several instances (needs a shared store such as Redis; one instance is fine for now).
+
+## Behind the API gateway
+
+Per-IP rate limits use the address the request comes from. Through the gateway that is always the gateway, so all users would share one limit. Before routing traffic through the gateway, the gateway must set `X-Forwarded-For` and identity must trust it:
+
+```yaml
+server:
+  forward-headers-strategy: framework
+```
+
+Only enable this when identity is reachable **only** through the gateway; otherwise clients could fake their address.

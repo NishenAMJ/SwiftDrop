@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
@@ -27,10 +28,13 @@ import com.swiftdrop.identity.user.UserService;
 
 /**
  * Helpers for end-to-end tests against the real database. Every test uses fresh random emails,
- * so tests don't depend on each other or on what earlier runs left in the database.
+ * so tests don't depend on each other or on what earlier runs left in the database. Rate limiting
+ * is off here (see RateLimitTests).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+// Tests make many requests from one address; RateLimitTests turns limiting back on.
+@TestPropertySource(properties = "swiftdrop.identity.rate-limit.enabled=false")
 public abstract class ApiTestSupport {
 
     protected static final String PASSWORD = "Correct-horse-42";

@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.swiftdrop.identity.ratelimit.RateLimitedException;
+
 /**
  * Turns every error into Problem Details with a SwiftDrop {@code code}. Unexpected errors are
  * logged here and returned as a generic 500, never with internal details.
@@ -35,6 +37,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setProperty("errors", ex.errors());
         }
         return ResponseEntity.status(ex.status()).body(problem);
+    }
+
+    @ExceptionHandler(RateLimitedException.class)
+    ResponseEntity<ProblemDetail> handleRateLimited(RateLimitedException ex) {
+        return ResponseEntity.status(ex.status())
+            .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.retryAfterSeconds()))
+            .body(Problems.of(ex.status(), ex.code(), ex.status().getReasonPhrase(), ex.getMessage()));
     }
 
     /** Two people changed the same record at the same moment (for example two dispatchers deciding). */
