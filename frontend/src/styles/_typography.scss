@@ -1,0 +1,44 @@
+// Typography (frontend/style.md section 3). Inter is self-hosted at public/fonts/InterVariable.woff2.
+// Until that file is added, the system fallback in --sd-font is used.
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+html {
+  font-size: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sd-font);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--sd-text);
+  background: var(--sd-page);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-block-start: 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--sd-text);
+  text-wrap: balance;
+}

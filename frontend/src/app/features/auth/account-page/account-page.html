@@ -1,0 +1,56 @@
+<div class="account">
+  <header class="account__header">
+    <span class="account__brand">SwiftDrop</span>
+    <button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="logout()"
+      [disabled]="signingOut()"
+      [attr.aria-busy]="signingOut()"
+    >
+      @if (signingOut()) {
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Logging out…
+      } @else {
+        Log out
+      }
+    </button>
+  </header>
+
+  <main class="account__main">
+    @if (user(); as user) {
+      <h1 class="account__title">Hello, {{ user.fullName }}</h1>
+
+      @if (user.mustChangePassword) {
+        <div class="sd-alert sd-alert--warning" role="status">
+          You're using the initial password a dispatcher gave you. Change it before you continue;
+          until then your dispatcher tools stay locked.
+        </div>
+      }
+
+      <section class="sd-card account__card" aria-labelledby="account-details">
+        <h2 id="account-details" class="account__card-title">Your account</h2>
+        <dl class="account__details">
+          <div>
+            <dt>Email</dt>
+            <dd>{{ user.email }}</dd>
+          </div>
+          @if (user.phoneNumber) {
+            <div>
+              <dt>Phone</dt>
+              <dd class="sd-tabular">{{ user.phoneNumber }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Roles</dt>
+            <dd class="account__roles">
+              @for (role of roles(); track role) {
+                <span class="sd-badge sd-badge--info">{{ role }}</span>
+              }
+            </dd>
+          </div>
+        </dl>
+      </section>
+    }
+  </main>
+</div>

@@ -1,0 +1,54 @@
+// SwiftDrop design tokens (frontend/style.md sections 2-4). Define once; use the CSS variables
+// everywhere else. Never copy hex values into feature styles.
+
+:root {
+  // Colour (section 2)
+  --sd-brand: #2457a7;
+  --sd-brand-hover: #1d4686;
+  --sd-brand-pressed: #183b70;
+  --sd-brand-soft: #eaf1fb;
+  --sd-accent: #705dd0;
+  --sd-accent-soft: #f0edfc;
+
+  --sd-auth-base: #faf8f2;
+  --sd-page: #f5f7fb;
+  --sd-surface: #ffffff;
+  --sd-surface-subtle: #f8fafc;
+  --sd-text: #1e293b;
+  --sd-text-secondary: #475569;
+  --sd-text-muted: #64748b;
+  --sd-border: #dbe3ee;
+  --sd-control-border: #7c8a9e;
+  --sd-focus: #2457a7;
+
+  --sd-success: #166534;
+  --sd-success-bg: #ecfdf3;
+  --sd-warning: #92400e;
+  --sd-warning-bg: #fffbeb;
+  --sd-danger: #b91c1c;
+  --sd-danger-bg: #fef2f2;
+  --sd-info: #1e40af;
+  --sd-info-bg: #eff6ff;
+  --sd-disabled-bg: #e2e8f0;
+  --sd-disabled-text: #64748b;
+
+  // Typography (section 3)
+  --sd-font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sd-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  // Spacing, shape and elevation (section 4)
+  --sd-space-1: 0.25rem;
+  --sd-space-2: 0.5rem;
+  --sd-space-3: 0.75rem;
+  --sd-space-4: 1rem;
+  --sd-space-5: 1.25rem;
+  --sd-space-6: 1.5rem;
+  --sd-space-8: 2rem;
+  --sd-space-10: 2.5rem;
+  --sd-space-12: 3rem;
+  --sd-radius-control: 0.5rem;
+  --sd-radius-card: 0.875rem;
+  --sd-radius-dialog: 1rem;
+  --sd-shadow-card: 0 2px 8px rgb(15 23 42 / 0.04);
+  --sd-shadow-overlay: 0 12px 32px rgb(15 23 42 / 0.14);
+}

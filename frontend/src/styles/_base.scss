@@ -1,0 +1,72 @@
+// Base rules and the Arctic Frost background (frontend/style.md sections 4, 5 and 7).
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--sd-focus);
+  outline-offset: 3px;
+}
+
+// Arctic Frost: authentication and landing screens only. The base colour belongs on the body;
+// the aura container stays transparent.
+body.sd-auth-page {
+  background-color: var(--sd-auth-base);
+}
+
+.sd-aura {
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100svh;
+  // Deliberately no background and no isolation:isolate.
+}
+
+.sd-aura__layer {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+  transform: translateZ(0);
+  pointer-events: none;
+}
+
+.sd-aura__layer--one {
+  background: linear-gradient(
+    transparent 0%,
+    rgb(200 230 255 / 0.12) 28%,
+    rgb(112 93 208) 42%,
+    rgb(150 200 255) 68%,
+    rgb(100 130 200) 100%
+  );
+  filter: blur(153px);
+  opacity: 0.93;
+}
+
+.sd-aura__layer--two {
+  background: linear-gradient(
+    transparent 0%,
+    rgb(8 114 201 / 0.22) 34%,
+    white 66%,
+    rgb(150 200 255) 82%,
+    rgb(100 130 200) 100%
+  );
+  filter: blur(78px);
+}
+
+.sd-aura__content {
+  position: relative;
+  z-index: 1;
+}
+
+@media (min-width: 64rem) {
+  .sd-aura__layer--one {
+    filter: blur(220px);
+  }
+
+  .sd-aura__layer--two {
+    filter: blur(112px);
+  }
+}
