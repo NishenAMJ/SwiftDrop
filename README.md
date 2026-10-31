@@ -7,7 +7,7 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 | Folder | What is in it |
 |---|---|
 | `services/` | Backend services. Currently `identity-merchant-service` (port 8081) |
-| `frontend/` | Angular frontend |
+| `frontend/` | Angular frontend (port 4200) |
 | `infrastructure/` | Docker/database setup, for example `postgres/init` (runs when the database is first created) |
 | `contracts/` | API contracts shared between services |
 | `docs/` | Documentation, including [prerequisites](docs/contributions/prerequisites.md) |
@@ -15,7 +15,7 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 ## 1. Install the tools
 
-You need Git, Java JDK 21 and Docker Desktop. Full list and versions: [docs/contributions/prerequisites.md](docs/contributions/prerequisites.md).
+You need Git, Java JDK 21, Docker Desktop and (for the frontend) Node.js 24 LTS. Full list and versions: [docs/contributions/prerequisites.md](docs/contributions/prerequisites.md).
 
 Check they work:
 
@@ -23,6 +23,7 @@ Check they work:
 git --version
 java -version      # must say 21
 docker --version
+node -v            # only needed for the frontend
 ```
 
 ## 2. Get the code
@@ -100,6 +101,35 @@ docker compose exec postgres psql -U postgres -d swiftdrop -c "SELECT * FROM ide
 
 You should see four rows: CUSTOMER, MERCHANT, COURIER and DISPATCHER.
 
+## 7. Run the frontend
+
+The web client lives in [`frontend/`](frontend) (Angular, standalone components, SCSS, Vitest). It does not need the database to start.
+
+```bash
+cd frontend
+npm install
+npm start          # ng serve -> http://localhost:4200
+```
+
+Other scripts: `npm run build`, `npm test`, `npm run watch`.
+
+If `ng` reports a Node.js version error, upgrade Node (see [prerequisites](docs/contributions/prerequisites.md)).
+
+Folder structure:
+
+```
+frontend/src/app/
+├── core/          # singletons: auth, layout (shell, header, guards, interceptors)
+├── shared/        # reusable components, pipes, directives
+└── features/      # one folder per role/domain
+    ├── auth/  customer/  merchant/  courier/
+    └── dispatcher/  warehouse/  tracking/  payments/  notifications/
+```
+
+Empty folders contain a `.gitkeep` so Git tracks them; delete it once the folder has real files.
+
+To create new pages, use the `create-frontend-page` skill in `.claude/skills/create-frontend-page`, and follow [frontend/style.md](frontend/style.md).
+
 ## Optional settings
 
 The service connects to `jdbc:postgresql://localhost:5432/swiftdrop` as `identity_merchant_user` by default. To change that, set `IDENTITY_DB_URL` or `IDENTITY_DB_USER`.
@@ -136,3 +166,4 @@ Another PostgreSQL is running on your machine. Stop it, or change the left-hand 
 - Never commit `.env` or real passwords.
 - Database changes go in a new Flyway file such as `V2__create_users.sql`. Never edit a migration that has already been merged.
 - Frontend work must follow [frontend/style.md](frontend/style.md).
+- Don't commit build output (`dist/`, `.angular/`, `node_modules/`).
