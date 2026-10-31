@@ -25,3 +25,14 @@ spring:
       - identity_merchant
     create-schemas: false
     locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only health is exposed over HTTP. It is public (see SecurityConfig) so Compose
+        # and the gateway can check it; it never shows component details.
+        include: health
+  endpoint:
+    health:
+      show-details: never

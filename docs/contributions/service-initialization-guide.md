@@ -306,7 +306,7 @@ Use one PostgreSQL instance with one `swiftdrop` database and separate schemas/u
 
 | Service | Schema | Database user | Password environment variable |
 |---|---|---|---|
-| Identity & Merchant | `identity_merchant` | `identity_user` | `IDENTITY_DB_PASSWORD` |
+| Identity & Merchant | `identity_merchant` | `identity_merchant_user` | `IDENTITY_DB_PASSWORD` |
 | Parcel & Pricing | `parcel_pricing` | `parcel_user` | `PARCEL_DB_PASSWORD` |
 | Delivery Operations | `delivery_operations` | `delivery_user` | `DELIVERY_DB_PASSWORD` |
 | Tracking & Reporting | `tracking_reporting` | `tracking_user` | `TRACKING_DB_PASSWORD` |

@@ -11,8 +11,8 @@
     <groupId>com.swiftdrop</groupId>
     <artifactId>identity-merchant-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name/>
-    <description/>
+    <name>identity-merchant-service</name>
+    <description>Authentication, users and merchant management for SwiftDrop</description>
     <url/>
     <licenses>
         <license/>
