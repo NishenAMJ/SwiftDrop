@@ -1,0 +1,15 @@
+{
+  "eventId": "2c8e4a6d-9b1f-4d3e-a7c5-4e0b8d2f6a19",
+  "eventType": "courier.approved",
+  "version": 1,
+  "occurredAt": "2026-11-02T05:00:00Z",
+  "producer": "identity-merchant-service",
+  "data": {
+    "userId": "6b4d8f2a-1e9c-4a7d-b3f5-9c2e6a8d4f10",
+    "fullName": "Kasun Fernando",
+    "vehicleType": "MOTORCYCLE",
+    "status": "APPROVED",
+    "previousStatus": "PENDING",
+    "decidedBy": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+  }
+}

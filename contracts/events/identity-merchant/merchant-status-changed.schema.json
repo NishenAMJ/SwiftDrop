@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/identity-merchant/merchant-status-changed.schema.json",
+  "title": "Merchant status changed",
+  "description": "Exchange swiftdrop.identity. Published when a dispatcher decides on a merchant, or the applicant (re)submits. The event type says what happened; data has the same shape for all of them. Bind merchant.* to receive every merchant event.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "enum": [
+            "merchant.submitted",
+            "merchant.approved",
+            "merchant.rejected",
+            "merchant.suspended",
+            "merchant.reactivated"
+          ]
+        },
+        "version": { "const": 1 },
+        "producer": { "const": "identity-merchant-service" },
+        "data": {
+          "type": "object",
+          "required": ["merchantId", "userId", "businessName", "status"],
+          "properties": {
+            "merchantId": { "type": "string", "format": "uuid" },
+            "userId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The merchant owner's user ID. Look up contact details from user events."
+            },
+            "businessName": { "type": "string" },
+            "status": { "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"] },
+            "previousStatus": {
+              "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"],
+              "description": "Absent for a first submission"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Present for rejected and suspended; this text is shown to the merchant"
+            },
+            "decidedBy": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Dispatcher's user ID. Absent for merchant.submitted."
+            }
+          }
+        }
+      }
+    }
+  ]
+}
