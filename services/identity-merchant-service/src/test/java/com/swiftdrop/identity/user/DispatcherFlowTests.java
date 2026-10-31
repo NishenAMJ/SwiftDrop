@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
@@ -17,11 +16,6 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.swiftdrop.identity.ApiTestSupport;
 
 class DispatcherFlowTests extends ApiTestSupport {
-
-    private static final String INITIAL_PASSWORD = "Initial-pass-1";
-
-    @Autowired
-    private UserService userService;
 
     @Test
     void newDispatcherHasNoPowersUntilThePasswordIsChanged() throws Exception {
@@ -100,13 +94,5 @@ class DispatcherFlowTests extends ApiTestSupport {
             .content("""
                 {"email": "%s", "fullName": "Second Dispatcher", "initialPassword": "%s"}
                 """.formatted(email, INITIAL_PASSWORD)));
-    }
-
-    /** A dispatcher who has already replaced the initial password. */
-    private String activeDispatcherToken() throws Exception {
-        String email = uniqueEmail();
-        User user = userService.createDispatcher(email, "Dispatcher", null, INITIAL_PASSWORD);
-        userService.changePassword(user.getId(), INITIAL_PASSWORD, PASSWORD);
-        return session(login(email, PASSWORD).andReturn()).accessToken();
     }
 }

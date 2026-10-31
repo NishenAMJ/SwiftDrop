@@ -47,6 +47,12 @@ The response also sets the `sd_refresh` cookie (HttpOnly, sent only to `/api/v1/
 | `GET`, `PATCH /api/v1/users/me`; `POST /api/v1/users/me/password` | any signed-in user |
 | `GET /api/v1/users` (filters: `role`, `status`, `q`; paging) | dispatcher |
 | `POST /api/v1/dispatchers` | dispatcher |
+| `POST /api/v1/merchants`, `POST /api/v1/couriers` (apply or resubmit) | customer |
+| `GET /api/v1/merchants/me`, `GET /api/v1/couriers/me` | the applicant (merchants/me also with an API-key token) |
+| `GET /api/v1/merchants`, `/merchants/{id}`; `GET /api/v1/couriers`, `/couriers/{userId}` | dispatcher |
+| `POST /api/v1/merchants/{id}/approve`, `/reject`, `/suspend`, `/reactivate` (same for couriers) | dispatcher |
+| `GET`, `POST /api/v1/merchants/me/api-keys`; `DELETE /api/v1/merchants/me/api-keys/{keyId}` | approved merchant (person token) |
+| `POST /api/v1/auth/token` (header `X-API-Key`) | public |
 | `GET /actuator/health` | public, status only |
 
 Everything else returns `401` without a token. Errors use Problem Details with a `code` (see [contracts/README.md](../../contracts/README.md)).
@@ -76,11 +82,13 @@ export IDENTITY_JWT_PRIVATE_KEY_PATH=~/swiftdrop-jwt-key.pem
 - **Refresh tokens:** random values, stored as SHA-256 hashes, 14 days, replaced on every refresh. Reusing an old one revokes that whole login, except within 10 seconds of a rotation (two browser tabs refreshing at once).
 - **Passwords:** BCrypt; 8–64 characters with a letter and a digit. Unknown email and wrong password give the same error.
 - **New dispatchers** get a token with no roles until they change the initial password.
-- **Events** (`user.registered`, `user.updated`) are written to the `outbox_events` table in the same transaction as the change. They are not sent anywhere yet (see below).
+- **Merchant and courier applications:** customers apply; dispatchers approve, reject (with a reason), suspend (with a reason) or reactivate. Approval adds the `MERCHANT`/`COURIER` role and suspension removes it, effective at the user's next token refresh. Invalid moves return `409 INVALID_STATUS_TRANSITION`. Every submission and decision is kept in `application_decisions` (who, when, reason, internal note).
+- **Merchant tokens** carry `merchant_id`.
+- **API keys:** `sd_live_` + 32 random characters, shown once, stored as a SHA-256 hash, at most 5 active per merchant. `POST /api/v1/auth/token` exchanges a key for a 15-minute `MERCHANT` token (`auth: "api_key"`). Keys stop working immediately when the merchant is suspended or the key is revoked. Inside identity such a token can only read `GET /api/v1/merchants/me`.
+- **Events** (`user.*`, `merchant.*`, `courier.*`) are written to the `outbox_events` table in the same transaction as the change. They are not sent anywhere yet (see below).
 
 ## Not done yet
 
 - Google login (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_BASE_URL`).
 - Publishing outbox events to RabbitMQ. Waits for a RabbitMQ container in `compose.yaml`; adding the dependency earlier would make `/actuator/health` report `DOWN`.
-- Merchant and courier applications, approvals and API keys.
-- Rate limiting for login and refresh.
+- Rate limiting for login, refresh and API-key exchange.

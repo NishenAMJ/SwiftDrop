@@ -179,6 +179,10 @@ paths:
         For merchant systems (server to server). Send the API key in `X-API-Key`; receive a
         short-lived access token with `roles: ["MERCHANT"]`, the `merchant_id` claim and
         `auth: "api_key"`. No refresh token: call this again when the token expires.
+
+        Within identity, that token is accepted only by `GET /api/v1/merchants/me`. Other
+        services treat it as a normal `MERCHANT` token and may refuse sensitive actions when
+        `auth` is `api_key`.
       security:
         - apiKeyAuth: []
       responses:
@@ -374,6 +378,7 @@ paths:
         Creates a `PENDING` merchant application for the signed-in user. If the user's previous
         application was `REJECTED`, this replaces its details and sets it back to `PENDING`
         (same `merchantId`). Each user has at most one merchant. Publishes `merchant.submitted`.
+        Requires the `CUSTOMER` role, so dispatcher accounts can't apply (`403`).
       requestBody:
         required: true
         content:
@@ -396,6 +401,8 @@ paths:
       tags: [Merchants]
       operationId: listMerchants
       summary: List merchants (dispatcher only)
+      description: Oldest submission first by default (`sort=submittedAt,asc`), so the approval queue reads top-down.
+        Sortable by `submittedAt`, `createdAt`, `businessName`.
       parameters:
         - name: status
           in: query
@@ -430,6 +437,7 @@ paths:
       tags: [Merchants]
       operationId: getMyMerchant
       summary: The signed-in user's merchant application or account
+      description: The only identity endpoint that also accepts API-key tokens (from `POST /api/v1/auth/token`).
       responses:
         '200':
           description: The user's merchant
@@ -544,7 +552,10 @@ paths:
       tags: [API keys]
       operationId: listApiKeys
       summary: List the signed-in merchant's API keys
-      description: Never returns the secret part of a key, only its prefix.
+      description: |
+        Never returns the secret part of a key, only its prefix. Managing keys needs a person's
+        token (password or Google login); API-key tokens get `403`, so a leaked key can't be used to
+        create more keys.
       responses:
         '200':
           description: All keys, including revoked ones
@@ -609,7 +620,7 @@ paths:
       description: |
         Creates a `PENDING` courier application for the signed-in user. A courier is identified
         by their user ID. If the previous application was `REJECTED`, this replaces its details
-        and sets it back to `PENDING`. Publishes `courier.submitted`.
+        and sets it back to `PENDING`. Publishes `courier.submitted`. Requires the `CUSTOMER` role.
 
         Identity owns only what is needed to approve a courier. Operational courier data
         (availability, zones, assignments) belongs to delivery-operations-service, which
@@ -636,6 +647,7 @@ paths:
       tags: [Couriers]
       operationId: listCouriers
       summary: List couriers (dispatcher only)
+      description: Oldest submission first by default (`sort=submittedAt,asc`). Sortable by `submittedAt`, `createdAt`.
       parameters:
         - name: status
           in: query
@@ -951,6 +963,7 @@ components:
           type: string
           description: |
             Machine-readable error code. Identity uses the shared codes plus:
+            `CONFLICT` (409: someone else changed the record at the same moment; reload and retry),
             `INVALID_CREDENTIALS`, `EMAIL_ALREADY_REGISTERED`, `ACCOUNT_SUSPENDED`,
             `REFRESH_TOKEN_INVALID`, `API_KEY_INVALID`, `API_KEY_LIMIT_REACHED`,
             `MERCHANT_NOT_ACTIVE`, `APPLICATION_ALREADY_EXISTS`, `INVALID_STATUS_TRANSITION`.

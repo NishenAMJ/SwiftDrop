@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -34,6 +35,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             problem.setProperty("errors", ex.errors());
         }
         return ResponseEntity.status(ex.status()).body(problem);
+    }
+
+    /** Two people changed the same record at the same moment (for example two dispatchers deciding). */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ProblemDetail> handleConcurrentChange(ObjectOptimisticLockingFailureException ex) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        return ResponseEntity.status(status).body(Problems.of(status, "CONFLICT", status.getReasonPhrase(),
+                "Someone else changed this at the same time. Reload it and try again."));
     }
 
     @ExceptionHandler(Exception.class)

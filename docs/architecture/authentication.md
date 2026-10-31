@@ -99,6 +99,8 @@ The **gateway** uses the same properties (they work for WebFlux too). It rejects
 
 So the gateway and other services only ever see JWTs; API keys are handled entirely inside identity.
 
+Inside identity, an API-key token is accepted only by `GET /api/v1/merchants/me`. It cannot manage API keys, change the password or edit the owner's account, so a leaked key can't be turned into more access. Keys stop working as soon as the merchant is suspended, because identity checks the merchant's status on every exchange.
+
 ## Signing keys
 
 | Environment | Where the private key comes from |

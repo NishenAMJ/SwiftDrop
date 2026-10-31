@@ -1,5 +1,6 @@
 package com.swiftdrop.identity;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -17,9 +18,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import com.swiftdrop.identity.user.User;
+import com.swiftdrop.identity.user.UserService;
 
 /**
  * Helpers for end-to-end tests against the real database. Every test uses fresh random emails,
@@ -31,9 +35,13 @@ public abstract class ApiTestSupport {
 
     protected static final String PASSWORD = "Correct-horse-42";
     protected static final String REFRESH_COOKIE = "sd_refresh";
+    protected static final String INITIAL_PASSWORD = "Initial-pass-1";
 
     @Autowired
     protected MockMvc mockMvc;
+
+    @Autowired
+    protected UserService userService;
 
     protected static String uniqueEmail() {
         return "user-" + UUID.randomUUID() + "@example.com";
@@ -61,6 +69,27 @@ public abstract class ApiTestSupport {
 
     protected ResultActions getWithToken(String path, String accessToken) throws Exception {
         return mockMvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken));
+    }
+
+    /** POST with an optional JSON body ({@code null} sends no body). */
+    protected ResultActions postWithToken(String path, String accessToken, String json) throws Exception {
+        MockHttpServletRequestBuilder request = post(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        if (json != null) {
+            request.contentType(MediaType.APPLICATION_JSON).content(json);
+        }
+        return mockMvc.perform(request);
+    }
+
+    protected ResultActions deleteWithToken(String path, String accessToken) throws Exception {
+        return mockMvc.perform(delete(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken));
+    }
+
+    /** A dispatcher who has already replaced the initial password. */
+    protected String activeDispatcherToken() throws Exception {
+        String email = uniqueEmail();
+        User user = userService.createDispatcher(email, "Dispatcher", null, INITIAL_PASSWORD);
+        userService.changePassword(user.getId(), INITIAL_PASSWORD, PASSWORD);
+        return session(login(email, PASSWORD).andReturn()).accessToken();
     }
 
     /** A logged-in session: access token, refresh token, user ID. */

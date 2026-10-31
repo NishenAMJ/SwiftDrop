@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.swiftdrop.identity.common.ApiException;
 import com.swiftdrop.identity.common.PageResponse;
+import com.swiftdrop.identity.common.SortGuard;
 
 /**
  * Users tag of the OpenAPI contract. Dispatcher-only routes are restricted in SecurityConfig.
@@ -54,11 +55,7 @@ public class UserController {
             @RequestParam(required = false) UserStatus status,
             @RequestParam(name = "q", required = false) String text,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        for (Sort.Order order : pageable.getSort()) {
-            if (!SORTABLE.contains(order.getProperty())) {
-                throw ApiException.validation("sort", "can only sort by " + String.join(", ", SORTABLE));
-            }
-        }
+        SortGuard.check(pageable, SORTABLE);
         if (text != null && text.length() > 100) {
             throw ApiException.validation("q", "must be at most 100 characters");
         }

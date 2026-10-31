@@ -20,6 +20,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.Formula;
 
 @Entity
 @Table(name = "users")
@@ -62,6 +63,13 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id"))
     @BatchSize(size = 50)
     private Set<Role> roles = new HashSet<>();
+
+    /**
+     * The user's merchant, in any status. Read-only: computed by the database when the user is
+     * loaded, so it is current for every new request.
+     */
+    @Formula("(select m.merchant_id from identity_merchant.merchants m where m.user_id = user_id)")
+    private UUID merchantId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -107,6 +115,10 @@ public class User {
 
     void addRole(Role role) {
         roles.add(role);
+    }
+
+    void removeRole(RoleName name) {
+        roles.removeIf(r -> r.getName() == name);
     }
 
     public boolean hasPassword() {
@@ -156,6 +168,10 @@ public class User {
 
     public String getGoogleSubject() {
         return googleSubject;
+    }
+
+    public UUID getMerchantId() {
+        return merchantId;
     }
 
     public Instant getCreatedAt() {

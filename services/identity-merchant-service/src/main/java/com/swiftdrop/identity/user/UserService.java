@@ -124,6 +124,36 @@ public class UserService {
         return users.saveAndFlush(user);
     }
 
+    /**
+     * Gives the user a role (merchant or courier approval). Takes effect in their next access token.
+     * Publishes {@code user.updated} if anything changed.
+     */
+    @Transactional
+    public void grantRole(UUID userId, RoleName roleName) {
+        User user = get(userId);
+        if (user.hasRole(roleName)) {
+            return;
+        }
+        user.addRole(roles.findByName(roleName)
+            .orElseThrow(() -> new IllegalStateException("Role missing from database: " + roleName)));
+        user.updateProfile(null, null, clock.instant());
+        users.saveAndFlush(user);
+        events.record("user.updated", eventData(user, null));
+    }
+
+    /** Removes a role (suspension). Publishes {@code user.updated} if anything changed. */
+    @Transactional
+    public void revokeRole(UUID userId, RoleName roleName) {
+        User user = get(userId);
+        if (!user.hasRole(roleName)) {
+            return;
+        }
+        user.removeRole(roleName);
+        user.updateProfile(null, null, clock.instant());
+        users.saveAndFlush(user);
+        events.record("user.updated", eventData(user, null));
+    }
+
     @Transactional(readOnly = true)
     public Page<User> search(RoleName role, UserStatus status, String text, Pageable pageable) {
         return users.findAll(UserSearch.matching(role, status, text), pageable);

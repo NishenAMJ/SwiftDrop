@@ -30,7 +30,7 @@ public record UserResponse(
             providers.add("GOOGLE");
         }
         return new UserResponse(user.getId(), user.getEmail(), user.getFullName(), user.getPhoneNumber(),
-                user.roleNames(), user.getStatus(), providers, user.isMustChangePassword(), null,
+                user.roleNames(), user.getStatus(), providers, user.isMustChangePassword(), user.getMerchantId(),
                 user.getCreatedAt());
     }
 }
