@@ -61,12 +61,11 @@ Wait until the `postgres` status says `healthy`. The first start creates the `sw
 
 ## 5. Run the identity-merchant service
 
-The service reads the password from an environment variable. Use the **same value** as `IDENTITY_DB_PASSWORD` in your `.env`, and set it in the same terminal that runs the service.
+The service automatically loads the root `.env` file when launched from the service directory or the SwiftDrop root. No terminal password setup is needed. Use plain, unquoted `KEY=value` entries (Java properties format), without `export` prefixes or inline comments.
 
 Windows (PowerShell):
 
 ```powershell
-$env:IDENTITY_DB_PASSWORD = "the-value-from-your-.env"
 cd services\identity-merchant-service
 .\mvnw spring-boot:run
 ```
@@ -74,16 +73,15 @@ cd services\identity-merchant-service
 macOS/Linux:
 
 ```bash
-export IDENTITY_DB_PASSWORD="the-value-from-your-.env"
 cd services/identity-merchant-service
 ./mvnw spring-boot:run
 ```
 
 On start, Flyway creates the tables (for example `roles`) from `src/main/resources/db/migration`. The service is ready when you see `Started ... in ... seconds` in the log, on http://localhost:8081.
 
-If you run it from an IDE, add `IDENTITY_DB_PASSWORD` to the run configuration's environment variables instead.
+If you run it from an IDE, set the working directory to the service directory or the SwiftDrop root. Other working directories require explicit environment variables.
 
-To check the variable is set in your terminal (PowerShell): `$env:IDENTITY_DB_PASSWORD`. If it prints nothing, set it again as shown above.
+Environment variables override `.env`. If you previously set an outdated password in PowerShell, clear it with `Remove-Item Env:IDENTITY_DB_PASSWORD -ErrorAction SilentlyContinue` before restarting.
 
 ## 6. Check that everything worked
 
@@ -147,10 +145,10 @@ The service connects to `jdbc:postgresql://localhost:5432/swiftdrop` as `identit
 ## Troubleshooting
 
 **"password authentication failed for user identity_merchant_user"**
-The password in your terminal differs from the one the database was created with. The database keeps the password from its first start, even if you edit `.env` later. Fix: make sure the terminal variable equals `.env`, and if you changed `.env`, run `docker compose down -v` then `docker compose up -d`.
+The configured password differs from the one the database was created with. Clear any outdated terminal override. The database keeps its original password even if you edit `.env` later. To reset it without deleting data, run `docker compose exec postgres psql -U postgres -d swiftdrop` from the root, enter `\password identity_merchant_user`, supply the password from `.env` at the prompts, then enter `\q` and restart the service.
 
 **"Could not resolve placeholder 'IDENTITY_DB_PASSWORD'"**
-The variable is not set in the terminal (or IDE run configuration) that starts the service. Set it as in step 5.
+Check that the root `.env` contains `IDENTITY_DB_PASSWORD` and the working directory is the service directory or the SwiftDrop root. For other working directories, set the variable in the terminal or IDE run configuration.
 
 **"schema identity_merchant does not exist" or "role identity_merchant_user does not exist"**
 The database was created before the setup script existed or failed. Run `docker compose down -v`, then `docker compose up -d`. The scripts in `infrastructure/postgres/init` run only when the database is created from empty.

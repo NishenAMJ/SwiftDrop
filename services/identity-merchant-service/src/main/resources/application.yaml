@@ -2,6 +2,9 @@ server:
   port: 8081
 
 spring:
+  config:
+    # Local runs from the service directory or the SwiftDrop root.
+    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
   application:
     name: identity-merchant-service
 

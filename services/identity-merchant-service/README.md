@@ -14,7 +14,6 @@ Authentication, users and merchant management for SwiftDrop. Port **8081**.
 Tests start the full application, so the database must be running (see the [root README](../../README.md), steps 3–4).
 
 ```bash
-export IDENTITY_DB_PASSWORD="the-value-from-your-.env"   # PowerShell: $env:IDENTITY_DB_PASSWORD = "..."
 ./mvnw verify                                            # Windows: .\mvnw.cmd verify
 ```
 
@@ -58,6 +57,8 @@ The response also sets the `sd_refresh` cookie (HttpOnly, sent only to `/api/v1/
 Everything else returns `401` without a token. Errors use Problem Details with a `code` (see [contracts/README.md](../../contracts/README.md)).
 
 ## Configuration
+
+Local runs load `SwiftDrop/.env` automatically when the working directory is this service directory or the SwiftDrop root. Use plain, unquoted `KEY=value` entries (Java properties format); do not use `export` prefixes or inline comments. Environment variables override file values. For runs from other directories, supply environment variables instead.
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
