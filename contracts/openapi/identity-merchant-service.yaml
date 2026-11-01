@@ -1,0 +1,1294 @@
+openapi: 3.1.0
+
+info:
+  title: SwiftDrop Identity & Merchant Service
+  version: 0.1.0
+  summary: Authentication, users, merchant/courier approvals and merchant API keys.
+  description: |
+    **Status: proposal for team review.**
+
+    Identity issues the access tokens (JWTs) that every other SwiftDrop service accepts.
+    Token rules, login flows and how other services validate tokens are described in
+    `docs/architecture/authentication.md`. Shared REST conventions (paths, errors, paging)
+    are in `contracts/README.md`.
+
+    **Account model**
+    - Every completed account has exactly one immutable accountRole.
+    - Password registration requires CUSTOMER, MERCHANT or COURIER. Dispatchers are created internally.
+    - New Google users choose their role after login using POST /users/me/role.
+    - Merchant/courier accounts submit matching applications and have no operational roles until approved.
+    - Approval activates the assigned role; suspension removes active permissions without changing accountRole.
+    - JWT roles remains an array containing zero or one active role. identity_version must equal 2.
+
+    **Application status transitions** (merchants and couriers)
+
+    | From | To | Who |
+    |---|---|---|
+    | (none) | `PENDING` | applicant (`POST /merchants`, `POST /couriers`) |
+    | `PENDING` | `APPROVED` / `REJECTED` | dispatcher |
+    | `REJECTED` | `PENDING` | applicant resubmits (same `POST`) |
+    | `APPROVED` | `SUSPENDED` | dispatcher |
+    | `SUSPENDED` | `APPROVED` | dispatcher (`/reactivate`) |
+
+    Any other transition returns `409` with code `INVALID_STATUS_TRANSITION`.
+
+    **Events** (RabbitMQ topic exchange `swiftdrop.identity`, schemas in
+    `contracts/events/identity-merchant/`): `user.registered`, `user.updated`,
+    `merchant.submitted|approved|rejected|suspended|reactivated`,
+    `courier.submitted|approved|rejected|suspended|reactivated`.
+
+servers:
+  - url: http://localhost:8081
+    description: Service running locally
+  - url: http://localhost:8080
+    description: Through the API gateway (once it exists)
+
+tags:
+  - name: Auth
+    description: Registration, login, tokens and keys for verifying tokens
+  - name: Users
+    description: The signed-in user's own account, and user administration for dispatchers
+  - name: Merchants
+    description: Merchant applications and approvals
+  - name: Couriers
+    description: Courier applications and approvals
+  - name: API keys
+    description: Keys that merchant systems use to call SwiftDrop
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------- Auth
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Create an account with a chosen public role
+      description: |
+        Creates an `ACTIVE` user with one assigned role, logs them in and returns an access token.
+        CUSTOMER has immediate access; MERCHANT/COURIER must complete an application and receive approval.
+        Sets the refresh-token cookie. Publishes `user.registered`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Account created and logged in
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409':
+          description: '`EMAIL_ALREADY_REGISTERED`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Log in with email and password
+      description: Returns an access token and sets the refresh-token cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Logged in
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401':
+          description: |
+            `INVALID_CREDENTIALS`. Returned for an unknown email and for a wrong password alike,
+            so callers can't find out which emails are registered.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: '`ACCOUNT_SUSPENDED`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refresh
+      summary: Get a new access token using the refresh-token cookie
+      description: |
+        Reads the `sd_refresh` cookie, replaces it with a new one (the old one stops working)
+        and returns a new access token. Roles in the new token reflect any approvals or
+        suspensions since the last token.
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: New access token
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '401':
+          description: '`REFRESH_TOKEN_INVALID`: missing, expired, revoked or already used'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: '`ACCOUNT_SUSPENDED`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Log out
+      description: |
+        Revokes the refresh token in the `sd_refresh` cookie and clears the cookie. Always
+        returns `204`, even without a valid cookie. Access tokens already issued stay valid
+        until they expire (at most 15 minutes).
+      security:
+        - refreshCookie: []
+      responses:
+        '204':
+          description: Logged out
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/ClearRefreshCookie' }
+
+  /api/v1/auth/token:
+    post:
+      tags: [Auth]
+      operationId: exchangeApiKey
+      summary: Exchange a merchant API key for an access token
+      description: |
+        For merchant systems (server to server). Send the API key in `X-API-Key`; receive a
+        short-lived access token with `roles: ["MERCHANT"]`, the `merchant_id` claim and
+        `auth: "api_key"`. No refresh token: call this again when the token expires.
+
+        Within identity, that token is accepted only by `GET /api/v1/merchants/me`. Other
+        services treat it as a normal `MERCHANT` token and may refuse sensitive actions when
+        `auth` is `api_key`.
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: Access token for the merchant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '401':
+          description: '`API_KEY_INVALID`: unknown, revoked or expired key'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: '`MERCHANT_NOT_ACTIVE`: the merchant is suspended'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /oauth2/authorization/google:
+    get:
+      tags: [Auth]
+      operationId: googleLogin
+      summary: Start Google login (browser navigation, not an API call)
+      description: |
+        Handled by Spring Security. The browser goes to Google and returns to
+        `/login/oauth2/code/google`. Identity then finds or creates the user, sets the
+        `sd_refresh` cookie and redirects to `{FRONTEND_BASE_URL}/auth/callback`. The Angular
+        app calls `POST /api/v1/auth/refresh` there to get its first access token. No token is
+        ever put in a URL.
+
+        If Google reports a verified email that matches an existing password account, the
+        Google login is linked to that account. A new Google user gets an account awaiting role selection
+        and `user.registered` is published.
+
+        On failure the browser goes to `{FRONTEND_BASE_URL}/auth/callback?error=<reason>`, with no
+        cookie set:
+        - `email_not_verified`: Google didn't confirm the email address
+        - `account_suspended`: the SwiftDrop account is suspended
+        - `account_mismatch`: the email belongs to an account linked to a different Google account
+        - `google_login_failed`: cancelled at Google, timed out, or anything else
+
+        Only available when identity has Google credentials configured; otherwise `401`.
+      security: []
+      responses:
+        '302':
+          description: Redirect to Google's consent screen
+
+  /.well-known/jwks.json:
+    get:
+      tags: [Auth]
+      operationId: getJwks
+      summary: Public keys for verifying SwiftDrop access tokens
+      description: |
+        The gateway and every service fetch this (and cache it) to verify access-token
+        signatures. Contains public keys only. During key rotation it lists both the old and
+        the new key; tokens name theirs in the `kid` header.
+      security: []
+      responses:
+        '200':
+          description: JSON Web Key Set (RFC 7517)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JwkSet' }
+
+  # ---------------------------------------------------------------- Users
+  /api/v1/users/me:
+    get:
+      tags: [Users]
+      operationId: getMe
+      summary: The signed-in user's account
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Users]
+      operationId: updateMe
+      summary: Update the signed-in user's name or phone number
+      description: |
+        Send only the fields to change. Email cannot be changed here. Publishes `user.updated`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMeRequest' }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/v1/users/me/role:
+    post:
+      tags: [Users]
+      operationId: selectAccountRole
+      summary: Choose the immutable role of a new Google account
+      description: Person token required. Only an account without an assigned role may use this endpoint. Returns updated user and access token; the existing refresh cookie remains valid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [CUSTOMER, MERCHANT, COURIER] }
+      responses:
+        '200':
+          description: Role assigned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409':
+          description: ROLE_ALREADY_ASSIGNED; account roles cannot be changed
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/users/me/password:
+    post:
+      tags: [Users]
+      operationId: changePassword
+      summary: Change the signed-in user's password
+      description: |
+        Revokes all of the user's refresh tokens, which logs out every other device, and sets a
+        new `sd_refresh` cookie so this device stays logged in. Clears `mustChangePassword`; call
+        `POST /api/v1/auth/refresh` afterwards to get an access token with the user's roles.
+        For a user who only has Google login, `currentPassword` is omitted and this sets a first
+        password. Not allowed with API-key tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204':
+          description: Password changed
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403':
+          description: |
+            `INVALID_CREDENTIALS`: current password is wrong. `FORBIDDEN`: called with an
+            API-key token.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List users (dispatcher only)
+      parameters:
+        - name: role
+          in: query
+          description: Filter by assigned account role, including applicants without active permissions.
+          schema: { $ref: '#/components/schemas/Role' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/UserStatus' }
+        - name: q
+          in: query
+          description: Case-insensitive match on name or email
+          schema: { type: string, maxLength: 100 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: One page of users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [content]
+                    properties:
+                      content:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/dispatchers:
+    post:
+      tags: [Users]
+      operationId: createDispatcher
+      summary: Create a dispatcher account (dispatcher only)
+      description: |
+        Creates an `ACTIVE` user with only the `DISPATCHER` role. The new dispatcher must change
+        the initial password at first login (`mustChangePassword: true`); until then their access
+        tokens carry no roles, so they can only read their account and change the password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDispatcherRequest' }
+      responses:
+        '201':
+          description: Dispatcher created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`EMAIL_ALREADY_REGISTERED`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  # ---------------------------------------------------------------- Merchants
+  /api/v1/merchants:
+    post:
+      tags: [Merchants]
+      operationId: applyAsMerchant
+      summary: Apply to become a merchant, or resubmit a rejected application
+      description: |
+        Creates a `PENDING` merchant application for the signed-in user. If the user's previous
+        application was `REJECTED`, this replaces its details and sets it back to `PENDING`
+        (same `merchantId`). Each user has at most one merchant. Publishes `merchant.submitted`.
+        Requires the assigned `MERCHANT` account role; customer, courier and dispatcher accounts cannot apply (`403`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MerchantApplicationRequest' }
+      responses:
+        '201':
+          description: Application submitted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Merchant' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409':
+          description: '`APPLICATION_ALREADY_EXISTS`: an application is already `PENDING`, `APPROVED` or `SUSPENDED`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    get:
+      tags: [Merchants]
+      operationId: listMerchants
+      summary: List merchants (dispatcher only)
+      description: Oldest submission first by default (`sort=submittedAt,asc`), so the approval queue reads top-down.
+        Sortable by `submittedAt`, `createdAt`, `businessName`.
+      parameters:
+        - name: status
+          in: query
+          description: For example `PENDING` to see the approval queue
+          schema: { $ref: '#/components/schemas/ApplicationStatus' }
+        - name: q
+          in: query
+          description: Case-insensitive match on business name
+          schema: { type: string, maxLength: 100 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: One page of merchants
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [content]
+                    properties:
+                      content:
+                        type: array
+                        items: { $ref: '#/components/schemas/Merchant' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/merchants/me:
+    get:
+      tags: [Merchants]
+      operationId: getMyMerchant
+      summary: The signed-in user's merchant application or account
+      description: The only identity endpoint that also accepts API-key tokens (from `POST /api/v1/auth/token`).
+      responses:
+        '200':
+          description: The user's merchant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Merchant' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/merchants/{merchantId}:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+    get:
+      tags: [Merchants]
+      operationId: getMerchant
+      summary: One merchant (dispatcher only)
+      responses:
+        '200':
+          description: The merchant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Merchant' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/merchants/{merchantId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+    post:
+      tags: [Merchants]
+      operationId: approveMerchant
+      summary: Approve a pending merchant (dispatcher only)
+      description: '`PENDING` → `APPROVED`. Publishes `merchant.approved`.'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptionalNoteRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/MerchantUpdated' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  /api/v1/merchants/{merchantId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+    post:
+      tags: [Merchants]
+      operationId: rejectMerchant
+      summary: Reject a pending merchant (dispatcher only)
+      description: '`PENDING` → `REJECTED`. The reason is shown to the applicant. Publishes `merchant.rejected`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/MerchantUpdated' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  /api/v1/merchants/{merchantId}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+    post:
+      tags: [Merchants]
+      operationId: suspendMerchant
+      summary: Suspend an approved merchant (dispatcher only)
+      description: |
+        `APPROVED` → `SUSPENDED`. The merchant's API keys stop working at once; tokens already
+        issued expire within 15 minutes. Publishes `merchant.suspended`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/MerchantUpdated' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  /api/v1/merchants/{merchantId}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+    post:
+      tags: [Merchants]
+      operationId: reactivateMerchant
+      summary: Reactivate a suspended merchant (dispatcher only)
+      description: '`SUSPENDED` → `APPROVED`. Revoked API keys stay revoked. Publishes `merchant.reactivated`.'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptionalNoteRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/MerchantUpdated' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  # ---------------------------------------------------------------- API keys
+  /api/v1/merchants/me/api-keys:
+    get:
+      tags: [API keys]
+      operationId: listApiKeys
+      summary: List the signed-in merchant's API keys
+      description: |
+        Never returns the secret part of a key, only its prefix. Managing keys needs a person's
+        token (password or Google login); API-key tokens get `403`, so a leaked key can't be used to
+        create more keys.
+      responses:
+        '200':
+          description: All keys, including revoked ones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApiKey' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [API keys]
+      operationId: createApiKey
+      summary: Create an API key (approved merchants only)
+      description: |
+        The full key is in the response **once**. SwiftDrop stores only a hash and cannot show
+        it again. A merchant can have at most 5 active keys.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateApiKeyRequest' }
+      responses:
+        '201':
+          description: Key created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedApiKey' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`API_KEY_LIMIT_REACHED`: revoke a key first'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/merchants/me/api-keys/{keyId}:
+    parameters:
+      - name: keyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [API keys]
+      operationId: revokeApiKey
+      summary: Revoke an API key
+      description: The key stops working immediately. Revoking an already revoked key also returns `204`.
+      responses:
+        '204':
+          description: Revoked
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------- Couriers
+  /api/v1/couriers:
+    post:
+      tags: [Couriers]
+      operationId: applyAsCourier
+      summary: Apply to become a courier, or resubmit a rejected application
+      description: |
+        Creates a `PENDING` courier application for the signed-in user. A courier is identified
+        by their user ID. If the previous application was `REJECTED`, this replaces its details
+        and sets it back to `PENDING`. Publishes `courier.submitted`. Requires the assigned `COURIER` account role.
+
+        Identity owns only what is needed to approve a courier. Operational courier data
+        (availability, zones, assignments) belongs to delivery-operations-service, which
+        creates its own courier profile when it receives `courier.approved`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourierApplicationRequest' }
+      responses:
+        '201':
+          description: Application submitted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Courier' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409':
+          description: '`APPLICATION_ALREADY_EXISTS`'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    get:
+      tags: [Couriers]
+      operationId: listCouriers
+      summary: List couriers (dispatcher only)
+      description: Oldest submission first by default (`sort=submittedAt,asc`). Sortable by `submittedAt`, `createdAt`.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ApplicationStatus' }
+        - name: vehicleType
+          in: query
+          schema: { $ref: '#/components/schemas/VehicleType' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: One page of couriers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [content]
+                    properties:
+                      content:
+                        type: array
+                        items: { $ref: '#/components/schemas/Courier' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/couriers/me:
+    get:
+      tags: [Couriers]
+      operationId: getMyCourier
+      summary: The signed-in user's courier application or account
+      responses:
+        '200':
+          description: The user's courier record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Courier' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/couriers/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CourierUserId'
+    get:
+      tags: [Couriers]
+      operationId: getCourier
+      summary: One courier (dispatcher only)
+      responses:
+        '200':
+          description: The courier
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Courier' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/couriers/{userId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/CourierUserId'
+    post:
+      tags: [Couriers]
+      operationId: approveCourier
+      summary: Approve a pending courier (dispatcher only)
+      description: '`PENDING` → `APPROVED`. Publishes `courier.approved`.'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptionalNoteRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/CourierUpdated' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  /api/v1/couriers/{userId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/CourierUserId'
+    post:
+      tags: [Couriers]
+      operationId: rejectCourier
+      summary: Reject a pending courier (dispatcher only)
+      description: '`PENDING` → `REJECTED`. Publishes `courier.rejected`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/CourierUpdated' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  /api/v1/couriers/{userId}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/CourierUserId'
+    post:
+      tags: [Couriers]
+      operationId: suspendCourier
+      summary: Suspend an approved courier (dispatcher only)
+      description: '`APPROVED` → `SUSPENDED`. Publishes `courier.suspended`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/CourierUpdated' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+  /api/v1/couriers/{userId}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/CourierUserId'
+    post:
+      tags: [Couriers]
+      operationId: reactivateCourier
+      summary: Reactivate a suspended courier (dispatcher only)
+      description: '`SUSPENDED` → `APPROVED`. Publishes `courier.reactivated`.'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptionalNoteRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/CourierUpdated' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidStatusTransition' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from `/api/v1/auth/login`, `/refresh` or `/token`. Valid for 15 minutes.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: sd_refresh
+      description: |
+        Opaque refresh token. `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`.
+        Valid for 14 days and replaced on every use.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Merchant API key. Accepted **only** by `POST /api/v1/auth/token`.
+
+  headers:
+    SetRefreshCookie:
+      description: '`sd_refresh=<token>; Max-Age=1209600; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`'
+      schema: { type: string }
+    ClearRefreshCookie:
+      description: '`sd_refresh=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Strict`'
+      schema: { type: string }
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Page number, starting at 0
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Sort:
+      name: sort
+      in: query
+      description: '`field,asc` or `field,desc`. Default `createdAt,desc`.'
+      schema: { type: string, examples: ['createdAt,desc'] }
+    MerchantId:
+      name: merchantId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CourierUserId:
+      name: userId
+      in: path
+      required: true
+      description: The courier's user ID
+      schema: { type: string, format: uuid }
+
+  responses:
+    TooManyRequests:
+      description: |
+        `RATE_LIMITED`: too many attempts. Wait the number of seconds in `Retry-After`. Login also
+        counts wrong passwords per account, across all addresses.
+      headers:
+        Retry-After:
+          description: Seconds to wait before trying again
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationFailed:
+      description: '`VALIDATION_FAILED`: see `errors` for each field'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://swiftdrop.dev/problems/validation-failed
+            title: Validation failed
+            status: 400
+            detail: One or more fields are invalid.
+            code: VALIDATION_FAILED
+            errors:
+              - field: email
+                message: must be a well-formed email address
+    Unauthenticated:
+      description: '`UNAUTHENTICATED`: missing, invalid or expired access token'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: '`FORBIDDEN`: the token does not have the required role'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: '`NOT_FOUND`'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidStatusTransition:
+      description: '`INVALID_STATUS_TRANSITION`: the action is not allowed from the current status'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    MerchantUpdated:
+      description: The merchant after the change
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Merchant' }
+    CourierUpdated:
+      description: The courier after the change
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Courier' }
+
+  schemas:
+    # ------------------------------------------------ enums
+    Role:
+      type: string
+      enum: [CUSTOMER, MERCHANT, COURIER, DISPATCHER]
+    UserStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED]
+    ApplicationStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, SUSPENDED]
+    AuthProvider:
+      type: string
+      enum: [PASSWORD, GOOGLE]
+    VehicleType:
+      type: string
+      enum: [BICYCLE, MOTORCYCLE, THREE_WHEELER, CAR, VAN, TRUCK]
+    BusinessType:
+      type: string
+      enum: [INDIVIDUAL, SOLE_PROPRIETORSHIP, PARTNERSHIP, COMPANY]
+
+    # ------------------------------------------------ shared building blocks
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+      examples: [nimal@example.com]
+    Password:
+      type: string
+      minLength: 8
+      maxLength: 64
+      description: |
+        8 to 64 characters, at least one letter and one digit. (BCrypt reads at most 72 bytes,
+        so the server also rejects anything longer than 72 bytes in UTF-8.)
+    PhoneNumber:
+      type: string
+      description: E.164 format
+      pattern: '^\+[1-9][0-9]{7,14}$'
+      examples: ['+94771234567']
+    PersonName:
+      type: string
+      minLength: 1
+      maxLength: 100
+      examples: [Nimal Perera]
+    Address:
+      type: object
+      required: [line1, city]
+      properties:
+        line1: { type: string, minLength: 1, maxLength: 120 }
+        line2: { type: string, maxLength: 120 }
+        city: { type: string, minLength: 1, maxLength: 80 }
+        postalCode: { type: string, maxLength: 20 }
+
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1 }
+        totalElements: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details with SwiftDrop's `code` and `errors` extensions.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          description: |
+            Machine-readable error code. Identity uses the shared codes plus:
+            `CONFLICT` (409: someone else changed the record at the same moment; reload and retry),
+            `INVALID_CREDENTIALS`, `EMAIL_ALREADY_REGISTERED`, `ACCOUNT_SUSPENDED`,
+            `ROLE_ALREADY_ASSIGNED`, `REFRESH_TOKEN_INVALID`, `API_KEY_INVALID`, `API_KEY_LIMIT_REACHED`,
+            `MERCHANT_NOT_ACTIVE`, `APPLICATION_ALREADY_EXISTS`, `INVALID_STATUS_TRANSITION`,
+            `RATE_LIMITED` (429).
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    # ------------------------------------------------ auth
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName, role]
+      properties:
+        role: { type: string, enum: [CUSTOMER, MERCHANT, COURIER] }
+        email: { $ref: '#/components/schemas/Email' }
+        password: { $ref: '#/components/schemas/Password' }
+        fullName: { $ref: '#/components/schemas/PersonName' }
+        phoneNumber: { $ref: '#/components/schemas/PhoneNumber' }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    TokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: Signed JWT. Keep it in memory only; never in localStorage.
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          description: Seconds until the access token expires
+          examples: [900]
+        user:
+          $ref: '#/components/schemas/User'
+          description: Included for login, register and refresh; omitted for API-key tokens.
+
+    JwkSet:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            required: [kty, kid, use, alg, n, e]
+            properties:
+              kty: { type: string, const: RSA }
+              kid: { type: string }
+              use: { type: string, const: sig }
+              alg: { type: string, const: RS256 }
+              n: { type: string }
+              e: { type: string }
+
+    # ------------------------------------------------ users
+    User:
+      type: object
+      required: [id, email, fullName, roles, onboardingState, status, authProviders, mustChangePassword, createdAt]
+      properties:
+        accountRole:
+          $ref: '#/components/schemas/Role'
+          description: Immutable chosen role; absent only for a new Google user awaiting selection.
+        onboardingState:
+          type: string
+          enum: [ROLE_REQUIRED, APPLICATION_REQUIRED, PENDING, REJECTED, SUSPENDED, READY]
+        id: { type: string, format: uuid }
+        email: { $ref: '#/components/schemas/Email' }
+        fullName: { $ref: '#/components/schemas/PersonName' }
+        phoneNumber: { $ref: '#/components/schemas/PhoneNumber' }
+        roles:
+          type: array
+          description: |
+            Roles that are active right now. Access tokens carry the same list, except that
+            while `mustChangePassword` is true they carry none.
+          items: { $ref: '#/components/schemas/Role' }
+          uniqueItems: true
+          maxItems: 1
+        status: { $ref: '#/components/schemas/UserStatus' }
+        authProviders:
+          type: array
+          items: { $ref: '#/components/schemas/AuthProvider' }
+          uniqueItems: true
+        mustChangePassword:
+          type: boolean
+          description: True for a new dispatcher until they set their own password
+        merchantId:
+          type: string
+          format: uuid
+          description: Present when the user has a merchant application in any status
+        createdAt: { type: string, format: date-time }
+
+    UpdateMeRequest:
+      type: object
+      minProperties: 1
+      properties:
+        fullName: { $ref: '#/components/schemas/PersonName' }
+        phoneNumber: { $ref: '#/components/schemas/PhoneNumber' }
+
+    ChangePasswordRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        currentPassword:
+          type: string
+          description: Required unless the user has never had a password (Google-only account)
+        newPassword: { $ref: '#/components/schemas/Password' }
+
+    CreateDispatcherRequest:
+      type: object
+      required: [email, fullName, initialPassword]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        fullName: { $ref: '#/components/schemas/PersonName' }
+        phoneNumber: { $ref: '#/components/schemas/PhoneNumber' }
+        initialPassword: { $ref: '#/components/schemas/Password' }
+
+    # ------------------------------------------------ approvals
+    OptionalNoteRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 500
+          description: Internal note, visible to dispatchers only
+
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: Shown to the applicant
+
+    StatusDecision:
+      type: object
+      description: The last approval decision on an application
+      required: [status, decidedAt]
+      properties:
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        reason:
+          type: string
+          description: Present for rejections and suspensions
+        decidedAt: { type: string, format: date-time }
+        decidedBy:
+          type: string
+          format: uuid
+          description: User ID of the dispatcher. Returned to dispatchers only.
+
+    # ------------------------------------------------ merchants
+    MerchantApplicationRequest:
+      type: object
+      required: [businessName, businessType, contactPhone, businessAddress]
+      properties:
+        businessName: { type: string, minLength: 2, maxLength: 120 }
+        businessType: { $ref: '#/components/schemas/BusinessType' }
+        businessRegistrationNumber:
+          type: string
+          maxLength: 50
+          description: Required when `businessType` is `COMPANY` or `PARTNERSHIP`
+        contactEmail: { $ref: '#/components/schemas/Email' }
+        contactPhone: { $ref: '#/components/schemas/PhoneNumber' }
+        businessAddress: { $ref: '#/components/schemas/Address' }
+
+    Merchant:
+      type: object
+      required: [id, userId, businessName, businessType, contactPhone, businessAddress, status, submittedAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        businessName: { type: string }
+        businessType: { $ref: '#/components/schemas/BusinessType' }
+        businessRegistrationNumber: { type: string }
+        contactEmail: { $ref: '#/components/schemas/Email' }
+        contactPhone: { $ref: '#/components/schemas/PhoneNumber' }
+        businessAddress: { $ref: '#/components/schemas/Address' }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        lastDecision: { $ref: '#/components/schemas/StatusDecision' }
+        submittedAt:
+          type: string
+          format: date-time
+          description: When the current application (or resubmission) was sent
+        createdAt: { type: string, format: date-time }
+
+    # ------------------------------------------------ couriers
+    CourierApplicationRequest:
+      type: object
+      required: [nationalIdNumber, vehicleType]
+      properties:
+        nationalIdNumber: { type: string, minLength: 5, maxLength: 20 }
+        vehicleType: { $ref: '#/components/schemas/VehicleType' }
+        drivingLicenceNumber:
+          type: string
+          maxLength: 20
+          description: Required for every vehicle type except `BICYCLE`
+        vehicleRegistrationNumber:
+          type: string
+          maxLength: 20
+          description: Required for every vehicle type except `BICYCLE`
+
+    Courier:
+      type: object
+      required: [userId, fullName, vehicleType, status, submittedAt, createdAt]
+      properties:
+        userId: { type: string, format: uuid }
+        fullName: { $ref: '#/components/schemas/PersonName' }
+        nationalIdNumber:
+          type: string
+          description: Returned to the courier themselves and to dispatchers only
+        vehicleType: { $ref: '#/components/schemas/VehicleType' }
+        drivingLicenceNumber: { type: string }
+        vehicleRegistrationNumber: { type: string }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        lastDecision: { $ref: '#/components/schemas/StatusDecision' }
+        submittedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    # ------------------------------------------------ API keys
+    CreateApiKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: A label to recognise the key, for example "Shopify store"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Optional. Omit for a key that never expires.
+
+    ApiKey:
+      type: object
+      required: [id, name, prefix, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix:
+          type: string
+          description: First characters of the key, to recognise it
+          examples: [sd_live_7Kq2]
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time }
+
+    CreatedApiKey:
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              description: The full key. Shown only in this response.
+              examples: [sd_live_7Kq2xR9mT4vB8nW1pL6cH3jD5fG0sA2e]

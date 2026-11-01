@@ -1,0 +1,23 @@
+:host {
+  display: block;
+  padding: var(--sd-space-6) var(--sd-space-4);
+}
+main {
+  max-width: 48rem;
+  margin: auto;
+  display: grid;
+  gap: var(--sd-space-6);
+}
+form {
+  display: grid;
+  gap: var(--sd-space-4);
+}
+nav,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-3);
+}
+h1 {
+  margin-bottom: var(--sd-space-4);
+}

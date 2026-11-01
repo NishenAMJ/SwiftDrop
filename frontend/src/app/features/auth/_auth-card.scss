@@ -1,0 +1,55 @@
+// Layout shared by the auth pages' cards (login, register, Google callback). Colours, controls
+// and type come from the global SwiftDrop classes and tokens.
+:host {
+  display: block;
+}
+
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-5);
+}
+
+.auth-card__title {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.auth-card__intro {
+  margin: calc(-1 * var(--sd-space-3)) 0 0;
+  color: var(--sd-text-secondary);
+}
+
+.auth-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+}
+
+.auth-card__form .sd-button {
+  margin-top: var(--sd-space-2);
+}
+
+.auth-card__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  font-size: 0.8125rem;
+  color: var(--sd-text-muted);
+}
+
+.auth-card__divider::before,
+.auth-card__divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--sd-border);
+}
+
+.auth-card__switch {
+  margin: 0;
+  font-size: 0.875rem;
+  text-align: center;
+  color: var(--sd-text-secondary);
+}

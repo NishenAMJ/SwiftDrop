@@ -1,0 +1,121 @@
+<main>
+  <header>
+    <p>SwiftDrop</p>
+    <h1>{{ merchant ? 'Merchant' : 'Courier' }} application</h1>
+    <span
+      class="sd-badge"
+      role="status"
+      [class.sd-badge--warning]="user()?.onboardingState === 'PENDING'"
+      [class.sd-badge--danger]="
+        user()?.onboardingState === 'REJECTED' || user()?.onboardingState === 'SUSPENDED'
+      "
+      [class.sd-badge--info]="user()?.onboardingState === 'APPLICATION_REQUIRED'"
+      [class.sd-badge--success]="user()?.onboardingState === 'READY'"
+      >{{ statusLabel() }}</span
+    >
+  </header>
+  @if (error()) {
+    <div class="sd-alert sd-alert--error" role="alert">
+      {{ error()
+      }}<button
+        class="sd-button sd-button--secondary"
+        (click)="refreshStatus()"
+        [disabled]="busy()"
+      >
+        Retry
+      </button>
+    </div>
+  }
+  @if (loading()) {
+    <p role="status">Loading your application...</p>
+  }
+  @if (reason()) {
+    <section class="sd-card">
+      <h2>Decision reason</h2>
+      <p>{{ reason() }}</p>
+    </section>
+  }
+  @if (editable()) {
+    <section class="sd-card">
+      <h2>
+        {{ user()?.onboardingState === 'REJECTED' ? 'Update and resubmit' : 'Application details' }}
+      </h2>
+      <p>
+        Fields marked * are required. Your details are visible to you and dispatchers reviewing your
+        application.
+      </p>
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        @for (field of fields; track field.name) {
+          <div class="sd-field">
+            <label class="sd-label" [for]="field.name"
+              >{{ field.label }}{{ required(field) ? ' *' : ' (optional)' }}</label
+            >
+            @if (field.options) {
+              <select
+                class="sd-input"
+                [id]="field.name"
+                [formControlName]="field.name"
+                (change)="configureConditionalFields()"
+                [attr.aria-invalid]="invalid(field.name)"
+                [attr.aria-describedby]="field.name + '-error'"
+              >
+                @for (option of field.options; track option) {
+                  <option [value]="option">{{ label(option) }}</option>
+                }
+              </select>
+            } @else {
+              <input
+                class="sd-input"
+                [id]="field.name"
+                [type]="field.type ?? 'text'"
+                [formControlName]="field.name"
+                [maxlength]="field.max"
+                [attr.aria-invalid]="invalid(field.name)"
+                [attr.aria-describedby]="field.name + '-error'"
+              />
+            }
+            <p class="sd-error" [id]="field.name + '-error'">
+              @if (invalid(field.name)) {
+                Check {{ field.label.toLowerCase() }}.
+                @if (required(field)) {
+                  This field is required.
+                }
+                @if (field.min) {
+                  Use at least {{ field.min }} characters.
+                }
+              }
+            </p>
+          </div>
+        }
+        <button
+          class="sd-button sd-button--primary"
+          [disabled]="busy() || loading()"
+          [attr.aria-busy]="busy()"
+        >
+          {{ busy() ? 'Submitting...' : 'Submit application' }}
+        </button>
+      </form>
+    </section>
+  } @else {
+    <section class="sd-card">
+      <h2>{{ statusLabel() }}</h2>
+      <p>
+        {{
+          user()?.onboardingState === 'PENDING'
+            ? 'A dispatcher will review your application. Refresh your status to check for a decision.'
+            : 'Operational access is suspended. Contact SwiftDrop support about the decision.'
+        }}
+      </p>
+    </section>
+  }
+  <nav aria-label="Account">
+    <button
+      class="sd-button sd-button--secondary"
+      (click)="refreshStatus()"
+      [disabled]="busy() || loading()"
+      [attr.aria-busy]="busy()"
+    >
+      Refresh status</button
+    ><button class="sd-button sd-button--secondary" (click)="logout()">Log out</button>
+  </nav>
+</main>

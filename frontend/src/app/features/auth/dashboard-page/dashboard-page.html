@@ -1,0 +1,18 @@
+<main>
+  <header>
+    <p>SwiftDrop</p>
+    <h1>{{ role() }} dashboard</h1>
+    <p>Welcome, {{ user()?.fullName }}.</p>
+  </header>
+  <section class="sd-card" aria-labelledby="dashboard-coming-soon">
+    <p><span class="sd-badge sd-badge--info">Coming soon</span></p>
+    <h2 id="dashboard-coming-soon">Your {{ role().toLowerCase() }} dashboard is on the way</h2>
+    <p>We're building the tools for your role. They'll appear here when they're ready.</p>
+    <p>For now, you can view your account details, change your password, or log out below.</p>
+  </section>
+  <nav aria-label="Account">
+    <a class="sd-button sd-button--secondary" routerLink="/account">Your account</a
+    ><a class="sd-button sd-button--secondary" routerLink="/change-password">Change password</a
+    ><button class="sd-button sd-button--secondary" (click)="logout()">Log out</button>
+  </nav>
+</main>

@@ -1,0 +1,13 @@
+<section class="sd-card auth-card" aria-labelledby="callback-title">
+  @if (error(); as message) {
+    <h1 id="callback-title" class="auth-card__title">Couldn't log you in</h1>
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+    <a class="sd-button sd-button--primary sd-button--block" routerLink="/login">Back to log in</a>
+  } @else {
+    <h1 id="callback-title" class="auth-card__title">Logging you in</h1>
+    <p class="callback__status" role="status">
+      <span class="sd-spinner" aria-hidden="true"></span>
+      Finishing Google login…
+    </p>
+  }
+</section>

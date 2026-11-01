@@ -1,0 +1,22 @@
+debug: false
+logging:
+  level:
+    root: WARN
+# Isolated test database; never falls back to IDENTITY_DB_* or the development database.
+spring:
+  datasource:
+    url: ${IDENTITY_TEST_DB_URL:jdbc:postgresql://localhost:15433/identity_role_test}
+    username: ${IDENTITY_TEST_DB_USER:postgres}
+    password: ${IDENTITY_TEST_DB_PASSWORD:identity-test-only}
+  flyway:
+    create-schemas: true
+swiftdrop:
+  identity:
+    google:
+      client-id: ""
+      client-secret: ""
+    bootstrap:
+      dispatcher-email: ""
+      dispatcher-password: ""
+    jwt:
+      private-key-path: ""

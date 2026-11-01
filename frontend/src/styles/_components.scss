@@ -1,0 +1,218 @@
+// Shared controls (frontend/style.md sections 7 and 8). Features use these classes instead of
+// styling their own buttons, fields, cards, alerts or badges. Change them here, through review.
+
+// Buttons
+.sd-button {
+  min-height: 2.75rem;
+  padding: 0.625rem 1.125rem;
+  border: 1px solid transparent;
+  border-radius: var(--sd-radius-control);
+  font-weight: 600;
+  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sd-space-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.sd-button--primary {
+  background: var(--sd-brand);
+  color: white;
+}
+
+.sd-button--primary:hover:not(:disabled) {
+  background: var(--sd-brand-hover);
+}
+
+.sd-button--primary:active:not(:disabled) {
+  background: var(--sd-brand-pressed);
+}
+
+.sd-button--secondary {
+  background: var(--sd-surface);
+  border-color: var(--sd-control-border);
+  color: var(--sd-brand-pressed);
+}
+
+.sd-button--secondary:hover:not(:disabled) {
+  background: var(--sd-brand-soft);
+}
+
+.sd-button--block {
+  width: 100%;
+}
+
+.sd-button:disabled {
+  background: var(--sd-disabled-bg);
+  color: var(--sd-disabled-text);
+  cursor: not-allowed;
+}
+
+// Loading: keep the button's size, show a spinner next to the label.
+.sd-button[aria-busy='true'] {
+  cursor: progress;
+}
+
+.sd-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: sd-spin 700ms linear infinite;
+}
+
+@keyframes sd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Text links
+.sd-link {
+  color: var(--sd-brand);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.sd-link:hover {
+  color: var(--sd-brand-hover);
+}
+
+// Cards
+.sd-card {
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-card);
+  box-shadow: var(--sd-shadow-card);
+  padding: var(--sd-space-6);
+}
+
+// Form fields: label above, control, then helper or error text.
+.sd-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+}
+
+.sd-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--sd-text);
+}
+
+.sd-label__optional {
+  font-weight: 400;
+  color: var(--sd-text-muted);
+}
+
+.sd-input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 1rem;
+  color: var(--sd-text);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-control-border);
+  border-radius: var(--sd-radius-control);
+}
+
+.sd-input[aria-invalid='true'] {
+  border-color: var(--sd-danger);
+  box-shadow: inset 0 0 0 1px var(--sd-danger);
+}
+
+.sd-help {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--sd-text-secondary);
+}
+
+.sd-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--sd-danger);
+}
+
+// Alerts: messages near the action they belong to.
+.sd-alert {
+  padding: var(--sd-space-3) var(--sd-space-4);
+  border-radius: var(--sd-radius-control);
+  border: 1px solid currentColor;
+  font-size: 0.875rem;
+}
+
+.sd-alert:focus {
+  outline: none;
+}
+
+.sd-alert:focus-visible {
+  outline: 3px solid var(--sd-focus);
+  outline-offset: 3px;
+}
+
+.sd-alert--error {
+  color: var(--sd-danger);
+  background: var(--sd-danger-bg);
+}
+
+.sd-alert--info {
+  color: var(--sd-info);
+  background: var(--sd-info-bg);
+}
+
+.sd-alert--warning {
+  color: var(--sd-warning);
+  background: var(--sd-warning-bg);
+}
+
+// Badges: always text, colour only supports it (section 9).
+.sd-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--sd-text-secondary);
+  background: var(--sd-surface-subtle);
+  border: 1px solid var(--sd-border);
+}
+
+.sd-badge--info {
+  color: var(--sd-info);
+  background: var(--sd-info-bg);
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-button {
+    transition: none;
+  }
+
+  .sd-spinner {
+    animation-duration: 2s;
+  }
+}
+
+// Application approval states share the status palette across all roles.
+.sd-badge--warning {
+  color: var(--sd-warning);
+  background: var(--sd-warning-bg);
+}
+.sd-badge--danger {
+  color: var(--sd-danger);
+  background: var(--sd-danger-bg);
+}
+.sd-badge--success {
+  color: var(--sd-success);
+  background: var(--sd-success-bg);
+}

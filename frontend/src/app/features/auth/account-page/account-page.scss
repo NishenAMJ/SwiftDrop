@@ -1,0 +1,72 @@
+:host {
+  display: block;
+}
+
+.account__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-4);
+  min-height: 4rem;
+  padding: var(--sd-space-3) var(--sd-space-4);
+  background: var(--sd-surface);
+  border-bottom: 1px solid var(--sd-border);
+}
+
+.account__brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sd-brand-pressed);
+}
+
+.account__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-6);
+  max-width: 45rem;
+  margin: 0 auto;
+  padding: var(--sd-space-8) var(--sd-space-4);
+}
+
+.account__title {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.account__card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 var(--sd-space-4);
+}
+
+.account__details {
+  display: grid;
+  gap: var(--sd-space-4);
+  margin: 0;
+}
+
+.account__details dt {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sd-text-secondary);
+}
+
+.account__details dd {
+  margin: var(--sd-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.account__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+}
+
+@media (min-width: 48rem) {
+  .account__header {
+    padding-inline: var(--sd-space-8);
+  }
+}

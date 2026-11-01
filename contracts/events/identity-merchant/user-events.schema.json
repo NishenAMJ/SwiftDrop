@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/identity-merchant/user-events.schema.json",
+  "title": "User events",
+  "description": "Exchange swiftdrop.identity. user.registered: a new account was created (password or Google). user.updated: name, phone, roles or status changed. Consumers that keep contact details (for example notification-webhook-service) build their copy from these two events.",
+  "allOf": [
+    {
+      "$ref": "../envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "enum": [
+            "user.registered",
+            "user.updated"
+          ]
+        },
+        "version": {
+          "const": 1
+        },
+        "producer": {
+          "const": "identity-merchant-service"
+        },
+        "data": {
+          "type": "object",
+          "required": [
+            "userId",
+            "email",
+            "fullName",
+            "roles",
+            "status"
+          ],
+          "properties": {
+            "userId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "fullName": {
+              "type": "string"
+            },
+            "phoneNumber": {
+              "type": "string",
+              "pattern": "^\\+[1-9][0-9]{7,14}$",
+              "description": "E.164. Absent if the user has not given one."
+            },
+            "roles": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "CUSTOMER",
+                  "MERCHANT",
+                  "COURIER",
+                  "DISPATCHER"
+                ]
+              },
+              "uniqueItems": true,
+              "maxItems": 1
+            },
+            "status": {
+              "enum": [
+                "ACTIVE",
+                "SUSPENDED"
+              ]
+            },
+            "authProvider": {
+              "enum": [
+                "PASSWORD",
+                "GOOGLE"
+              ],
+              "description": "user.registered only: how the account was created"
+            },
+            "accountRole": {
+              "enum": [
+                "CUSTOMER",
+                "MERCHANT",
+                "COURIER",
+                "DISPATCHER"
+              ],
+              "description": "Chosen account role; absent before a new Google account completes role selection."
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+.auth-frame {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sd-space-6);
+  padding: var(--sd-space-10) var(--sd-space-4);
+}
+
+.auth-frame__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sd-space-1);
+  text-align: center;
+}
+
+.auth-frame__wordmark {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--sd-brand-pressed);
+}
+
+.auth-frame__tagline {
+  font-size: 0.875rem;
+  color: var(--sd-text-secondary);
+}
+
+.auth-frame__main {
+  width: 100%;
+  max-width: 27.5rem; // 440px (style.md section 6)
+}
+
+@media (min-width: 48rem) {
+  .auth-frame {
+    padding-block: var(--sd-space-12);
+  }
+}

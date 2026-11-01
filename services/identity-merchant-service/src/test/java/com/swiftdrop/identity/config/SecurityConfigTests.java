@@ -1,0 +1,48 @@
+package com.swiftdrop.identity.config;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+
+@org.springframework.test.context.ActiveProfiles("test")
+@SpringBootTest
+@AutoConfigureMockMvc
+class SecurityConfigTests {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void healthIsPublicAndHidesDetails() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("UP"))
+            .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
+    void otherRequestsNeedAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/users/me"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().doesNotExist("Set-Cookie"));
+    }
+
+    @Test
+    void googleLoginIsOffWithoutCredentials() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/google"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void otherActuatorEndpointsAreNotPublic() throws Exception {
+        mockMvc.perform(get("/actuator/env"))
+            .andExpect(status().isUnauthorized());
+    }
+}

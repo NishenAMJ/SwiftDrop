@@ -1,0 +1,82 @@
+server:
+  port: 8081
+
+spring:
+  config:
+    # Local runs from the service directory or the SwiftDrop root.
+    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
+  application:
+    name: identity-merchant-service
+
+  datasource:
+    url: ${IDENTITY_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
+    username: ${IDENTITY_DB_USER:identity_merchant_user}
+    password: ${IDENTITY_DB_PASSWORD}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: identity_merchant
+
+  flyway:
+    enabled: true
+    default-schema: identity_merchant
+    schemas:
+      - identity_merchant
+    create-schemas: false
+    locations: classpath:db/migration
+
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+
+swiftdrop:
+  identity:
+    jwt:
+      issuer: swiftdrop-identity
+      audience: swiftdrop-api
+      access-token-ttl: 15m
+      # PKCS#8 PEM file. Empty: a temporary key is generated at startup (tokens die on restart).
+      private-key-path: ${IDENTITY_JWT_PRIVATE_KEY_PATH:}
+    refresh-token:
+      ttl: 14d
+      cookie-name: sd_refresh
+      cookie-path: /api/v1/auth
+      # Browsers accept Secure cookies on http://localhost, so this stays true locally too.
+      cookie-secure: ${IDENTITY_COOKIE_SECURE:true}
+      reuse-grace: 10s
+    bootstrap:
+      dispatcher-email: ${DISPATCHER_BOOTSTRAP_EMAIL:}
+      dispatcher-password: ${DISPATCHER_BOOTSTRAP_PASSWORD:}
+      dispatcher-name: ${DISPATCHER_BOOTSTRAP_NAME:SwiftDrop Dispatcher}
+    # Google login is on only when both are set. Redirect URI to register with Google:
+    # http://localhost:8081/login/oauth2/code/google
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+    # Where the browser goes after Google login: {frontend-base-url}/auth/callback
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:4200}
+    # Per service instance, in memory. "requests per period", refilled smoothly.
+    rate-limit:
+      enabled: ${IDENTITY_RATE_LIMIT_ENABLED:true}
+      register-per-ip: { requests: 10, per: 1h }
+      login-per-ip: { requests: 30, per: 1m }
+      login-failures-per-account: { requests: 10, per: 15m }
+      refresh-per-ip: { requests: 120, per: 1m }
+      api-key-exchange-per-ip: { requests: 60, per: 1m }
+      password-failures-per-user: { requests: 5, per: 15m }
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only health is exposed over HTTP. It is public (see SecurityConfig) so Compose
+        # and the gateway can check it; it never shows component details.
+        include: health
+  endpoint:
+    health:
+      show-details: never

@@ -1,0 +1,19 @@
+{
+  "eventId": "0b6f3d1e-6a8c-4c52-9f0e-3d2a1b7c9e41",
+  "eventType": "user.registered",
+  "version": 1,
+  "occurredAt": "2026-11-01T09:30:00Z",
+  "producer": "identity-merchant-service",
+  "data": {
+    "userId": "8f3c2a10-4b7d-4e9a-a1c2-5d6e7f809a1b",
+    "email": "nimal@example.com",
+    "fullName": "Nimal Perera",
+    "phoneNumber": "+94771234567",
+    "roles": [
+      "CUSTOMER"
+    ],
+    "status": "ACTIVE",
+    "authProvider": "PASSWORD",
+    "accountRole": "CUSTOMER"
+  }
+}
