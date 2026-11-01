@@ -11,7 +11,14 @@ Authentication, users and merchant management for SwiftDrop. Port **8081**.
 
 ## Build and test
 
-Tests start the full application, so the database must be running (see the [root README](../../README.md), steps 3–4).
+Tests use the `test` profile and an isolated database on port 15433, never the development database. Start a disposable database and wait until `pg_isready` reports accepting connections:
+
+```powershell
+docker run --name swiftdrop-identity-role-tests --rm -d -p 127.0.0.1:15433:5432 -e POSTGRES_PASSWORD=identity-test-only -e POSTGRES_DB=identity_role_test postgres:17
+docker exec swiftdrop-identity-role-tests pg_isready -U postgres -d identity_role_test
+```
+
+Run the tests below, then stop the disposable container with `docker stop swiftdrop-identity-role-tests`. Alternative isolated databases use `IDENTITY_TEST_DB_URL`, `IDENTITY_TEST_DB_USER`, and `IDENTITY_TEST_DB_PASSWORD`.
 
 ```bash
 ./mvnw verify                                            # Windows: .\mvnw.cmd verify
@@ -29,7 +36,7 @@ curl http://localhost:8081/actuator/health               # {"status":"UP"}
 ```bash
 # Register (creates a CUSTOMER and logs in)
 curl -i -X POST localhost:8081/api/v1/auth/register -H 'Content-Type: application/json' \
-  -d '{"email":"nimal@example.com","password":"Correct-horse-42","fullName":"Nimal Perera"}'
+  -d '{"email":"nimal@example.com","password":"Correct-horse-42","fullName":"Nimal Perera","role":"CUSTOMER"}'
 
 # Use the accessToken from the response
 curl localhost:8081/api/v1/users/me -H "Authorization: Bearer <accessToken>"
@@ -46,7 +53,7 @@ The response also sets the `sd_refresh` cookie (HttpOnly, sent only to `/api/v1/
 | `GET`, `PATCH /api/v1/users/me`; `POST /api/v1/users/me/password` | any signed-in user |
 | `GET /api/v1/users` (filters: `role`, `status`, `q`; paging) | dispatcher |
 | `POST /api/v1/dispatchers` | dispatcher |
-| `POST /api/v1/merchants`, `POST /api/v1/couriers` (apply or resubmit) | customer |
+| `POST /api/v1/merchants`, `POST /api/v1/couriers` (apply or resubmit) | matching assigned merchant/courier role |
 | `GET /api/v1/merchants/me`, `GET /api/v1/couriers/me` | the applicant (merchants/me also with an API-key token) |
 | `GET /api/v1/merchants`, `/merchants/{id}`; `GET /api/v1/couriers`, `/couriers/{userId}` | dispatcher |
 | `POST /api/v1/merchants/{id}/approve`, `/reject`, `/suspend`, `/reactivate` (same for couriers) | dispatcher |
@@ -95,11 +102,11 @@ Errors arrive as `/auth/callback?error=email_not_verified | account_suspended | 
 - **Refresh tokens:** random values, stored as SHA-256 hashes, 14 days, replaced on every refresh. Reusing an old one revokes that whole login, except within 10 seconds of a rotation (two browser tabs refreshing at once).
 - **Passwords:** BCrypt; 8–64 characters with a letter and a digit. Unknown email and wrong password give the same error.
 - **New dispatchers** get a token with no roles until they change the initial password.
-- **Merchant and courier applications:** customers apply; dispatchers approve, reject (with a reason), suspend (with a reason) or reactivate. Approval adds the `MERCHANT`/`COURIER` role and suspension removes it, effective at the user's next token refresh. Invalid moves return `409 INVALID_STATUS_TRANSITION`. Every submission and decision is kept in `application_decisions` (who, when, reason, internal note).
+- **Merchant and courier applications:** users choose MERCHANT or COURIER at registration and apply for that role; dispatchers approve, reject (with a reason), suspend (with a reason) or reactivate. Approval activates the assigned `MERCHANT`/`COURIER` role and suspension removes it, effective at the user's next token refresh. Invalid moves return `409 INVALID_STATUS_TRANSITION`. Every submission and decision is kept in `application_decisions` (who, when, reason, internal note).
 - **Merchant tokens** carry `merchant_id`.
 - **API keys:** `sd_live_` + 32 random characters, shown once, stored as a SHA-256 hash, at most 5 active per merchant. `POST /api/v1/auth/token` exchanges a key for a 15-minute `MERCHANT` token (`auth: "api_key"`). Keys stop working immediately when the merchant is suspended or the key is revoked. Inside identity such a token can only read `GET /api/v1/merchants/me`.
 - **Rate limits:** per IP on register, login, refresh and API-key exchange, and per account on wrong passwords (login and password change), so guessing one person's password from many addresses is slowed down too. Over the limit: `429 RATE_LIMITED` with `Retry-After`. Defaults are in the [auth design](../../docs/architecture/authentication.md#security-rules). Counts are kept in memory per instance.
-- **Google login:** finds the user by Google ID, else links the account with the same verified email, else creates a CUSTOMER. Ends with the refresh cookie and a redirect; no token in the URL.
+- **Google login:** finds the user by Google ID, else links the account with the same verified email, else creates an account awaiting one-time role selection. Ends with the refresh cookie and a redirect; no token in the URL.
 - **Events** (`user.*`, `merchant.*`, `courier.*`) are written to the `outbox_events` table in the same transaction as the change. They are not sent anywhere yet (see below).
 
 ## Not done yet
@@ -118,3 +125,15 @@ server:
 ```
 
 Only enable this when identity is reachable **only** through the gateway; otherwise clients could fake their address.
+
+## Single-role onboarding
+
+Password registration requires `role`: CUSTOMER, MERCHANT, or COURIER. There is one shared login. Each account keeps exactly one immutable `accountRole`; `roles` contains zero or one active permission role. Merchant/courier accounts have no operational role until approved. New Google accounts have no `accountRole` until `POST /api/v1/users/me/role` selects it; existing Google-linked accounts retain theirs.
+
+User responses include `onboardingState`: ROLE_REQUIRED, APPLICATION_REQUIRED, PENDING, REJECTED, SUSPENDED, or READY. `mustChangePassword` takes routing priority. The Angular app routes to role selection, password change, application/status, or `/customer`, `/merchant`, `/courier`, `/dispatcher`. Operational dashboards are basic shells; approval APIs remain available, but dispatcher approval screens are a later feature.
+
+### Coordinated rollout
+
+Stop traffic to old identity instances before migrating. V7 preserves users, infers assigned roles from legacy permissions/applications, and aborts with user IDs if conflicting assignments exist. Resolve those conflicts explicitly; do not reset production data. The migration revokes previous refresh sessions. Updated identity rejects JWTs without `identity_version: 2`.
+
+Deploy the matching frontend and update gateway/downstream validators to require `identity_version: 2` before reopening traffic. If those validators cannot yet be updated, keep old access tokens out of traffic until their maximum lifetime plus verifier clock skew has elapsed. All users must log in again. Never run old and new identity versions together after this migration.

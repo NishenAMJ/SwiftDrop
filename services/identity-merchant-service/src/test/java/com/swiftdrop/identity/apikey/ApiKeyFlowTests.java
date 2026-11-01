@@ -30,7 +30,7 @@ class ApiKeyFlowTests extends ApiTestSupport {
 
     @BeforeEach
     void approvedMerchant() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("MERCHANT");
         dispatcher = activeDispatcherToken();
         merchantId = JsonPath.read(postWithToken("/api/v1/merchants", applicant.accessToken(), APPLICATION)
             .andReturn().getResponse().getContentAsString(), "$.id");

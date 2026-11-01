@@ -7,13 +7,18 @@ export const exampleUser: AuthUser = {
   fullName: 'Nimal Perera',
   phoneNumber: '+94771234567',
   roles: ['CUSTOMER'],
+  accountRole: 'CUSTOMER',
+  onboardingState: 'READY',
   status: 'ACTIVE',
   authProviders: ['PASSWORD'],
   mustChangePassword: false,
   createdAt: '2026-11-01T09:30:00Z',
 };
 
-export function tokenResponse(user: AuthUser = exampleUser, accessToken = 'access-1'): TokenResponse {
+export function tokenResponse(
+  user: AuthUser = exampleUser,
+  accessToken = 'access-1',
+): TokenResponse {
   return { accessToken, tokenType: 'Bearer', expiresIn: 900, user };
 }
 

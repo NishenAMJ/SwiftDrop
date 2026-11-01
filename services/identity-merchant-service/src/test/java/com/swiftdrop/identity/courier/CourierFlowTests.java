@@ -31,7 +31,7 @@ class CourierFlowTests extends ApiTestSupport {
 
     @Test
     void approvalMakesTheUserACourier() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("COURIER");
         String dispatcher = activeDispatcherToken();
 
         apply(applicant.accessToken(), MOTORCYCLE)
@@ -52,7 +52,7 @@ class CourierFlowTests extends ApiTestSupport {
             .andExpect(jsonPath("$.lastDecision.decidedBy").exists());
 
         Session courier = session(refresh(applicant.refreshToken()).andReturn());
-        assertThat((List<String>) claims(courier.accessToken()).read("$.roles")).containsExactly("CUSTOMER", "COURIER");
+        assertThat((List<String>) claims(courier.accessToken()).read("$.roles")).containsExactly("COURIER");
         getWithToken("/api/v1/couriers/me", courier.accessToken())
             .andExpect(jsonPath("$.status").value("APPROVED"))
             .andExpect(jsonPath("$.lastDecision.decidedBy").doesNotExist());
@@ -69,18 +69,18 @@ class CourierFlowTests extends ApiTestSupport {
         decide(dispatcher, applicant.userId(), "suspend", "{\"reason\": \"Repeated late deliveries\"}")
             .andExpect(jsonPath("$.status").value("SUSPENDED"));
         Session suspended = session(refresh(courier.refreshToken()).andReturn());
-        assertThat((List<String>) claims(suspended.accessToken()).read("$.roles")).containsExactly("CUSTOMER");
+        assertThat((List<String>) claims(suspended.accessToken()).read("$.roles")).isEmpty();
     }
 
     @Test
     void bicyclesNeedNoDocumentsButOtherVehiclesDo() throws Exception {
-        apply(registerAndLogin().accessToken(), """
+        apply(registerAndLogin("COURIER").accessToken(), """
             {"nationalIdNumber": "200012345678", "vehicleType": "BICYCLE", "drivingLicenceNumber": "IGNORED"}
             """)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.drivingLicenceNumber").doesNotExist());
 
-        apply(registerAndLogin().accessToken(), """
+        apply(registerAndLogin("COURIER").accessToken(), """
             {"nationalIdNumber": "200012345678", "vehicleType": "CAR"}
             """)
             .andExpect(status().isBadRequest())
@@ -89,7 +89,7 @@ class CourierFlowTests extends ApiTestSupport {
 
     @Test
     void rejectedCourierCanResubmit() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("COURIER");
         String dispatcher = activeDispatcherToken();
         apply(applicant.accessToken(), MOTORCYCLE).andExpect(status().isCreated());
         apply(applicant.accessToken(), MOTORCYCLE).andExpect(status().isConflict());
@@ -106,7 +106,7 @@ class CourierFlowTests extends ApiTestSupport {
 
     @Test
     void permissions() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("COURIER");
         String dispatcher = activeDispatcherToken();
         apply(applicant.accessToken(), MOTORCYCLE).andExpect(status().isCreated());
 
@@ -114,7 +114,7 @@ class CourierFlowTests extends ApiTestSupport {
         decide(applicant.accessToken(), applicant.userId(), "approve", null).andExpect(status().isForbidden());
         getWithToken("/api/v1/couriers", applicant.accessToken()).andExpect(status().isForbidden());
         getWithToken("/api/v1/couriers/" + applicant.userId(), dispatcher).andExpect(status().isOk());
-        getWithToken("/api/v1/couriers/me", registerAndLogin().accessToken()).andExpect(status().isNotFound());
+        getWithToken("/api/v1/couriers/me", registerAndLogin("COURIER").accessToken()).andExpect(status().isNotFound());
     }
 
     private ResultActions apply(String token, String json) throws Exception {

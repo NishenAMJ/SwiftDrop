@@ -1,7 +1,7 @@
 <section class="sd-card auth-card" aria-labelledby="register-title">
   <h1 id="register-title" class="auth-card__title">Create your account</h1>
   <p class="auth-card__intro">
-    Start with a customer account. You can apply to become a merchant or courier afterwards.
+    Choose your account role. Merchant and courier accounts require approval before use.
   </p>
 
   @if (serverError(); as message) {
@@ -9,6 +9,20 @@
   }
 
   <form class="auth-card__form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="sd-field">
+      <label class="sd-label" for="register-role">Account role</label>
+      <select
+        id="register-role"
+        class="sd-input"
+        formControlName="role"
+        aria-describedby="role-help"
+      >
+        <option value="CUSTOMER">Customer</option>
+        <option value="MERCHANT">Merchant</option>
+        <option value="COURIER">Courier</option>
+      </select>
+      <p class="sd-help" id="role-help">Your role cannot be changed after registration.</p>
+    </div>
     <div class="sd-field">
       <label class="sd-label" for="register-fullName">Full name</label>
       <input

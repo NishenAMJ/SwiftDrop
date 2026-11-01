@@ -1,0 +1,26 @@
+<main>
+  <section class="sd-card">
+    <h1>Choose your account role</h1>
+    <p>
+      Choose how you will use SwiftDrop. This choice cannot be changed. Merchants and couriers must
+      submit an application for approval.
+    </p>
+    @if (error()) {
+      <p class="sd-alert sd-alert--error" role="alert">{{ error() }}</p>
+    }
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <div class="sd-field">
+        <label class="sd-label" for="account-role">Account role</label>
+        <select id="account-role" class="sd-input" formControlName="role">
+          <option value="CUSTOMER">Customer</option>
+          <option value="MERCHANT">Merchant</option>
+          <option value="COURIER">Courier</option>
+        </select>
+      </div>
+      <button class="sd-button sd-button--primary" [disabled]="busy()" [attr.aria-busy]="busy()">
+        {{ busy() ? 'Saving...' : 'Continue' }}
+      </button>
+    </form>
+  </section>
+  <button class="sd-button sd-button--secondary" (click)="logout()">Log out</button>
+</main>

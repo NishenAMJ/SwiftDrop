@@ -11,7 +11,7 @@ import {
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { safeReturnUrl } from '../../../core/auth/auth.guards';
+import { destinationFor } from '../../../core/auth/auth.guards';
 import { AuthService, GOOGLE_LOGIN_URL } from '../../../core/auth/auth.service';
 import { errorMessage } from '../../../core/auth/problem-messages';
 
@@ -60,15 +60,17 @@ export class LoginPage {
     this.submitting.set(true);
     const { email, password } = this.form.getRawValue();
     this.auth.login({ email: email.trim(), password }).subscribe({
-      next: () => {
+      next: (user) => {
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-        void this.router.navigateByUrl(safeReturnUrl(returnUrl));
+        void this.router.navigateByUrl(destinationFor(user, returnUrl));
       },
       error: (error: unknown) => {
         this.submitting.set(false);
         this.serverError.set(errorMessage(error, MESSAGES));
         // Move focus to the message so screen-reader and keyboard users notice it.
-        afterNextRender(() => this.errorAlert()?.nativeElement.focus(), { injector: this.injector });
+        afterNextRender(() => this.errorAlert()?.nativeElement.focus(), {
+          injector: this.injector,
+        });
       },
     });
   }

@@ -26,18 +26,20 @@ describe('AccountPage', () => {
   afterEach(() => http.verify());
 
   it('shows who is signed in and their roles as text', async () => {
-    const page = (await signedInAs({ ...exampleUser, roles: ['CUSTOMER', 'MERCHANT'] })).nativeElement as HTMLElement;
+    const page = (
+      await signedInAs({ ...exampleUser, accountRole: 'MERCHANT', roles: ['MERCHANT'] })
+    ).nativeElement as HTMLElement;
     expect(page.querySelector('h1')?.textContent).toContain('Hello, Nimal Perera');
     expect(page.textContent).toContain('nimal@example.com');
     expect([...page.querySelectorAll('.sd-badge')].map((b) => b.textContent?.trim())).toEqual([
-      'Customer',
       'Merchant',
     ]);
   });
 
   it('tells a new dispatcher to change the initial password', async () => {
-    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'], mustChangePassword: true }))
-      .nativeElement as HTMLElement;
+    const page = (
+      await signedInAs({ ...exampleUser, roles: ['DISPATCHER'], mustChangePassword: true })
+    ).nativeElement as HTMLElement;
     expect(page.querySelector('.sd-alert--warning')?.textContent).toContain('initial password');
   });
 

@@ -97,7 +97,7 @@ class AuthFlowTests extends ApiTestSupport {
     @Test
     void registerValidatesFieldsAndPasswordRules() throws Exception {
         mockMvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).content("""
-                {"email": "not-an-email", "password": "x", "fullName": "", "phoneNumber": "0771234567"}
+                {"role": "CUSTOMER", "email": "not-an-email", "password": "x", "fullName": "", "phoneNumber": "0771234567"}
                 """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))

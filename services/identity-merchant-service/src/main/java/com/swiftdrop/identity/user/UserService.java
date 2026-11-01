@@ -44,11 +44,17 @@ public class UserService {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 
-    /** Self-registration with a password. Always creates an active CUSTOMER. */
+    /** Convenience for internal callers creating a customer; public registration requires a role. */
     @Transactional
     public User registerCustomer(String email, String password, String fullName, String phoneNumber) {
+        return register(email, password, fullName, phoneNumber, RoleName.CUSTOMER);
+    }
+
+    @Transactional
+    public User register(String email, String password, String fullName, String phoneNumber, RoleName role) {
+        requirePublicRole(role);
         PasswordPolicy.check("password", password);
-        User user = newUser(email, fullName, phoneNumber, password, RoleName.CUSTOMER);
+        User user = newUser(email, fullName, phoneNumber, password, role);
         events.record("user.registered", eventData(user, "PASSWORD"));
         return user;
     }
@@ -58,7 +64,7 @@ public class UserService {
      * <ol>
      *   <li>the user who already logged in with this Google account;</li>
      *   <li>otherwise the account with the same email, which gets linked to Google;</li>
-     *   <li>otherwise a new active CUSTOMER without a password ({@code user.registered}).</li>
+     *   <li>otherwise a new account awaiting role selection without a password ({@code user.registered}).</li>
      * </ol>
      * The caller must only pass emails that Google reports as verified; linking an unverified
      * email would let anyone take over the account registered with it.
@@ -84,8 +90,7 @@ public class UserService {
 
         User user = new User(email, displayName(name, email), null, now);
         user.linkGoogle(googleSubject, now);
-        user.addRole(roles.findByName(RoleName.CUSTOMER)
-            .orElseThrow(() -> new IllegalStateException("Role missing from database: CUSTOMER")));
+
         try {
             users.saveAndFlush(user);
         }
@@ -226,14 +231,45 @@ public class UserService {
         Instant now = clock.instant();
         User user = new User(normalizedEmail, fullName.trim(), phoneNumber, now);
         user.setPasswordHash(passwordEncoder.encode(password), now);
-        user.addRole(roles.findByName(roleName)
-            .orElseThrow(() -> new IllegalStateException("Role missing from database: " + roleName)));
+        user.assignRole(roleName);
+        if (roleName == RoleName.CUSTOMER || roleName == RoleName.DISPATCHER) {
+            user.addRole(roles.findByName(roleName).orElseThrow());
+        }
         try {
             return users.saveAndFlush(user);
         }
         catch (DataIntegrityViolationException ex) {
             // Two registrations with the same email at the same moment: the unique constraint wins.
             throw emailTaken();
+        }
+    }
+
+    private static void requirePublicRole(RoleName role) {
+        if (role == null || role == RoleName.DISPATCHER) {
+            throw ApiException.validation("role", "Choose customer, merchant or courier.");
+        }
+    }
+
+    @Transactional
+    public User selectRole(UUID userId, RoleName role) {
+        requirePublicRole(role);
+        User user = get(userId);
+        requireActive(user);
+        if (user.getAccountRole() != null || user.getGoogleSubject() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "ROLE_ALREADY_ASSIGNED", "Your account role cannot be changed.");
+        }
+        user.assignRole(role);
+        if (role == RoleName.CUSTOMER) user.addRole(roles.findByName(role).orElseThrow());
+        users.saveAndFlush(user);
+        events.record("user.updated", eventData(user, null));
+        return user;
+    }
+
+    public void requireApplicant(UUID userId, RoleName role) {
+        User user = get(userId);
+        requireActive(user);
+        if (user.getAccountRole() != role || user.isMustChangePassword()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "This application does not match your account role.");
         }
     }
 
@@ -253,6 +289,7 @@ public class UserService {
         }
         data.put("roles", user.roleNames().stream().map(Enum::name).toList());
         data.put("status", user.getStatus().name());
+        if (user.getAccountRole() != null) data.put("accountRole", user.getAccountRole().name());
         if (authProvider != null) {
             data.put("authProvider", authProvider);
         }

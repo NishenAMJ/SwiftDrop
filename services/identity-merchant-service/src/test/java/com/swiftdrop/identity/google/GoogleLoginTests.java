@@ -64,7 +64,7 @@ class GoogleLoginTests extends ApiTestSupport {
     }
 
     @Test
-    void newGoogleUserBecomesACustomerWithoutPassword() throws Exception {
+    void newGoogleUserMustChooseRoleWithoutOperationalAccess() throws Exception {
         String email = uniqueEmail();
         MockHttpServletResponse response = finishGoogleLogin(googleUser("g-" + UUID.randomUUID(), email, true, "Kamala Silva"));
 
@@ -76,6 +76,7 @@ class GoogleLoginTests extends ApiTestSupport {
         // The frontend's next step: exchange the cookie for an access token.
         MvcResult refreshed = refresh(cookie.getValue())
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.onboardingState").value("ROLE_REQUIRED"))
             .andExpect(jsonPath("$.user.email").value(email))
             .andExpect(jsonPath("$.user.fullName").value("Kamala Silva"))
             .andExpect(jsonPath("$.user.authProviders[0]").value("GOOGLE"))
@@ -83,7 +84,7 @@ class GoogleLoginTests extends ApiTestSupport {
             .andReturn();
         Session session = session(refreshed);
         assertThat((String) claims(session.accessToken()).read("$.auth")).isEqualTo("google");
-        assertThat((List<String>) claims(session.accessToken()).read("$.roles")).containsExactly("CUSTOMER");
+        assertThat((List<String>) claims(session.accessToken()).read("$.roles")).isEmpty();
 
         assertThat(outbox.findAll().stream()
             .filter(e -> e.getEventType().equals("user.registered"))

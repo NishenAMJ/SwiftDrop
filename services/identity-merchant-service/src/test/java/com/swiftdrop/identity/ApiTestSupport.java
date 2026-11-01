@@ -31,6 +31,7 @@ import com.swiftdrop.identity.user.UserService;
  * so tests don't depend on each other or on what earlier runs left in the database. Rate limiting
  * is off here (see RateLimitTests).
  */
+@org.springframework.test.context.ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
 // Tests make many requests from one address; RateLimitTests turns limiting back on.
@@ -52,11 +53,15 @@ public abstract class ApiTestSupport {
     }
 
     protected ResultActions register(String email, String password) throws Exception {
+        return register(email, password, "CUSTOMER");
+    }
+
+    protected ResultActions register(String email, String password, String role) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/register")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
-                {"email": "%s", "password": "%s", "fullName": "Test User", "phoneNumber": "+94771234567"}
-                """.formatted(email, password)));
+                {"email": "%s", "password": "%s", "fullName": "Test User", "phoneNumber": "+94771234567", "role": "%s"}
+                """.formatted(email, password, role)));
     }
 
     protected ResultActions login(String email, String password) throws Exception {
@@ -109,6 +114,10 @@ public abstract class ApiTestSupport {
 
     protected Session registerAndLogin() throws Exception {
         return session(register(uniqueEmail(), PASSWORD).andReturn());
+    }
+
+    protected Session registerAndLogin(String role) throws Exception {
+        return session(register(uniqueEmail(), PASSWORD, role).andReturn());
     }
 
     /** The decoded payload of a JWT (no signature check; the API tests cover that). */

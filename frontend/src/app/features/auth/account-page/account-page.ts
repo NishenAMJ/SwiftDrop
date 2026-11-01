@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { Role } from '../../../core/auth/auth.models';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -17,6 +17,7 @@ const ROLE_LABELS: Record<Role, string> = {
  */
 @Component({
   selector: 'app-account-page',
+  imports: [RouterLink],
   templateUrl: './account-page.html',
   styleUrl: './account-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

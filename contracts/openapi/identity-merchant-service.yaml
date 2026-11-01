@@ -13,12 +13,12 @@ info:
     are in `contracts/README.md`.
 
     **Account model**
-    - Everyone registers (with a password or Google) and gets a `CUSTOMER` account.
-    - A user can then apply to become a merchant and/or a courier. The application starts `PENDING`.
-    - A `DISPATCHER` approves, rejects, suspends or reactivates applications. Approval adds the
-      `MERCHANT` or `COURIER` role to the user's next token.
-    - Nobody can register as a dispatcher. The first dispatcher is created at startup from
-      environment variables; after that, dispatchers create other dispatchers.
+    - Every completed account has exactly one immutable accountRole.
+    - Password registration requires CUSTOMER, MERCHANT or COURIER. Dispatchers are created internally.
+    - New Google users choose their role after login using POST /users/me/role.
+    - Merchant/courier accounts submit matching applications and have no operational roles until approved.
+    - Approval activates the assigned role; suspension removes active permissions without changing accountRole.
+    - JWT roles remains an array containing zero or one active role. identity_version must equal 2.
 
     **Application status transitions** (merchants and couriers)
 
@@ -64,9 +64,10 @@ paths:
     post:
       tags: [Auth]
       operationId: register
-      summary: Create a customer account with email and password
+      summary: Create an account with a chosen public role
       description: |
-        Creates an `ACTIVE` user with the `CUSTOMER` role, logs them in and returns an access token.
+        Creates an `ACTIVE` user with one assigned role, logs them in and returns an access token.
+        CUSTOMER has immediate access; MERCHANT/COURIER must complete an application and receive approval.
         Sets the refresh-token cookie. Publishes `user.registered`.
       security: []
       requestBody:
@@ -219,7 +220,7 @@ paths:
         ever put in a URL.
 
         If Google reports a verified email that matches an existing password account, the
-        Google login is linked to that account. A new Google user gets a `CUSTOMER` account
+        Google login is linked to that account. A new Google user gets an account awaiting role selection
         and `user.registered` is published.
 
         On failure the browser goes to `{FRONTEND_BASE_URL}/auth/callback?error=<reason>`, with no
@@ -285,6 +286,34 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
 
+  /api/v1/users/me/role:
+    post:
+      tags: [Users]
+      operationId: selectAccountRole
+      summary: Choose the immutable role of a new Google account
+      description: Person token required. Only an account without an assigned role may use this endpoint. Returns updated user and access token; the existing refresh cookie remains valid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [CUSTOMER, MERCHANT, COURIER] }
+      responses:
+        '200':
+          description: Role assigned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409':
+          description: ROLE_ALREADY_ASSIGNED; account roles cannot be changed
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /api/v1/users/me/password:
     post:
       tags: [Users]
@@ -325,6 +354,7 @@ paths:
       parameters:
         - name: role
           in: query
+          description: Filter by assigned account role, including applicants without active permissions.
           schema: { $ref: '#/components/schemas/Role' }
         - name: status
           in: query
@@ -392,7 +422,7 @@ paths:
         Creates a `PENDING` merchant application for the signed-in user. If the user's previous
         application was `REJECTED`, this replaces its details and sets it back to `PENDING`
         (same `merchantId`). Each user has at most one merchant. Publishes `merchant.submitted`.
-        Requires the `CUSTOMER` role, so dispatcher accounts can't apply (`403`).
+        Requires the assigned `MERCHANT` account role; customer, courier and dispatcher accounts cannot apply (`403`).
       requestBody:
         required: true
         content:
@@ -634,7 +664,7 @@ paths:
       description: |
         Creates a `PENDING` courier application for the signed-in user. A courier is identified
         by their user ID. If the previous application was `REJECTED`, this replaces its details
-        and sets it back to `PENDING`. Publishes `courier.submitted`. Requires the `CUSTOMER` role.
+        and sets it back to `PENDING`. Publishes `courier.submitted`. Requires the assigned `COURIER` account role.
 
         Identity owns only what is needed to approve a courier. Operational courier data
         (availability, zones, assignments) belongs to delivery-operations-service, which
@@ -990,7 +1020,7 @@ components:
             Machine-readable error code. Identity uses the shared codes plus:
             `CONFLICT` (409: someone else changed the record at the same moment; reload and retry),
             `INVALID_CREDENTIALS`, `EMAIL_ALREADY_REGISTERED`, `ACCOUNT_SUSPENDED`,
-            `REFRESH_TOKEN_INVALID`, `API_KEY_INVALID`, `API_KEY_LIMIT_REACHED`,
+            `ROLE_ALREADY_ASSIGNED`, `REFRESH_TOKEN_INVALID`, `API_KEY_INVALID`, `API_KEY_LIMIT_REACHED`,
             `MERCHANT_NOT_ACTIVE`, `APPLICATION_ALREADY_EXISTS`, `INVALID_STATUS_TRANSITION`,
             `RATE_LIMITED` (429).
         errors:
@@ -1005,8 +1035,9 @@ components:
     # ------------------------------------------------ auth
     RegisterRequest:
       type: object
-      required: [email, password, fullName]
+      required: [email, password, fullName, role]
       properties:
+        role: { type: string, enum: [CUSTOMER, MERCHANT, COURIER] }
         email: { $ref: '#/components/schemas/Email' }
         password: { $ref: '#/components/schemas/Password' }
         fullName: { $ref: '#/components/schemas/PersonName' }
@@ -1060,8 +1091,14 @@ components:
     # ------------------------------------------------ users
     User:
       type: object
-      required: [id, email, fullName, roles, status, authProviders, mustChangePassword, createdAt]
+      required: [id, email, fullName, roles, onboardingState, status, authProviders, mustChangePassword, createdAt]
       properties:
+        accountRole:
+          $ref: '#/components/schemas/Role'
+          description: Immutable chosen role; absent only for a new Google user awaiting selection.
+        onboardingState:
+          type: string
+          enum: [ROLE_REQUIRED, APPLICATION_REQUIRED, PENDING, REJECTED, SUSPENDED, READY]
         id: { type: string, format: uuid }
         email: { $ref: '#/components/schemas/Email' }
         fullName: { $ref: '#/components/schemas/PersonName' }
@@ -1073,6 +1110,7 @@ components:
             while `mustChangePassword` is true they carry none.
           items: { $ref: '#/components/schemas/Role' }
           uniqueItems: true
+          maxItems: 1
         status: { $ref: '#/components/schemas/UserStatus' }
         authProviders:
           type: array
@@ -1134,7 +1172,7 @@ components:
     StatusDecision:
       type: object
       description: The last approval decision on an application
-      required: [status, decidedAt, decidedBy]
+      required: [status, decidedAt]
       properties:
         status: { $ref: '#/components/schemas/ApplicationStatus' }
         reason:

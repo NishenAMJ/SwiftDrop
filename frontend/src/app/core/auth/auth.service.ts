@@ -1,8 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, finalize, firstValueFrom, map, shareReplay, tap } from 'rxjs';
+import { Observable, finalize, firstValueFrom, map, shareReplay, tap, switchMap } from 'rxjs';
 
-import { AuthUser, LoginRequest, RegisterRequest, TokenResponse } from './auth.models';
+import { AuthUser, LoginRequest, RegisterRequest, TokenResponse, PublicRole } from './auth.models';
 
 export const AUTH_API = '/api/v1/auth';
 
@@ -62,6 +62,16 @@ export class AuthService {
 
   logout(): Observable<void> {
     return this.http.post<void>(`${AUTH_API}/logout`, null).pipe(finalize(() => this.clear()));
+  }
+
+  selectRole(role: PublicRole): Observable<AuthUser> {
+    return this.startSession(this.http.post<TokenResponse>('/api/v1/users/me/role', { role }));
+  }
+
+  changePassword(currentPassword: string | undefined, newPassword: string): Observable<AuthUser> {
+    return this.http
+      .post<void>('/api/v1/users/me/password', { currentPassword, newPassword })
+      .pipe(switchMap(() => this.refresh()));
   }
 
   clear(): void {

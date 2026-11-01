@@ -34,8 +34,8 @@ public class AuthService {
 
     @Transactional
     public AuthResult register(RegisterRequest request) {
-        User user = userService.registerCustomer(request.email(), request.password(), request.fullName(),
-                request.phoneNumber());
+        User user = userService.register(request.email(), request.password(), request.fullName(),
+                request.phoneNumber(), request.role());
         return startSession(user, PASSWORD);
     }
 

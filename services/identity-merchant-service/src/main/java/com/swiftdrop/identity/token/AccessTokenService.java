@@ -71,6 +71,7 @@ public class AccessTokenService {
             .issuedAt(now)
             .expiresAt(now.plus(ttl))
             .id(UUID.randomUUID().toString())
+            .claim("identity_version", 2)
             .claim(ROLES_CLAIM, roles)
             .claim(AUTH_CLAIM, authMethod);
         if (merchantId != null) {

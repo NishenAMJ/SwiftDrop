@@ -56,6 +56,31 @@ public class User {
     @Column(name = "google_subject", length = 255)
     private String googleSubject;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_role", length = 20)
+    private RoleName accountRole;
+
+    @Formula("(select m.status from identity_merchant.merchants m where m.user_id = user_id)")
+    private String merchantStatus;
+
+    @Formula("(select c.status from identity_merchant.couriers c where c.user_id = user_id)")
+    private String courierStatus;
+
+    public RoleName getAccountRole() { return accountRole; }
+
+    void assignRole(RoleName role) {
+        if (accountRole != null) throw new IllegalStateException("Account role is already assigned");
+        accountRole = role;
+    }
+
+    public String getOnboardingState() {
+        if (accountRole == null) return "ROLE_REQUIRED";
+        String applicationStatus = accountRole == RoleName.MERCHANT ? merchantStatus
+                : accountRole == RoleName.COURIER ? courierStatus : "APPROVED";
+        if (applicationStatus == null) return "APPLICATION_REQUIRED";
+        return "APPROVED".equals(applicationStatus) ? "READY" : applicationStatus;
+    }
+
     /** Roles that are active right now. */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles",
@@ -120,6 +145,8 @@ public class User {
     }
 
     void addRole(Role role) {
+        if (accountRole != role.getName()) throw new IllegalStateException("Role must match assigned account role");
+        roles.clear();
         roles.add(role);
     }
 

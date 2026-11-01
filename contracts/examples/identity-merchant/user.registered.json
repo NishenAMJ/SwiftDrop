@@ -9,8 +9,11 @@
     "email": "nimal@example.com",
     "fullName": "Nimal Perera",
     "phoneNumber": "+94771234567",
-    "roles": ["CUSTOMER"],
+    "roles": [
+      "CUSTOMER"
+    ],
     "status": "ACTIVE",
-    "authProvider": "PASSWORD"
+    "authProvider": "PASSWORD",
+    "accountRole": "CUSTOMER"
   }
 }

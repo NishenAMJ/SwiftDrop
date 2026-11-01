@@ -51,8 +51,12 @@ describe('LoginPage', () => {
     const email = page.querySelector('#login-email')!;
     expect(email.getAttribute('aria-invalid')).toBe('true');
     expect(email.getAttribute('aria-describedby')).toBe('login-email-error');
-    expect(page.querySelector('#login-email-error')?.textContent).toContain('Enter your email address.');
-    expect(page.querySelector('#login-password-error')?.textContent).toContain('Enter your password.');
+    expect(page.querySelector('#login-email-error')?.textContent).toContain(
+      'Enter your email address.',
+    );
+    expect(page.querySelector('#login-password-error')?.textContent).toContain(
+      'Enter your password.',
+    );
   });
 
   it('logs in and goes to the account page', async () => {
@@ -65,16 +69,18 @@ describe('LoginPage', () => {
     expect(page.querySelector('button[type="submit"]')?.textContent).toContain('Logging in');
     request.flush(tokenResponse());
 
-    expect(navigate).toHaveBeenCalledWith('/account');
+    expect(navigate).toHaveBeenCalledWith('/customer');
   });
 
   it('explains a wrong password in its own words and keeps what was typed', async () => {
     fill('nimal@example.com', 'Wrong-pass-1');
     await submit();
-    http.expectOne('/api/v1/auth/login').flush(problem('INVALID_CREDENTIALS', { detail: 'server text' }), {
-      status: 401,
-      statusText: 'Unauthorized',
-    });
+    http
+      .expectOne('/api/v1/auth/login')
+      .flush(problem('INVALID_CREDENTIALS', { detail: 'server text' }), {
+        status: 401,
+        statusText: 'Unauthorized',
+      });
     await fixture.whenStable();
 
     const alert = page.querySelector('[role="alert"]');

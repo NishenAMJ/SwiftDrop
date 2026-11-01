@@ -16,7 +16,10 @@ describe('AuthCallbackPage', () => {
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(query) } } },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -29,10 +32,12 @@ describe('AuthCallbackPage', () => {
     const fixture = create({});
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Finishing Google login');
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain(
+      'Finishing Google login',
+    );
 
     http.expectOne('/api/v1/auth/refresh').flush(tokenResponse());
-    expect(navigate).toHaveBeenCalledWith('/account', { replaceUrl: true });
+    expect(navigate).toHaveBeenCalledWith('/customer', { replaceUrl: true });
   });
 
   it('explains errors sent back by identity without calling it', async () => {

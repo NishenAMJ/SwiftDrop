@@ -17,9 +17,11 @@ import {
 } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
-import { HOME_AFTER_LOGIN } from '../../../core/auth/auth.guards';
+import { homeFor } from '../../../core/auth/auth.guards';
 import { AuthService, GOOGLE_LOGIN_URL } from '../../../core/auth/auth.service';
 import { errorMessage, readProblem } from '../../../core/auth/problem-messages';
+
+import { PublicRole } from '../../../core/auth/auth.models';
 
 type Field = 'fullName' | 'email' | 'phoneNumber' | 'password';
 
@@ -60,6 +62,7 @@ export class RegisterPage {
   private readonly errorAlert = viewChild<ElementRef<HTMLElement>>('errorAlert');
 
   protected readonly form = inject(NonNullableFormBuilder).group({
+    role: ['CUSTOMER' as PublicRole, Validators.required],
     fullName: ['', [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(254)]],
     phoneNumber: ['', Validators.pattern(PHONE_E164)],
@@ -87,13 +90,14 @@ export class RegisterPage {
     const value = this.form.getRawValue();
     this.auth
       .register({
+        role: value.role,
         fullName: value.fullName.trim(),
         email: value.email.trim(),
         password: value.password,
         phoneNumber: value.phoneNumber.trim() || undefined,
       })
       .subscribe({
-        next: () => void this.router.navigateByUrl(HOME_AFTER_LOGIN),
+        next: (user) => void this.router.navigateByUrl(homeFor(user)),
         error: (error: unknown) => this.handleError(error),
       });
   }

@@ -202,3 +202,17 @@
     animation-duration: 2s;
   }
 }
+
+// Application approval states share the status palette across all roles.
+.sd-badge--warning {
+  color: var(--sd-warning);
+  background: var(--sd-warning-bg);
+}
+.sd-badge--danger {
+  color: var(--sd-danger);
+  background: var(--sd-danger-bg);
+}
+.sd-badge--success {
+  color: var(--sd-success);
+  background: var(--sd-success-bg);
+}

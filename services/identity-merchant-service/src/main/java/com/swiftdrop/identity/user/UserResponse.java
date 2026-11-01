@@ -15,6 +15,8 @@ public record UserResponse(
         String fullName,
         String phoneNumber,
         List<RoleName> roles,
+        RoleName accountRole,
+        String onboardingState,
         UserStatus status,
         List<String> authProviders,
         boolean mustChangePassword,
@@ -30,7 +32,7 @@ public record UserResponse(
             providers.add("GOOGLE");
         }
         return new UserResponse(user.getId(), user.getEmail(), user.getFullName(), user.getPhoneNumber(),
-                user.roleNames(), user.getStatus(), providers, user.isMustChangePassword(), user.getMerchantId(),
+                user.roleNames(), user.getAccountRole(), user.getOnboardingState(), user.getStatus(), providers, user.isMustChangePassword(), user.getMerchantId(),
                 user.getCreatedAt());
     }
 }

@@ -113,7 +113,7 @@ class RateLimitTests extends ApiTestSupport {
     private ResultActions registerFrom(String ip, String email) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/register").with(from(ip))
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"email\": \"%s\", \"password\": \"%s\", \"fullName\": \"New User\"}".formatted(email, PASSWORD)));
+            .content("{\"role\": \"CUSTOMER\", \"email\": \"%s\", \"password\": \"%s\", \"fullName\": \"New User\"}".formatted(email, PASSWORD)));
     }
 
     private ResultActions exchangeFrom(String ip) throws Exception {

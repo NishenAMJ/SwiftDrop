@@ -1,9 +1,15 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, guestGuard } from './core/auth/auth.guards';
+import { authGuard, guestGuard, homeGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'account' },
+  {
+    path: '',
+    pathMatch: 'full',
+    canActivate: [homeGuard],
+    loadComponent: () =>
+      import('./features/auth/dashboard-page/dashboard-page').then((m) => m.DashboardPage),
+  },
   {
     // Login, register and the Google callback share the Arctic Frost auth layout.
     path: '',
@@ -40,5 +46,31 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/auth/account-page/account-page').then((m) => m.AccountPage),
   },
-  { path: '**', redirectTo: 'account' },
+  ...['customer', 'merchant', 'courier', 'dispatcher'].map((path) => ({
+    path,
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/auth/dashboard-page/dashboard-page').then((m) => m.DashboardPage),
+  })),
+  {
+    path: 'choose-role',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/auth/choose-role-page/choose-role-page').then((m) => m.ChooseRolePage),
+  },
+  {
+    path: 'change-password',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/auth/change-password-page/change-password-page').then(
+        (m) => m.ChangePasswordPage,
+      ),
+  },
+  {
+    path: 'onboarding',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/auth/onboarding-page/onboarding-page').then((m) => m.OnboardingPage),
+  },
+  { path: '**', redirectTo: '' },
 ];

@@ -3,12 +3,8 @@ package com.swiftdrop.identity.user;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
-import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
-import jakarta.persistence.criteria.Subquery;
 
 import org.springframework.data.jpa.domain.Specification;
 
@@ -25,13 +21,7 @@ final class UserSearch {
                 predicates.add(cb.equal(root.get("status"), status));
             }
             if (role != null) {
-                // EXISTS subquery, so a user with several roles still appears once.
-                Subquery<UUID> withRole = query.subquery(UUID.class);
-                Root<User> u = withRole.from(User.class);
-                Join<User, Role> r = u.join("roles");
-                withRole.select(u.get("id"))
-                    .where(cb.equal(u.get("id"), root.get("id")), cb.equal(r.get("name"), role));
-                predicates.add(cb.exists(withRole));
+                predicates.add(cb.equal(root.get("accountRole"), role));
             }
             if (text != null && !text.isBlank()) {
                 String pattern = "%" + escapeLike(text.trim().toLowerCase(Locale.ROOT)) + "%";

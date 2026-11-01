@@ -43,7 +43,7 @@ class MerchantFlowTests extends ApiTestSupport {
 
     @Test
     void fullLifecycleChangesRolesAndPublishesEvents() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("MERCHANT");
         String dispatcher = activeDispatcherToken();
 
         String merchantId = JsonPath.read(apply(applicant.accessToken(), APPLICATION)
@@ -56,7 +56,7 @@ class MerchantFlowTests extends ApiTestSupport {
 
         // Pending: still only a customer, but /users/me already links the merchant.
         Session pending = session(refresh(applicant.refreshToken()).andReturn());
-        assertThat((List<String>) claims(pending.accessToken()).read("$.roles")).containsExactly("CUSTOMER");
+        assertThat((List<String>) claims(pending.accessToken()).read("$.roles")).isEmpty();
         getWithToken("/api/v1/users/me", pending.accessToken())
             .andExpect(jsonPath("$.merchantId").value(merchantId));
 
@@ -72,7 +72,7 @@ class MerchantFlowTests extends ApiTestSupport {
 
         Session approved = session(refresh(pending.refreshToken()).andReturn());
         DocumentContext claims = claims(approved.accessToken());
-        assertThat((List<String>) claims.read("$.roles")).containsExactly("CUSTOMER", "MERCHANT");
+        assertThat((List<String>) claims.read("$.roles")).containsExactly("MERCHANT");
         assertThat((String) claims.read("$.merchant_id")).isEqualTo(merchantId);
 
         // The merchant sees the decision, but not which dispatcher made it.
@@ -85,7 +85,7 @@ class MerchantFlowTests extends ApiTestSupport {
             .andExpect(jsonPath("$.status").value("SUSPENDED"))
             .andExpect(jsonPath("$.lastDecision.reason").value("Too many failed deliveries"));
         Session suspended = session(refresh(approved.refreshToken()).andReturn());
-        assertThat((List<String>) claims(suspended.accessToken()).read("$.roles")).containsExactly("CUSTOMER");
+        assertThat((List<String>) claims(suspended.accessToken()).read("$.roles")).isEmpty();
         assertThat((Map<String, Object>) claims(suspended.accessToken()).read("$")).doesNotContainKey("merchant_id");
 
         decide(dispatcher, merchantId, "reactivate", null).andExpect(jsonPath("$.status").value("APPROVED"));
@@ -108,7 +108,7 @@ class MerchantFlowTests extends ApiTestSupport {
 
     @Test
     void rejectedApplicantCanResubmitButNotApplyTwice() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("MERCHANT");
         String dispatcher = activeDispatcherToken();
         String merchantId = JsonPath.read(apply(applicant.accessToken(), APPLICATION).andReturn()
             .getResponse().getContentAsString(), "$.id");
@@ -134,7 +134,7 @@ class MerchantFlowTests extends ApiTestSupport {
 
     @Test
     void invalidTransitionsAndMissingReasonsAreRejected() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("MERCHANT");
         String dispatcher = activeDispatcherToken();
         String merchantId = JsonPath.read(apply(applicant.accessToken(), APPLICATION).andReturn()
             .getResponse().getContentAsString(), "$.id");
@@ -154,7 +154,7 @@ class MerchantFlowTests extends ApiTestSupport {
 
     @Test
     void applicationIsValidated() throws Exception {
-        String customer = registerAndLogin().accessToken();
+        String customer = registerAndLogin("MERCHANT").accessToken();
 
         apply(customer, APPLICATION.replace("SOLE_PROPRIETORSHIP", "COMPANY"))
             .andExpect(status().isBadRequest())
@@ -176,8 +176,8 @@ class MerchantFlowTests extends ApiTestSupport {
     }
 
     @Test
-    void onlyCustomersApplyAndOnlyDispatchersDecide() throws Exception {
-        Session applicant = registerAndLogin();
+    void onlyMatchingApplicantsApplyAndOnlyDispatchersDecide() throws Exception {
+        Session applicant = registerAndLogin("MERCHANT");
         String dispatcher = activeDispatcherToken();
         String merchantId = JsonPath.read(apply(applicant.accessToken(), APPLICATION).andReturn()
             .getResponse().getContentAsString(), "$.id");
@@ -189,14 +189,14 @@ class MerchantFlowTests extends ApiTestSupport {
 
         getWithToken("/api/v1/merchants/" + merchantId, dispatcher).andExpect(status().isOk())
             .andExpect(jsonPath("$.userId").value(applicant.userId()));
-        getWithToken("/api/v1/merchants/me", registerAndLogin().accessToken())
+        getWithToken("/api/v1/merchants/me", registerAndLogin("MERCHANT").accessToken())
             .andExpect(status().isNotFound());
         getWithToken("/api/v1/merchants?sort=userId,asc", dispatcher).andExpect(status().isBadRequest());
     }
 
     @Test
     void approvalAlsoPublishesUserUpdatedWithTheNewRole() throws Exception {
-        Session applicant = registerAndLogin();
+        Session applicant = registerAndLogin("MERCHANT");
         String merchantId = JsonPath.read(apply(applicant.accessToken(), APPLICATION).andReturn()
             .getResponse().getContentAsString(), "$.id");
 
@@ -207,9 +207,9 @@ class MerchantFlowTests extends ApiTestSupport {
             .map(OutboxEvent::getPayload).map(JsonPath::parse)
             .filter(json -> applicant.userId().equals(json.read("$.data.userId")))
             .reduce((a, b) -> b).orElseThrow();
-        assertThat((List<String>) userUpdated.read("$.data.roles")).containsExactly("CUSTOMER", "MERCHANT");
+        assertThat((List<String>) userUpdated.read("$.data.roles")).containsExactly("MERCHANT");
         getWithToken("/api/v1/users/me", session(refresh(applicant.refreshToken()).andReturn()).accessToken())
-            .andExpect(jsonPath("$.roles").value(contains("CUSTOMER", "MERCHANT")));
+            .andExpect(jsonPath("$.roles").value(contains("MERCHANT")));
     }
 
     ResultActions apply(String token, String json) throws Exception {

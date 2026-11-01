@@ -48,6 +48,7 @@ public class MerchantService {
     /** Apply, or resubmit after a rejection (same merchant ID). */
     @Transactional
     public MerchantResponse apply(UUID userId, MerchantApplicationRequest request) {
+        userService.requireApplicant(userId, RoleName.MERCHANT);
         Instant now = clock.instant();
         Merchant existing = merchants.findByUserId(userId).orElse(null);
         if (existing != null) {

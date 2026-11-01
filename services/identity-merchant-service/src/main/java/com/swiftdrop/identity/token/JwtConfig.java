@@ -44,7 +44,8 @@ public class JwtConfig {
         OAuth2TokenValidator<Jwt> audienceValidator = new JwtClaimValidator<List<String>>(JwtClaimNames.AUD,
                 aud -> aud != null && aud.contains(audience));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(properties.jwt().issuer()), audienceValidator));
+                JwtValidators.createDefaultWithIssuer(properties.jwt().issuer()), audienceValidator,
+                new JwtClaimValidator<Object>("identity_version", value -> value instanceof Number n && n.intValue() == 2)));
         return decoder;
     }
 

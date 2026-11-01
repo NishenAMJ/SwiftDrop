@@ -11,7 +11,9 @@ describe('AuthService', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     auth = TestBed.inject(AuthService);
     http = TestBed.inject(HttpTestingController);
   });
@@ -19,7 +21,9 @@ describe('AuthService', () => {
   afterEach(() => http.verify());
 
   it('keeps the access token and user after login', async () => {
-    const result = firstValueFrom(auth.login({ email: 'nimal@example.com', password: 'Secret-pass-1' }));
+    const result = firstValueFrom(
+      auth.login({ email: 'nimal@example.com', password: 'Secret-pass-1' }),
+    );
     const request = http.expectOne('/api/v1/auth/login');
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({ email: 'nimal@example.com', password: 'Secret-pass-1' });
@@ -42,7 +46,9 @@ describe('AuthService', () => {
 
   it('restores nothing, quietly, when there is no valid refresh cookie', async () => {
     const restored = auth.restoreSession();
-    http.expectOne('/api/v1/auth/refresh').flush({ code: 'REFRESH_TOKEN_INVALID' }, { status: 401, statusText: 'Unauthorized' });
+    http
+      .expectOne('/api/v1/auth/refresh')
+      .flush({ code: 'REFRESH_TOKEN_INVALID' }, { status: 401, statusText: 'Unauthorized' });
     await restored;
 
     expect(auth.isSignedIn()).toBe(false);
@@ -50,7 +56,14 @@ describe('AuthService', () => {
   });
 
   it('forgets the session on logout', async () => {
-    auth.register({ email: 'a@example.com', password: 'Secret-pass-1', fullName: 'A' }).subscribe();
+    auth
+      .register({
+        email: 'a@example.com',
+        password: 'Secret-pass-1',
+        fullName: 'A',
+        role: 'CUSTOMER',
+      })
+      .subscribe();
     http.expectOne('/api/v1/auth/register').flush(tokenResponse());
 
     const done = firstValueFrom(auth.logout(), { defaultValue: undefined });

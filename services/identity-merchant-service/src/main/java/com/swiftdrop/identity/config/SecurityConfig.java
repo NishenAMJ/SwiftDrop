@@ -20,7 +20,7 @@ import com.swiftdrop.identity.token.JwtConfig;
  * <ul>
  *   <li>Public: health, JWKS, register, login, refresh, logout, API-key exchange.</li>
  *   <li>Dispatcher only: user lists, creating dispatchers, merchant/courier lists and decisions.</li>
- *   <li>Customers only: applying as merchant or courier.</li>
+ *   <li>Person tokens: application services enforce the matching assigned account role.</li>
  *   <li>Approved merchants (person tokens): managing API keys.</li>
  *   <li>API-key tokens: only {@code GET /api/v1/merchants/me} (see JwtConfig).</li>
  *   <li>Everything else: any signed-in person. Controllers then only touch the caller's own data.</li>
@@ -49,8 +49,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/merchants/me/api-keys", "/api/v1/merchants/me/api-keys/**")
                     .hasRole("MERCHANT")
 
-                // Applying: customers only (not dispatchers)
-                .requestMatchers(HttpMethod.POST, "/api/v1/merchants", "/api/v1/couriers").hasRole("CUSTOMER")
+                // Pending applicants have no active roles; services check the assigned account role.
+                .requestMatchers(HttpMethod.POST, "/api/v1/merchants", "/api/v1/couriers").hasAuthority(JwtConfig.PERSON_AUTHORITY)
 
                 // Dispatcher work. The "/me" routes above and below come first, so they aren't caught here.
                 .requestMatchers(HttpMethod.GET, "/api/v1/couriers/me").hasAuthority(JwtConfig.PERSON_AUTHORITY)

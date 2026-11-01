@@ -18,7 +18,8 @@ Example payload:
   "iss": "swiftdrop-identity",
   "aud": "swiftdrop-api",
   "sub": "8f3c2a10-4b7d-4e9a-a1c2-5d6e7f809a1b",
-  "roles": ["CUSTOMER", "MERCHANT"],
+  "roles": ["MERCHANT"],
+  "identity_version": 2,
   "merchant_id": "c71a4e2b-9d3f-4b8a-b6e1-2f5c8d0a7e64",
   "auth": "password",
   "iat": 1761980000,
@@ -43,13 +44,14 @@ Header: `alg: RS256` and `kid` (the key ID, used during key rotation).
 **Rules**
 - No personal data in tokens: no email, phone, name or address. Tokens end up in logs and browser tools.
 - A role change (approval, suspension) takes effect at the user's next refresh, at most 15 minutes later. That delay is accepted; API keys of a suspended merchant stop working immediately because identity checks the merchant on every exchange.
-- Every user starts with `CUSTOMER`. Approval adds `MERCHANT` or `COURIER`. `DISPATCHER` accounts can only be created by another dispatcher (or the startup bootstrap).
+- Each account has one immutable assigned role. Public registration chooses CUSTOMER, MERCHANT or COURIER; merchant/courier permissions activate only after approval. New Google users choose their role after authentication. DISPATCHER accounts are created internally.
+- Tokens contain `identity_version: 2`. Every verifier must reject tokens without this claim/value during the single-role rollout; identity enforces it in JwtConfig.
 - A new dispatcher's tokens carry **no roles** until they replace the initial password, so a password someone else chose can't be used to act as a dispatcher.
 - With a single audience, `aud` is sent as a string (`"aud": "swiftdrop-api"`), which the JWT standard allows. Spring accepts both the string and the array form.
 
 ## How to verify tokens in your service
 
-Add to your service's `application.yaml`. No Java code is needed for the basics (Spring Boot maps the `roles` claim to `ROLE_*` authorities):
+Add the following basic JWT verification settings to your service's `application.yaml` (Spring Boot maps `roles` to `ROLE_*` authorities). Also install an `identity_version == 2` claim validator alongside issuer, audience and timestamp validators; the YAML alone does not enforce that rollout boundary. See identity's `JwtConfig` for the validator.
 
 ```yaml
 spring:
@@ -80,7 +82,7 @@ The **gateway** uses the same properties (they work for WebFlux too). It rejects
 
 ### Google
 1. The Angular app navigates the browser to `/oauth2/authorization/google`.
-2. Google sends the user back to `/login/oauth2/code/google`. Identity finds the user by Google ID; failing that, links to an existing account with the same **verified** email; failing that, creates a new `CUSTOMER`.
+2. Google sends the user back to `/login/oauth2/code/google`. Identity finds the user by Google ID; failing that, links to an existing account with the same **verified** email; failing that, creates a new account awaiting role selection. The Angular app then uses `POST /api/v1/users/me/role` to choose CUSTOMER, MERCHANT or COURIER once.
 3. Identity sets the refresh cookie and redirects to `{FRONTEND_BASE_URL}/auth/callback`.
 4. The Angular app calls `POST /api/v1/auth/refresh` to get its first access token. No token ever appears in a URL.
 

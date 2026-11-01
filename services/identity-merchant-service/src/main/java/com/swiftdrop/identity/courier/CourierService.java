@@ -51,6 +51,7 @@ public class CourierService {
 
     @Transactional
     public CourierResponse apply(UUID userId, CourierApplicationRequest request) {
+        userService.requireApplicant(userId, RoleName.COURIER);
         Instant now = clock.instant();
         Courier existing = couriers.findById(userId).orElse(null);
         if (existing != null) {

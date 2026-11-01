@@ -48,8 +48,12 @@ describe('RegisterPage', () => {
     type('phoneNumber', '0771234567');
     await fixture.whenStable();
 
-    expect(page.querySelector('#register-password-error')?.textContent).toContain('one letter and one number');
-    expect(page.querySelector('#register-phoneNumber-error')?.textContent).toContain('+94771234567');
+    expect(page.querySelector('#register-password-error')?.textContent).toContain(
+      'one letter and one number',
+    );
+    expect(page.querySelector('#register-phoneNumber-error')?.textContent).toContain(
+      '+94771234567',
+    );
     expect(page.querySelector('#register-password')?.getAttribute('aria-describedby')).toBe(
       'register-password-help register-password-error',
     );
@@ -65,13 +69,14 @@ describe('RegisterPage', () => {
 
     const request = http.expectOne('/api/v1/auth/register');
     expect(request.request.body).toEqual({
+      role: 'CUSTOMER',
       fullName: 'Nimal Perera',
       email: 'nimal@example.com',
       password: 'Secret-pass-1',
       phoneNumber: undefined,
     });
     request.flush(tokenResponse(), { status: 201, statusText: 'Created' });
-    expect(navigate).toHaveBeenCalledWith('/account');
+    expect(navigate).toHaveBeenCalledWith('/customer');
   });
 
   it('points to login when the email is already registered, until the email changes', async () => {
@@ -95,12 +100,18 @@ describe('RegisterPage', () => {
   it('shows server field errors on the matching field', async () => {
     fillValid();
     await submit();
-    http.expectOne('/api/v1/auth/register').flush(
-      problem('VALIDATION_FAILED', { errors: [{ field: 'fullName', message: 'must not be blank' }] }),
-      { status: 400, statusText: 'Bad Request' },
-    );
+    http
+      .expectOne('/api/v1/auth/register')
+      .flush(
+        problem('VALIDATION_FAILED', {
+          errors: [{ field: 'fullName', message: 'must not be blank' }],
+        }),
+        { status: 400, statusText: 'Bad Request' },
+      );
     await fixture.whenStable();
 
-    expect(page.querySelector('#register-fullName-error')?.textContent).toContain('must not be blank');
+    expect(page.querySelector('#register-fullName-error')?.textContent).toContain(
+      'must not be blank',
+    );
   });
 });

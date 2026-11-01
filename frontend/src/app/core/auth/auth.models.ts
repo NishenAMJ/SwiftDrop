@@ -2,7 +2,13 @@
 
 export type Role = 'CUSTOMER' | 'MERCHANT' | 'COURIER' | 'DISPATCHER';
 
+export type PublicRole = Exclude<Role, 'DISPATCHER'>;
+export type OnboardingState =
+  'ROLE_REQUIRED' | 'APPLICATION_REQUIRED' | 'PENDING' | 'REJECTED' | 'SUSPENDED' | 'READY';
+
 export interface AuthUser {
+  accountRole?: Role;
+  onboardingState: OnboardingState;
   id: string;
   email: string;
   fullName: string;
@@ -28,6 +34,7 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
+  role: PublicRole;
   email: string;
   password: string;
   fullName: string;

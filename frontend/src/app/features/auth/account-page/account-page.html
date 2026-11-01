@@ -18,6 +18,10 @@
   </header>
 
   <main class="account__main">
+    <nav aria-label="Account">
+      <a class="sd-button sd-button--secondary" routerLink="/">Dashboard</a>
+      <a class="sd-button sd-button--secondary" routerLink="/change-password">Change password</a>
+    </nav>
     @if (user(); as user) {
       <h1 class="account__title">Hello, {{ user.fullName }}</h1>
 
@@ -42,7 +46,7 @@
             </div>
           }
           <div>
-            <dt>Roles</dt>
+            <dt>Role</dt>
             <dd class="account__roles">
               @for (role of roles(); track role) {
                 <span class="sd-badge sd-badge--info">{{ role }}</span>

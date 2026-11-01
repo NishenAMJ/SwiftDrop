@@ -1,23 +1,24 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-
 import { AuthService } from './auth.service';
+import { canVisit, destinationFor, homeFor } from './auth-routing';
 
 export const HOME_AFTER_LOGIN = '/account';
-
-/** Pages for signed-in users. Others go to login and come back afterwards. */
 export const authGuard: CanActivateFn = (_route, state) => {
-  if (inject(AuthService).isSignedIn()) {
-    return true;
-  }
-  return inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+  const user = inject(AuthService).user();
+  const router = inject(Router);
+  if (!user) return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+  return canVisit(user, state.url) || router.parseUrl(homeFor(user));
 };
-
-/** Login and register: a signed-in user goes straight to their account. */
-export const guestGuard: CanActivateFn = () =>
-  inject(AuthService).isSignedIn() ? inject(Router).parseUrl(HOME_AFTER_LOGIN) : true;
-
-/** Only same-app paths, so a crafted link can't send people to another site after login. */
+export const guestGuard: CanActivateFn = () => {
+  const user = inject(AuthService).user();
+  return user ? inject(Router).parseUrl(homeFor(user)) : true;
+};
+export const homeGuard: CanActivateFn = () =>
+  inject(Router).parseUrl(homeFor(inject(AuthService).user()));
 export function safeReturnUrl(value: string | null | undefined): string {
-  return value && value.startsWith('/') && !value.startsWith('//') ? value : HOME_AFTER_LOGIN;
+  return value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
+    ? value
+    : HOME_AFTER_LOGIN;
 }
+export { destinationFor, homeFor };
