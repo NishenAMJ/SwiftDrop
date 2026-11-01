@@ -1,1 +1,7 @@
-/* You can add global styles to this file, and also import other style files */
+// Global styles: shared SwiftDrop tokens and components, loaded once (frontend/style.md section 13).
+// Page-specific layout belongs in each component's own SCSS.
+@use 'styles/tokens';
+@use 'styles/typography';
+@use 'styles/base';
+@use 'styles/utilities';
+@use 'styles/components';
