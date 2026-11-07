@@ -18,6 +18,7 @@ jobs:
       # Throwaway values: the CI database only exists for this run.
       POSTGRES_ADMIN_PASSWORD: ci-admin-password
       IDENTITY_DB_PASSWORD: ci-identity-password
+      PAYMENT_DB_PASSWORD: ci-payment-password
     steps:
       - uses: actions/checkout@v4
 
