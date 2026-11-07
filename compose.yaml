@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -16,6 +17,21 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  payment-settlement-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.payment
+    ports:
+      - "8085:8085"
+    environment:
+      PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      PAYMENT_DB_USER: payment_settlement_user
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 
 volumes:
   postgres_data:

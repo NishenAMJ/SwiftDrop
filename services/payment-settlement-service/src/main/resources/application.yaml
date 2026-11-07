@@ -1,3 +1,24 @@
+server:
+  port: 8085
+
 spring:
   application:
-    name: tracking-reporting-service
+    name: payment-settlement-service
+  datasource:
+    url: ${PAYMENT_DB_URL:jdbc:postgresql://postgres:5432/swiftdrop}
+    username: ${PAYMENT_DB_USER:payment_settlement_user}
+    password: ${PAYMENT_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_settlement
+  flyway:
+    enabled: true
+    default-schema: payment_settlement
+    schemas:
+      - payment_settlement
+    create-schemas: false
+    locations: classpath:db/migration
