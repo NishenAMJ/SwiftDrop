@@ -310,7 +310,7 @@ Use one PostgreSQL instance with one `swiftdrop` database and separate schemas/u
 | Parcel & Pricing | `parcel_pricing` | `parcel_user` | `PARCEL_DB_PASSWORD` |
 | Delivery Operations | `delivery_operations` | `delivery_user` | `DELIVERY_DB_PASSWORD` |
 | Tracking & Reporting | `tracking_reporting` | `tracking_user` | `TRACKING_DB_PASSWORD` |
-| Payment & Settlement | `payment_settlement` | `payment_user` | `PAYMENT_DB_PASSWORD` |
+| Payment & Settlement | `payment_settlement` | `payment_settlement_user` | `PAYMENT_DB_PASSWORD` |
 | Notification & Webhook | `notification_webhook` | `communication_user` | `COMMUNICATION_DB_PASSWORD` |
 
 - Service users must be restricted to their assigned schemas; no administrator credentials in application connections.
@@ -321,6 +321,34 @@ Use one PostgreSQL instance with one `swiftdrop` database and separate schemas/u
 - Use IDs, APIs and events for cross-service references.
 - From a service running on the laptop, PostgreSQL is `localhost` with the published port. From Compose, use the PostgreSQL service name and container port.
 - Root `.env` is read by Compose for substitution; Spring Boot launched directly in PowerShell does not automatically load it.
+
+### Provision a service database user and schema
+
+Create one login role per service. Give that role ownership of only that service's schema, and configure the app to connect with that role. Keep each password in the root `.env`; never put a real password in SQL, Compose YAML, or source control. Add placeholder keys to `.env.example`.
+
+For a new service, add a PostgreSQL init script under `infrastructure/postgres/init/`, for example `03-parcel-pricing.sql`:
+
+```sql
+\getenv service_password PARCEL_DB_PASSWORD
+
+CREATE ROLE parcel_pricing_user
+    LOGIN PASSWORD :'service_password'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE;
+
+GRANT CONNECT ON DATABASE swiftdrop TO parcel_pricing_user;
+CREATE SCHEMA parcel_pricing AUTHORIZATION parcel_pricing_user;
+REVOKE ALL ON SCHEMA parcel_pricing FROM PUBLIC;
+
+ALTER ROLE parcel_pricing_user
+    IN DATABASE swiftdrop
+    SET search_path TO parcel_pricing;
+```
+
+Replace the example role, schema and password variable with the service's values from the table above. Pass that password variable into the PostgreSQL container in `compose.yaml` so the init script can read it, and pass it separately into the application container alongside its database URL and username. The app should use its own credentials, not the `postgres` administrator account.
+
+Configure `spring.datasource` with the service username and password, and set Hibernate's `default_schema` and Flyway's `default-schema`/`schemas` to the same schema. Use `create-schemas: false` because provisioning creates the schema; Flyway then owns tables and other application objects inside it.
+
+PostgreSQL runs files in `/docker-entrypoint-initdb.d` only when it initializes an empty data directory. For an existing volume, either apply the new script explicitly (for example, `docker compose exec postgres psql -U postgres -d swiftdrop -f /docker-entrypoint-initdb.d/03-parcel-pricing.sql`) or have the infrastructure owner provision the role and schema with an approved admin connection. Do not delete the volume just to rerun initialization unless its data is disposable.
 
 ## 8. Git commands for service owners
 

@@ -1,0 +1,21 @@
+# Exclude Git metadata.
+.git
+
+# Exclude build output and installed dependencies.
+**/target
+**/node_modules
+**/dist
+**/.angular
+
+# Exclude IDE and editor files.
+**/.idea
+**/.vscode
+**/*.iml
+
+# Exclude logs and local secrets.
+**/*.log
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
