@@ -31,6 +31,7 @@ services:
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
 
   delivery-operations-service:
+    image: swiftdrop/delivery-operations-service:latest
     build:
       context: ./services/delivery-operations-service
     ports:
