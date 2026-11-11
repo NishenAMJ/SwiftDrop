@@ -1,9 +1,10 @@
 # Member 8: payment implementation decisions
 
-## Step 1: API contract
+## Implemented contract and decisions
 
 The OpenAPI contract in `contracts/openapi/payment-settlement-service.yaml` describes
-the intended API. It does not implement endpoints or enforce security yet.
+the implemented API. Controllers and service-level authorization now enforce its
+core behavior. Integration conventions still require team review.
 
 - PayHere is the selected provider. The official documentation review and proposed
   pricing lookup are recorded in [payment-integrations.md](payment-integrations.md).
@@ -19,14 +20,14 @@ the intended API. It does not implement endpoints or enforce security yet.
   several refund attempts. Pending refunds reserve funds; only confirmed refunds
   increase `refundedAmount`. A timeout is not proof of failure.
 - Keep the existing packages and Member 9 ownership boundaries. Add future Flyway
-  migrations rather than rewriting V1. Java and SQL do not yet implement the new
-  PARTIALLY_REFUNDED state.
+  migrations rather than rewriting V1. V2 and Java implement PARTIALLY_REFUNDED and
+  CHARGEBACKED, ownership, refund reservations and outbox persistence.
 
-## Integration agreements to implement in later steps
+## Integration status
 
 Parcel & Pricing is one service (`parcel-pricing-service`, port 8082), currently
-unavailable. Define its payment lookup contract with the owner before implementing
-the client. It must provide the booking reference, booking channel, customer and
+unavailable. A client and local-only fixture implement the proposed payment-context
+shape, awaiting agreement with the owner. It provides booking reference, channel, customer and
 merchant ownership, payable state, authoritative amount/currency and pricing
 snapshot identifier. Do not trust client-provided ownership or amounts. Use a
 development/test stub for this agreement; production must require the real service.
@@ -37,13 +38,15 @@ Use RabbitMQ and a transactional outbox. Save each payment state change and its
 event in one database transaction. A worker publishes persistent messages with
 publisher confirms and retries; mark an outbox record delivered only after successful
 routing and broker confirmation. A crash can cause redelivery, so reuse eventId and
-require consumers to deduplicate. Follow the shared event envelope. Event schemas,
-exchange and routing keys will be added in the messaging step.
+require consumers to deduplicate. The implementation follows the shared envelope;
+[event schemas and examples](../../contracts/events/payment-settlement-service/README.md)
+document swiftdrop.payment and its four routing keys.
 
 Persist provider attempts before external operations. Recover pending/uncertain
 operations using provider-supported status checks and verified callbacks. Never
 blindly repeat a potentially successful charge or refund. Exact reconciliation
-capabilities must be verified during the PayHere adapter step.
+capabilities and limitations are documented in the integration notes. Real-provider
+sandbox validation remains outstanding.
 
 ## Returned parcels and merchant fines
 
@@ -58,7 +61,7 @@ does not authorize an automatic PayHere debit.
 
 ## Learning sequence
 
-1. Review API inputs, permissions and refund responses (this step).
+1. Review API inputs, permissions and refund responses.
 2. Finalize the pricing contract and verify PayHere checkout/refund capabilities.
 3. Add persistence migrations and entities, explaining payment versus attempts/refunds.
 4. Add JWT authorization alongside the first protected endpoints.
@@ -69,3 +72,13 @@ does not authorize an automatic PayHere debit.
 
 For each step, explain the change and its purpose, implement a small coherent piece,
 run relevant checks, and review the result before starting the next piece.
+
+## Verification and next work
+
+The user reported 22 tests passing, none skipped, on 2026-11-11 at 16:07:52
+Asia/Colombo. This covers the current automated suite, including PostgreSQL and
+RabbitMQ publishing recovery; it does not verify real identity/pricing services,
+PayHere sandbox behavior or broker-restart recovery. See the
+[service README](../../services/payment-settlement-service/README.md) for commands,
+configuration, code-flow explanations and operational limits. Next steps are Docker
+startup checks and team/provider integration, not additional contract implementation.

@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/payment-settlement-service/payment-event.schema.json",
+  "title": "Payment service event version 1",
+  "allOf": [
+    {
+      "$ref": "../envelope.schema.json"
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "payment.succeeded"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "SUCCESS"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "payment.failed"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "FAILED"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "payment.chargebacked"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "CHARGEBACKED"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "payment.refunded"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": [
+              "refundId",
+              "refundAmount"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "PARTIALLY_REFUNDED",
+                  "REFUNDED",
+                  "CHARGEBACKED"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "eventType": {
+      "enum": [
+        "payment.succeeded",
+        "payment.failed",
+        "payment.refunded",
+        "payment.chargebacked"
+      ]
+    },
+    "version": {
+      "const": 1
+    },
+    "producer": {
+      "const": "payment-settlement-service"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "bookingId",
+        "amount",
+        "currency",
+        "status",
+        "refundedAmount"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bookingId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "multipleOf": 0.01
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+        },
+        "status": {
+          "enum": [
+            "PENDING",
+            "SUCCESS",
+            "FAILED",
+            "PARTIALLY_REFUNDED",
+            "REFUNDED",
+            "CHARGEBACKED"
+          ]
+        },
+        "refundedAmount": {
+          "type": "number",
+          "minimum": 0,
+          "multipleOf": 0.01
+        },
+        "customerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "merchantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "refundId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "refundAmount": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "multipleOf": 0.01
+        }
+      }
+    }
+  }
+}

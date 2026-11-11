@@ -1,6 +1,7 @@
 # Payment integration draft
 
-Status: Member 8 proposal for integration review, not an implemented upstream API.
+Status: payment-side client/adapter implemented; pricing API remains a proposal for
+the upstream owner. Real-provider sandbox verification is outstanding.
 
 ## PayHere review
 
@@ -26,9 +27,10 @@ SwiftDrop choices:
 - Format provider monetary values with exactly two decimal places using BigDecimal.
 - Build hashes server-side. Verify callbacks before applying state changes, including
   comparison against stored amount, currency, order ID and configured merchant ID.
-- Configure return/cancel URLs server-side. Direct-booking checkout handoff to the
-  customer still needs an authenticated customer checkout view before end-to-end UI
-  implementation; do not turn form fields into a public URL or grant initiation rights.
+- Configure return/cancel URLs server-side. GET /api/v1/payments/{paymentId}/checkout
+  supplies authenticated owners with form data after dispatcher initiation. The
+  customer-facing screen/handoff is not implemented; do not turn fields into a
+  public URL or grant direct-booking initiation rights to customers.
 - Require PAYMENT_PAYHERE_MERCHANT_ID, PAYMENT_PAYHERE_MERCHANT_SECRET,
   PAYMENT_PAYHERE_APP_ID and PAYMENT_PAYHERE_APP_SECRET through environment secrets.
   Keep sandbox/live base URLs and callback/return/cancel URLs separately configured.
@@ -40,10 +42,14 @@ partial-refund lookup. Do not infer either. Serialize refund submissions per pay
 reserve funds before submission. On timeout, retain PENDING and the reservation.
 Reconcile using verified provider evidence; if evidence cannot identify the exact
 refund amount and attempt, retain it for operational investigation without resubmission.
-Confirm in sandbox whether a successful Refund API response is final or acceptance
-only before mapping it to SUCCESS. The retrieval documentation distinguishes refund
-processing from completion. Repeated partial refunds and ambiguous timeout recovery
-are mandatory sandbox checks, not capabilities assumed from one example.
+The adapter currently maps Refund API status=1 with a numeric refund reference to
+SUCCESS, confirming that provider operation, not bank settlement. Explicit status
+0/-1 maps to FAILED; exceptions and ambiguous responses retain PENDING. Pre-refund
+retrieval failures can also leave a claimed attempt pending. Retrieval-based
+recovery only resolves a matching aggregate REFUNDED payment when one outstanding
+refund covers the remaining balance. There is no manual resolution endpoint.
+Repeated partial refunds and ambiguous timeout recovery remain mandatory sandbox
+acceptance checks; automated tests use a mocked provider for these workflows.
 
 ## Proposed Parcel & Pricing lookup
 
@@ -91,11 +97,11 @@ Example 200 response (synthetic data):
 - Upstream 401/403/404 remain corresponding safe client errors. Not payable or an
   invalidated snapshot produces 409. Timeout, malformed data or upstream outage
   produces 502; never substitute an invented price. Initial connect/read timeouts:
-  2/5 seconds, configurable, with no automatic retries in the first client.
+  2/5 seconds, currently hardcoded, with no automatic retries in the first client.
 - Use this shape in test fixtures and an explicitly enabled local stub. Production
   must not enable the stub. Do not query Parcel & Pricing's database directly.
 
-## Checks for the upcoming implementation
+## Integration acceptance checks
 
 - Pricing lookup: both booking channels, owning/non-owning callers, missing payer
   fields, invalid amount/currency, not payable, timeout and idempotent replay.
@@ -105,5 +111,7 @@ Example 200 response (synthetic data):
 - Recovery: duplicate provider matches, unavailable retrieval and uncertain refunds
   must not create another charge or refund.
 
-No upstream endpoint, provider account, live request, or local stub was created in
-this documentation step. The pricing owner must review this proposed agreement.
+A local-only pricing fixture and HTTP client now exist. No upstream endpoint or
+provider account was created, and no live-provider request has been verified. The
+pricing owner must review this proposed agreement. See the service README for
+fixture activation and test instructions.

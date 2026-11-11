@@ -46,7 +46,10 @@ paths:
       description: |
         Resolves the authoritative amount from the pricing service, creates an
         idempotent PENDING payment and starts the configured provider checkout.
-        Retrying with the same `Idempotency-Key` returns the existing payment.
+        Retrying with the same `Idempotency-Key` returns the existing payment with
+        HTTP 201. checkout is included only while that payment is PENDING.
+        A different key cannot create another payment for an already claimed booking,
+        even if its existing payment has failed. No payment-reset API exists yet.
         The key is scoped to the authenticated actor and operation. Reusing it with
         a different request returns 409, including while the original is pending.
 
@@ -66,7 +69,7 @@ paths:
               $ref: '#/components/schemas/CreatePaymentRequest'
       responses:
         '201':
-          description: Payment checkout created
+          description: Payment created or replayed; checkout is omitted for non-pending payments
           content:
             application/json:
               schema:
@@ -76,7 +79,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Existing idempotency key conflicts with a different request
+          description: Conflicting key, booking already claimed, or booking is not payable
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -85,6 +88,59 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/ProviderNotConfigured' }
+
+  /api/v1/payments/{paymentId}/checkout:
+    get:
+      tags: [Payments]
+      operationId: getPaymentCheckout
+      summary: Get checkout form data for an existing pending payment
+      description: |
+        Requires payment ownership or DISPATCHER. An owning customer can retrieve
+        checkout for a direct website booking after a dispatcher initiates payment.
+        This does not grant permission to initiate a direct website payment.
+        Response has Cache-Control no-store. No frontend checkout screen is supplied.
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Private browser form submission data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderCheckout' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Payment is not pending or has no stored payer details
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/ProviderNotConfigured' }
+
+  /api/v1/payments/{paymentId}/refunds/{refundId}:
+    get:
+      tags: [Refunds]
+      operationId: getRefund
+      summary: Read a refund belonging to an authorized payment
+      description: Payment ownership or DISPATCHER is required; only dispatchers can create refunds.
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - name: refundId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current refund status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Refund' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/v1/payments/{paymentId}:
     get:
@@ -139,13 +195,20 @@ paths:
         amount is required and uses the original payment currency. To refund all
         remaining funds, send the remaining refundable amount explicitly.
         Confirmed plus pending refund amounts must never exceed the original payment.
-        Concurrent requests reserve refundable funds atomically. An uncertain provider
+        Only one pending refund per payment is allowed. Concurrent requests reserve
+        refundable funds atomically. An uncertain provider
         result stays pending until reconciled; it must not release reserved funds or
         cause a blind retry with a new provider operation.
         A confirmed partial refund sets PARTIALLY_REFUNDED; REFUNDED means the total
         confirmed refunded amount equals the original payment amount.
         The same actor, operation, payment and Idempotency-Key return the same refund;
         changing the amount or reason with that key returns 409.
+        The key is scoped to the dispatcher and refund operation across all payments.
+        HTTP 202 can contain PENDING, SUCCESS or FAILED; inspect the response status.
+        Provider exceptions leave PENDING; a definitive provider rejection sets FAILED
+        and releases the reservation. SUCCESS confirms the provider operation, not
+        completion of the customer's bank settlement. A concurrent chargeback remains
+        CHARGEBACKED even when a refund succeeds.
       parameters:
         - $ref: '#/components/parameters/PaymentId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -157,7 +220,7 @@ paths:
               $ref: '#/components/schemas/RefundPaymentRequest'
       responses:
         '202':
-          description: Refund accepted or already in progress
+          description: Refund created or replayed with its current status
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Refund' }
@@ -167,11 +230,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: Payment is ineligible, funds are insufficient, or the idempotency key conflicts
-          content:
-            application/problem+json:
-              schema: { $ref: '#/components/schemas/Problem' }
-        '502':
-          description: Provider rejected the operation before acceptance; uncertain accepted refunds remain pending
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -185,6 +243,9 @@ paths:
         Called by PayHere. This endpoint is not authenticated with a customer JWT.
         The service validates the provider callback hash/signature and reconciles
         the callback against the stored payment before returning success.
+        Duplicate fields, more than 30 fields, or field values over 1000 characters
+        are rejected. Verified conflicting/replayed notifications are recorded and
+        acknowledged with 200; this does not imply a payment state change.
       security: []
       requestBody:
         required: true
@@ -205,6 +266,7 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/ProviderNotConfigured' }
 
 components:
   parameters:
@@ -224,6 +286,7 @@ components:
         type: string
         minLength: 16
         maxLength: 128
+        pattern: '^[A-Za-z0-9._:-]{16,128}$'
     Page:
       name: page
       in: query
@@ -248,6 +311,7 @@ components:
       schema:
         type: string
         default: createdAt,desc
+        enum: ['createdAt,desc', 'createdAt,asc']
 
   securitySchemes:
     bearerAuth:
@@ -271,7 +335,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Payment'
         - type: object
-          required: [checkout]
+          description: checkout is present only when the returned payment is PENDING.
           properties:
             checkout:
               $ref: '#/components/schemas/ProviderCheckout'
@@ -330,7 +394,7 @@ components:
           example: LKR
         status:
           type: string
-          enum: [PENDING, SUCCESS, FAILED, PARTIALLY_REFUNDED, REFUNDED]
+          enum: [PENDING, SUCCESS, FAILED, PARTIALLY_REFUNDED, REFUNDED, CHARGEBACKED]
         refundedAmount:
           type: number
           minimum: 0
@@ -340,8 +404,6 @@ components:
           type: string
           example: PAYHERE
         providerReference:
-          type: string
-        failureCode:
           type: string
         createdAt:
           type: string
@@ -380,6 +442,7 @@ components:
           type: number
           exclusiveMinimum: 0
           multipleOf: 0.01
+          maximum: 9999999999.99
           description: Amount to refund in the original payment currency, at most the unreserved refundable balance.
           example: 250.00
         reason:
@@ -408,7 +471,7 @@ components:
         status:
           type: string
           enum: [PENDING, SUCCESS, FAILED]
-          description: PENDING includes uncertain provider outcomes awaiting reconciliation.
+          description: PENDING includes uncertain outcomes; SUCCESS confirms the provider refund operation, not bank settlement.
         createdAt:
           type: string
           format: date-time
@@ -429,13 +492,14 @@ components:
           type: string
         payment_id:
           type: string
-          description: Provider payment reference; required by application validation for successful payments.
+          description: Numeric provider reference (1-30 digits); required for success and chargeback notifications.
         payhere_amount:
           type: string
         payhere_currency:
           type: string
         status_code:
           type: string
+          enum: ['2', '0', '-1', '-2', '-3']
         md5sig:
           type: string
 
@@ -471,6 +535,11 @@ components:
           type: string
 
   responses:
+    ProviderNotConfigured:
+      description: Required provider configuration is missing (PROVIDER_NOT_CONFIGURED)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     ValidationFailed:
       description: Request validation failed
       content:
