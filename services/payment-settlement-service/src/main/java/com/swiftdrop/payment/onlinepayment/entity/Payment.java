@@ -36,7 +36,62 @@ public class Payment {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // Getters and setters
+    @Column(name = "customer_id")
+    private UUID customerId;
+    public UUID getCustomerId() { return customerId; }
+    public void setCustomerId(UUID value) { this.customerId = value; }
+
+    @Column(name = "merchant_id")
+    private UUID merchantId;
+    public UUID getMerchantId() { return merchantId; }
+    public void setMerchantId(UUID value) { this.merchantId = value; }
+
+    @Column(name = "initiated_by")
+    private UUID initiatedBy;
+    public UUID getInitiatedBy() { return initiatedBy; }
+    public void setInitiatedBy(UUID value) { this.initiatedBy = value; }
+
+    @Column(name = "idempotency_key")
+    private String idempotencyKey;
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String value) { this.idempotencyKey = value; }
+
+    @Column(name = "pricing_snapshot_id")
+    private UUID pricingSnapshotId;
+    public UUID getPricingSnapshotId() { return pricingSnapshotId; }
+    public void setPricingSnapshotId(UUID value) { this.pricingSnapshotId = value; }
+
+    @Column(name = "booking_channel")
+    private String bookingChannel;
+    public String getBookingChannel() { return bookingChannel; }
+    public void setBookingChannel(String value) { this.bookingChannel = value; }
+
+    @Column(name = "payer_json")
+    private String payerJson;
+    public String getPayerJson() { return payerJson; }
+    public void setPayerJson(String value) { this.payerJson = value; }
+
+    @Column(name = "refunded_amount", precision = 12, scale = 2)
+    private BigDecimal refundedAmount = BigDecimal.ZERO;
+    public BigDecimal getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(BigDecimal value) { this.refundedAmount = value; }
+
+    @Column(name = "reserved_amount", precision = 12, scale = 2)
+    private BigDecimal reservedAmount = BigDecimal.ZERO;
+    public BigDecimal getReservedAmount() { return reservedAmount; }
+    public void setReservedAmount(BigDecimal value) { this.reservedAmount = value; }
+
+    @Version
+    @Column(name = "version")
+    private long version;
+    public long getVersion() { return version; }
+    public void setVersion(long value) { this.version = value; }
+
+    @Column(name = "reconcile_after")
+    private LocalDateTime reconcileAfter;
+    public LocalDateTime getReconcileAfter() { return reconcileAfter; }
+    public void setReconcileAfter(LocalDateTime value) { this.reconcileAfter = value; }
+
 
     public UUID getId() {
         return id;
