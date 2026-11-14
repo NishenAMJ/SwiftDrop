@@ -41,6 +41,13 @@ class ReportApiIntegrationTests {
 
     @BeforeEach
     void createReportData() {
+        // Keep report expectations independent of records already present in a
+        // developer's local database. The surrounding test transaction restores
+        // all existing rows after each test.
+        entityManager.createNativeQuery("DELETE FROM tracking_reporting.tracking_history").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM tracking_reporting.tracking_records").executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM tracking_reporting.processed_events").executeUpdate();
+
         Parcel delivered = bookParcel("2026-11-01T09:00:00Z");
         update(delivered, "delivery.delivered", "DELIVERED", "2026-11-03T09:00:00Z");
 
