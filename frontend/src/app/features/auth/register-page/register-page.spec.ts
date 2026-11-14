@@ -71,7 +71,8 @@ describe('RegisterPage', () => {
       phoneNumber: undefined,
     });
     request.flush(tokenResponse(), { status: 201, statusText: 'Created' });
-    expect(navigate).toHaveBeenCalledWith('/account');
+    // A new account is a customer, so it starts in the customer portal.
+    expect(navigate).toHaveBeenCalledWith('/customer');
   });
 
   it('points to login when the email is already registered, until the email changes', async () => {
