@@ -1,4 +1,4 @@
--- Flyway Migration V3: Customer Profiles with persistent Avatar Image Storage
+-- Flyway Migration V6: Customer Profiles with persistent Avatar Image Storage
 -- Schema: parcel_pricing
 
 CREATE TABLE IF NOT EXISTS parcel_pricing.customer_profiles (
