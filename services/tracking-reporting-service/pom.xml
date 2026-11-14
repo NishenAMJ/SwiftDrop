@@ -11,8 +11,8 @@
 	<groupId>com.swiftdrop</groupId>
 	<artifactId>tracking-reporting-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>tracking-reporting-service</name>
+	<description>Parcel tracking, delivery history and reporting for SwiftDrop</description>
 	<url/>
 	<licenses>
 		<license/>
