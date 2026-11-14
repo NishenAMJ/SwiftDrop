@@ -1,0 +1,207 @@
+<div class="tracking-page">
+  <header class="tracking-header">
+    <a class="tracking-brand" routerLink="/tracking" aria-label="SwiftDrop parcel tracking">
+      <span class="tracking-brand__mark" aria-hidden="true">S</span>
+      <span>SwiftDrop</span>
+    </a>
+    <nav class="tracking-header__actions" aria-label="Tracking navigation">
+      @if (isDispatcher()) {
+        <a class="sd-button sd-button--secondary" routerLink="/tracking/reports">Reports</a>
+      }
+      @if (isSignedIn()) {
+        <a class="sd-link" routerLink="/account">Account</a>
+      } @else {
+        <a class="sd-link" routerLink="/login" [queryParams]="{ returnUrl: '/tracking' }">
+          Log in
+        </a>
+      }
+    </nav>
+  </header>
+
+  <main class="tracking-main">
+    <section class="tracking-intro" aria-labelledby="tracking-title">
+      <p class="tracking-intro__eyebrow">Parcel tracking</p>
+      <h1 id="tracking-title">Where is your parcel?</h1>
+      <p>
+        Enter the tracking number from your SwiftDrop receipt to see the latest safe delivery
+        update.
+      </p>
+    </section>
+
+    <section class="sd-card tracking-search" aria-labelledby="tracking-search-title">
+      <h2 id="tracking-search-title">Track a parcel</h2>
+      <form class="tracking-search__form" [formGroup]="searchForm" (ngSubmit)="search()">
+        <div class="sd-field tracking-search__field">
+          <label class="sd-label" for="tracking-number">Tracking number</label>
+          <input
+            id="tracking-number"
+            class="sd-input tracking-number"
+            type="text"
+            formControlName="trackingNumber"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="SWD-2026-100001"
+            aria-describedby="tracking-number-help tracking-number-error"
+            [attr.aria-invalid]="
+              searchForm.controls.trackingNumber.touched &&
+              searchForm.controls.trackingNumber.invalid
+            "
+          />
+          <p id="tracking-number-help" class="sd-help">
+            Format: SWD, four-digit year and at least six digits.
+          </p>
+          @if (
+            searchForm.controls.trackingNumber.touched && searchForm.controls.trackingNumber.invalid
+          ) {
+            <p id="tracking-number-error" class="sd-error">
+              Enter a tracking number such as SWD-2026-100001.
+            </p>
+          }
+        </div>
+        <button
+          class="sd-button sd-button--primary tracking-search__button"
+          type="submit"
+          [disabled]="state() === 'loading'"
+          [attr.aria-busy]="state() === 'loading'"
+        >
+          @if (state() === 'loading') {
+            <span class="sd-spinner" aria-hidden="true"></span>
+            Searching…
+          } @else {
+            Search
+          }
+        </button>
+      </form>
+    </section>
+
+    <div class="tracking-feedback" aria-live="polite">
+      @if (state() === 'loading') {
+        <section class="sd-card tracking-state" aria-label="Loading tracking information">
+          <span class="sd-spinner tracking-state__spinner" aria-hidden="true"></span>
+          <div>
+            <h2>Finding your parcel</h2>
+            <p>Loading the latest tracking status and history…</p>
+          </div>
+        </section>
+      } @else if (state() === 'not-found') {
+        <section class="sd-card tracking-empty" role="status">
+          <h2>Tracking number not found</h2>
+          <p>{{ message() }}</p>
+          <p>Check every letter and number on your receipt, then search again.</p>
+        </section>
+      } @else if (state() === 'error') {
+        <section class="sd-alert sd-alert--error tracking-error" role="alert">
+          <h2>Tracking is temporarily unavailable</h2>
+          <p>{{ message() }}</p>
+        </section>
+      }
+    </div>
+
+    @if (state() === 'success' && result(); as tracking) {
+      <div class="tracking-results">
+        @if (isSignedIn()) {
+          <div
+            class="tracking-live"
+            [class.tracking-live--warning]="liveState() === 'reconnecting'"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="tracking-live__dot" aria-hidden="true"></span>
+            @switch (liveState()) {
+              @case ('connecting') {
+                Connecting to live updates…
+              }
+              @case ('reconnecting') {
+                Live connection interrupted. Reconnecting safely…
+              }
+              @case ('connected') {
+                Live status updates connected
+              }
+              @default {
+                Live updates unavailable
+              }
+            }
+          </div>
+        } @else {
+          <div class="sd-alert sd-alert--info tracking-live-note" role="status">
+            This result is current as of the time shown.
+            <a class="sd-link" routerLink="/login" [queryParams]="{ returnUrl: '/tracking' }">
+              Log in for live update and reconnect feedback.
+            </a>
+          </div>
+        }
+
+        <section class="sd-card tracking-current" aria-labelledby="current-status-title">
+          <div class="tracking-current__heading">
+            <div>
+              <p class="tracking-current__label">Current delivery status</p>
+              <h2 id="current-status-title">
+                {{ statusLabel(tracking.summary.currentStatus) }}
+              </h2>
+            </div>
+            <span
+              class="sd-badge"
+              [class]="'sd-badge ' + badgeClass(tracking.summary.currentStatus)"
+            >
+              {{ statusLabel(tracking.summary.currentStatus) }}
+            </span>
+          </div>
+          <p class="tracking-current__description">{{ tracking.summary.publicDescription }}</p>
+          <dl class="tracking-current__details">
+            <div>
+              <dt>Tracking number</dt>
+              <dd class="tracking-number">{{ tracking.summary.trackingNumber }}</dd>
+            </div>
+            @if (tracking.summary.safeLocation) {
+              <div>
+                <dt>General location</dt>
+                <dd>{{ tracking.summary.safeLocation }}</dd>
+              </div>
+            }
+            <div>
+              <dt>Latest update</dt>
+              <dd class="sd-tabular">{{ formatDate(tracking.summary.latestUpdateTime) }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="sd-card tracking-history" aria-labelledby="tracking-history-title">
+          <div class="tracking-history__heading">
+            <div>
+              <h2 id="tracking-history-title">Tracking history</h2>
+              <p>Updates are shown from newest to oldest in Sri Lanka time.</p>
+            </div>
+            <span class="sd-badge">{{ tracking.history.events.length }} updates</span>
+          </div>
+
+          @if (tracking.history.events.length === 0) {
+            <div class="tracking-empty tracking-empty--compact" role="status">
+              <h3>No history yet</h3>
+              <p>The first tracking update will appear here.</p>
+            </div>
+          } @else {
+            <ol class="timeline">
+              @for (event of historyNewestFirst(); track $index) {
+                <li class="timeline__item">
+                  <span class="timeline__marker" aria-hidden="true"></span>
+                  <div class="timeline__content">
+                    <div class="timeline__topline">
+                      <h3>{{ statusLabel(event.status) }}</h3>
+                      <time class="sd-tabular" [attr.datetime]="event.eventTime">
+                        {{ formatDate(event.eventTime) }}
+                      </time>
+                    </div>
+                    <p>{{ event.publicDescription }}</p>
+                    @if (event.safeLocation) {
+                      <span class="timeline__location">{{ event.safeLocation }}</span>
+                    }
+                  </div>
+                </li>
+              }
+            </ol>
+          }
+        </section>
+      </div>
+    }
+  </main>
+</div>
