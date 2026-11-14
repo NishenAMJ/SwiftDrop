@@ -1,8 +1,15 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, finalize, firstValueFrom, map, shareReplay, tap } from 'rxjs';
+import { Observable, finalize, firstValueFrom, map, shareReplay, switchMap, tap } from 'rxjs';
 
-import { AuthUser, LoginRequest, RegisterRequest, TokenResponse } from './auth.models';
+import {
+  AuthUser,
+  ChangePasswordRequest,
+  LoginRequest,
+  RegisterRequest,
+  Role,
+  TokenResponse,
+} from './auth.models';
 
 export const AUTH_API = '/api/v1/auth';
 
@@ -24,6 +31,16 @@ export class AuthService {
 
   readonly user = this.currentUser.asReadonly();
   readonly isSignedIn = computed(() => this.currentUser() !== null);
+
+  /**
+   * Roles the access token actually carries. Same as `user.roles`, except while the user must
+   * change an initial password: then the token has none, so no role-specific screen would work.
+   */
+  readonly roles = computed<readonly Role[]>(() => activeRoles(this.currentUser()));
+
+  hasRole(role: Role): boolean {
+    return this.roles().includes(role);
+  }
 
   token(): string | null {
     return this.accessToken;
@@ -69,6 +86,17 @@ export class AuthService {
     this.currentUser.set(null);
   }
 
+  /**
+   * Changes (or, for a Google-only account, sets) the password. Identity revokes every other
+   * session and sets a new refresh cookie; one refresh then returns a token with the user's roles,
+   * which matters for a new dispatcher whose token had none.
+   */
+  changePassword(request: ChangePasswordRequest): Observable<AuthUser> {
+    return this.http
+      .post<void>('/api/v1/users/me/password', request)
+      .pipe(switchMap(() => this.refresh()));
+  }
+
   private startSession(request: Observable<TokenResponse>): Observable<AuthUser> {
     return request.pipe(
       tap((response) => {
@@ -78,4 +106,11 @@ export class AuthService {
       map((response) => response.user as AuthUser),
     );
   }
+}
+
+export function activeRoles(user: AuthUser | null | undefined): readonly Role[] {
+  if (!user || user.mustChangePassword) {
+    return [];
+  }
+  return user.roles;
 }

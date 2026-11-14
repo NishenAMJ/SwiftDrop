@@ -8,38 +8,17 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import {
-  AbstractControl,
-  NonNullableFormBuilder,
-  ReactiveFormsModule,
-  ValidationErrors,
-  Validators,
-} from '@angular/forms';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
-import { HOME_AFTER_LOGIN } from '../../../core/auth/auth.guards';
+import { homeFor } from '../../../core/auth/auth.guards';
+import { passwordRules } from '../../../core/auth/password-rules';
+import { PHONE_E164 } from '../../../shared/models/application';
 import { AuthService, GOOGLE_LOGIN_URL } from '../../../core/auth/auth.service';
 import { errorMessage, readProblem } from '../../../core/auth/problem-messages';
 
 type Field = 'fullName' | 'email' | 'phoneNumber' | 'password';
 
-/** Same rules as the server (contracts/openapi/identity-merchant-service.yaml). */
-const PHONE_E164 = /^\+[1-9][0-9]{7,14}$/;
-
-function passwordRules(control: AbstractControl<string>): ValidationErrors | null {
-  const value = control.value ?? '';
-  if (!value) {
-    return null; // "required" reports this
-  }
-  const length = [...value].length;
-  if (length < 8 || length > 64) {
-    return { passwordLength: true };
-  }
-  if (!/\p{L}/u.test(value) || !/\p{N}/u.test(value)) {
-    return { passwordMix: true };
-  }
-  return null;
-}
 
 @Component({
   selector: 'app-register-page',
@@ -93,7 +72,7 @@ export class RegisterPage {
         phoneNumber: value.phoneNumber.trim() || undefined,
       })
       .subscribe({
-        next: () => void this.router.navigateByUrl(HOME_AFTER_LOGIN),
+        next: (user) => void this.router.navigateByUrl(homeFor(user)),
         error: (error: unknown) => this.handleError(error),
       });
   }

@@ -1,0 +1,161 @@
+<div class="page page--wide">
+  <header class="page__header">
+    <h1 class="page__title">Merchant applications</h1>
+    <p class="page__intro">
+      Check each business before approving it. Oldest applications are listed first.
+    </p>
+  </header>
+
+  <form class="sd-card filters" [formGroup]="filters" (ngSubmit)="search()" role="search" aria-label="Merchant applications">
+    <div class="sd-field">
+      <label class="sd-label" for="merchant-filter-status">Status</label>
+      <select id="merchant-filter-status" class="sd-input" formControlName="status">
+        @for (status of statuses; track status[0]) {
+          <option [value]="status[0]">{{ status[1] }}</option>
+        }
+        <option value="">All statuses</option>
+      </select>
+    </div>
+    <div class="sd-field">
+      <label class="sd-label" for="merchant-filter-q">Business name</label>
+      <input id="merchant-filter-q" class="sd-input" type="search" formControlName="q" maxlength="100" />
+    </div>
+    <button class="sd-button sd-button--primary filters__submit" type="submit">Show applications</button>
+  </form>
+
+  @if (notice(); as notice) {
+    <div class="sd-alert" [class.sd-alert--success]="notice.tone === 'success'" [class.sd-alert--info]="notice.tone === 'info'" role="status">
+      {{ notice.text }}
+    </div>
+  }
+
+  <section class="page__section" aria-labelledby="merchant-results-title">
+    <h2 #resultsHeading id="merchant-results-title" class="page__section-title results-title" tabindex="-1">
+      Results
+      @if (result(); as result) {
+        <span class="results-count sd-tabular">
+          ({{ result.totalElements }} {{ result.totalElements === 1 ? 'application' : 'applications' }})
+        </span>
+      }
+    </h2>
+
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Loading applications…
+      </p>
+    } @else if (loadError(); as message) {
+      <div class="sd-alert sd-alert--error" role="alert">
+        {{ message }}
+        <button class="sd-button sd-button--secondary retry" type="button" (click)="load()">Try again</button>
+      </div>
+    } @else if (result(); as result) {
+      @if (result.content.length === 0) {
+        <div class="sd-card">
+          <p class="page__muted">
+            @if (filters.controls.status.value === 'PENDING' && !filters.controls.q.value) {
+              No merchant applications are waiting for review.
+            } @else {
+              No merchant applications match these filters.
+            }
+          </p>
+        </div>
+      } @else {
+        <ul class="review-list">
+          @for (merchant of result.content; track merchant.id) {
+            <li class="sd-card review-item">
+              <article [attr.aria-labelledby]="'merchant-' + merchant.id">
+                <div class="review-item__header">
+                  <h3 class="page__card-title" [id]="'merchant-' + merchant.id">{{ merchant.businessName }}</h3>
+                  <app-application-status-badge [status]="merchant.status" />
+                </div>
+
+                <dl class="details review-item__details">
+                  <div>
+                    <dt>Business type</dt>
+                    <dd>{{ businessTypeLabels[merchant.businessType] }}</dd>
+                  </div>
+                  <div>
+                    <dt>Registration number</dt>
+                    <dd>{{ merchant.businessRegistrationNumber || 'Not given' }}</dd>
+                  </div>
+                  <div>
+                    <dt>Contact phone</dt>
+                    <dd class="sd-tabular">{{ merchant.contactPhone }}</dd>
+                  </div>
+                  <div>
+                    <dt>Contact email</dt>
+                    <dd>{{ merchant.contactEmail || 'Not given' }}</dd>
+                  </div>
+                  <div class="details__full">
+                    <dt>Business address</dt>
+                    <dd>{{ formatAddress(merchant.businessAddress) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Submitted</dt>
+                    <dd class="sd-tabular">{{ merchant.submittedAt | colomboDate }}</dd>
+                  </div>
+                  @if (merchant.lastDecision; as last) {
+                    <div>
+                      <dt>Last decision</dt>
+                      <dd>
+                        {{ decisionLabels[last.status] }} on <span class="sd-tabular">{{ last.decidedAt | colomboDate }}</span>
+                      </dd>
+                    </div>
+                    @if (last.reason) {
+                      <div class="details__full">
+                        <dt>Reason given</dt>
+                        <dd class="review-item__reason">{{ last.reason }}</dd>
+                      </div>
+                    }
+                  }
+                </dl>
+
+                @if (decisionsFor(merchant.status).length) {
+                  <div class="page__actions review-item__actions">
+                    @for (action of decisionsFor(merchant.status); track action) {
+                      <button
+                        class="sd-button"
+                        [class.sd-button--primary]="copy[action].tone === 'primary'"
+                        [class.sd-button--secondary]="copy[action].tone === 'danger'"
+                        type="button"
+                        (click)="ask(merchant, action)"
+                      >
+                        {{ copy[action].action }}<span class="sd-visually-hidden"> {{ merchant.businessName }}</span>
+                      </button>
+                    }
+                  </div>
+                }
+              </article>
+            </li>
+          }
+        </ul>
+
+        <app-pagination
+          [page]="result.page"
+          [totalPages]="result.totalPages"
+          label="Merchant application pages"
+          [disabled]="loading()"
+          (pageChange)="goToPage($event)"
+        />
+      }
+    }
+  </section>
+</div>
+
+@let pending = decision.pending();
+<app-confirm-dialog
+  [open]="pending !== null"
+  [title]="pending ? copy[pending.decision].action + ' ' + pending.name + '?' : ''"
+  [confirmLabel]="pending ? copy[pending.decision].confirm : ''"
+  [tone]="pending ? copy[pending.decision].tone : 'primary'"
+  [text]="pending ? copy[pending.decision].text : null"
+  [busy]="decision.busy()"
+  [error]="decision.error()"
+  (confirmed)="decision.confirm($event)"
+  (cancelled)="decision.cancel()"
+>
+  @if (pending) {
+    <p>{{ copy[pending.decision].explain.merchant }}</p>
+  }
+</app-confirm-dialog>
