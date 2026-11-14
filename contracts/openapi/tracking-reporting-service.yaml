@@ -19,6 +19,7 @@ servers:
 tags:
   - name: Public tracking
   - name: Authenticated tracking
+  - name: Reports
 
 security:
   - bearerAuth: []
@@ -95,6 +96,82 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/TrackingNotFound' }
 
+  /api/v1/reports/summary:
+    get:
+      tags: [Reports]
+      operationId: getReportSummary
+      summary: Get booking-cohort totals and delivery success rate
+      description: Requires the `DISPATCHER` role.
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        '200':
+          description: Summary for the selected UTC booking cohort
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportSummary' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/reports/status-breakdown:
+    get:
+      tags: [Reports]
+      operationId: getStatusBreakdown
+      summary: Group booking-cohort parcels by current status
+      description: Requires the `DISPATCHER` role.
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        '200':
+          description: Current status totals for the selected booking cohort
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusBreakdown' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/reports/deliveries/daily:
+    get:
+      tags: [Reports]
+      operationId: getDailyDeliveryCounts
+      summary: Count distinct delivered parcels by UTC day
+      description: Requires the `DISPATCHER` role. Zero-count days are omitted.
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        '200':
+          description: Daily delivery counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryCounts' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/reports/deliveries/monthly:
+    get:
+      tags: [Reports]
+      operationId: getMonthlyDeliveryCounts
+      summary: Count distinct delivered parcels by UTC month
+      description: Requires the `DISPATCHER` role. Zero-count months are omitted.
+      parameters:
+        - $ref: '#/components/parameters/StartDate'
+        - $ref: '#/components/parameters/EndDate'
+      responses:
+        '200':
+          description: Monthly delivery counts using the first date of each month
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryCounts' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -112,6 +189,18 @@ components:
         type: string
         pattern: '^SWD-[0-9]{4}-[0-9]{6,}$'
         example: SWD-2026-100001
+    StartDate:
+      name: startDate
+      in: query
+      required: false
+      description: Inclusive UTC start date; omitted means no lower bound
+      schema: { type: string, format: date }
+    EndDate:
+      name: endDate
+      in: query
+      required: false
+      description: Inclusive UTC end date; omitted means no upper bound
+      schema: { type: string, format: date }
 
   schemas:
     TrackingSummary:
@@ -173,6 +262,69 @@ components:
           type: string
           format: date-time
 
+    ReportSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - totalParcelsBooked
+        - parcelsCurrentlyInTransit
+        - deliveredParcels
+        - failedDeliveries
+        - deliverySuccessRate
+      properties:
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        totalParcelsBooked: { type: integer, format: int64, minimum: 0 }
+        parcelsCurrentlyInTransit: { type: integer, format: int64, minimum: 0 }
+        deliveredParcels: { type: integer, format: int64, minimum: 0 }
+        failedDeliveries: { type: integer, format: int64, minimum: 0 }
+        deliverySuccessRate:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Delivered divided by delivered plus failed, as a percentage
+
+    StatusBreakdown:
+      type: object
+      additionalProperties: false
+      required: [statuses]
+      properties:
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        statuses:
+          type: array
+          items: { $ref: '#/components/schemas/StatusTotal' }
+
+    StatusTotal:
+      type: object
+      additionalProperties: false
+      required: [status, total]
+      properties:
+        status: { type: string }
+        total: { type: integer, format: int64, minimum: 0 }
+
+    DeliveryCounts:
+      type: object
+      additionalProperties: false
+      required: [counts]
+      properties:
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        counts:
+          type: array
+          items: { $ref: '#/components/schemas/DeliveryCount' }
+
+    DeliveryCount:
+      type: object
+      additionalProperties: false
+      required: [period, deliveredParcels]
+      properties:
+        period:
+          type: string
+          format: date
+          description: UTC day, or the first date of a UTC month
+        deliveredParcels: { type: integer, format: int64, minimum: 0 }
+
     Problem:
       type: object
       required: [type, title, status, detail, code]
@@ -192,6 +344,11 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
     Unauthenticated:
       description: A valid access token is required
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: The caller does not have the `DISPATCHER` role
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }

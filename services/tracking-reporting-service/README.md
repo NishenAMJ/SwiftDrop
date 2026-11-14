@@ -82,6 +82,20 @@ Authenticated callers can use:
 
 All responses are limited to the tracking number, public delivery state and description, safe general location labels and timestamps. Unknown tracking numbers return a generic `404` Problem Details response. See `contracts/openapi/tracking-reporting-service.yaml` for the complete contract.
 
+## Reports
+
+The following endpoints require a JWT with the `DISPATCHER` role:
+
+- `GET /api/v1/reports/summary`
+- `GET /api/v1/reports/status-breakdown`
+- `GET /api/v1/reports/deliveries/daily`
+- `GET /api/v1/reports/deliveries/monthly`
+
+Each endpoint accepts optional inclusive `startDate` and `endDate` query parameters in ISO
+`YYYY-MM-DD` format. Calculations use UTC. The exact cohort, success-rate and delivery-count
+definitions are documented in `docs/requirements/tracking-report-calculations.md`.
+
 ## Current status
 
-The service has tracking tables, event consumers, idempotent projection updates, privacy-safe tracking APIs and authenticated live SSE delivery. Report APIs are implemented in a later phase.
+The service has tracking tables, event consumers, idempotent projection updates, privacy-safe
+tracking APIs, authenticated live SSE delivery and dispatcher-only operational reports.

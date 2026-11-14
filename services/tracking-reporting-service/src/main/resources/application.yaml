@@ -51,8 +51,6 @@ spring:
           jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
           issuer-uri: swiftdrop-identity
           audiences: swiftdrop-api
-          authorities-claim-name: roles
-          authority-prefix: ROLE_
 
 management:
   endpoints:
