@@ -7,10 +7,12 @@ import {
   BookingSummaryDto,
   CreateBookingRequest,
   FeeBreakdown,
+  PaymentContextResponse,
   UrgencyType,
 } from '../models/customer-booking.models';
 
 export const BOOKING_API = '/api/v1/bookings';
+export const PAYMENTS_API = '/api/v1/payments';
 
 @Injectable({ providedIn: 'root' })
 export class CustomerBookingService {
@@ -36,6 +38,26 @@ export class CustomerBookingService {
     return this.http.get<BookingReceiptDto>(`${BOOKING_API}/${parcelId}/receipt`);
   }
 
+  getPaymentContext(bookingId: string): Observable<PaymentContextResponse> {
+    return this.http.get<PaymentContextResponse>(`${BOOKING_API}/${bookingId}/payment-context`);
+  }
+
+  /**
+   * Calls Payment & Settlement Service (Member 8) to initiate online checkout.
+   * Sends authoritative bookingId and client idempotency key.
+   */
+  initiatePayment(bookingId: string): Observable<{ id: string; checkoutUrl?: string; status: string }> {
+    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `pay-${Date.now()}`;
+
+    return this.http.post<{ id: string; checkoutUrl?: string; status: string }>(
+      PAYMENTS_API,
+      { bookingId },
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+  }
+
   /**
    * Calculates local real-time fee breakdown matching the backend BookingService formula:
    * Base Fee: 350 LKR
@@ -57,4 +79,3 @@ export class CustomerBookingService {
     };
   }
 }
-
