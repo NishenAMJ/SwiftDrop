@@ -31,7 +31,7 @@ jobs:
           cache: maven
 
       - name: Start PostgreSQL (same setup as local)
-        run: docker compose up -d --wait
+        run: docker compose up -d --wait postgres
 
       - name: Build and test
         working-directory: services/identity-merchant-service
