@@ -44,6 +44,21 @@ After PostgreSQL, RabbitMQ and the Identity service are available:
 
 The application will be available at `http://localhost:8084`.
 
+## Event consumption
+
+The service owns two durable RabbitMQ queues:
+
+- `tracking-reporting-service.parcel-pricing-events` for `parcel.*` events from `swiftdrop.parcel-pricing`
+- `tracking-reporting-service.delivery-events` for `parcel.*` and `delivery.*` events from `swiftdrop.delivery-operations`
+
+Invalid messages and messages that still fail after three attempts are rejected to queue-specific dead-letter queues. Event IDs are claimed transactionally in PostgreSQL, so duplicate deliveries do not create duplicate history entries.
+
+Committed state changes are sent to SSE subscribers at:
+
+```text
+GET /api/v1/tracking/{trackingNumber}/stream
+```
+
 ## Current status
 
-The Spring Boot scaffold and runtime connection settings are present. Tracking tables, Flyway migrations, RabbitMQ consumers, security rules, APIs, live updates and reports are implemented in later phases after the shared event contracts are agreed.
+The service has its tracking tables, event consumers, idempotent projection updates and live SSE delivery. Tracking query APIs, report APIs and final endpoint authorization are implemented in later phases.

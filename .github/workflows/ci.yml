@@ -38,8 +38,12 @@ jobs:
       - name: Start PostgreSQL (same setup as local)
         run: docker compose up -d --wait
 
-      - name: Build and test
+      - name: Build and test Identity service
         working-directory: services/identity-merchant-service
+        run: ./mvnw -B verify
+
+      - name: Build and test Tracking service
+        working-directory: services/tracking-reporting-service
         run: ./mvnw -B verify
 
       - name: Show database logs on failure
