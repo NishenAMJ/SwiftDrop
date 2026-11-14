@@ -40,5 +40,14 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/auth/account-page/account-page').then((m) => m.AccountPage),
   },
+  {
+    path: 'warehouse',
+    title: 'Warehouse operations | SwiftDrop',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/warehouse/warehouse-dashboard/warehouse-dashboard').then(
+        (m) => m.WarehouseDashboard,
+      ),
+  },
   { path: '**', redirectTo: 'account' },
 ];

@@ -1,0 +1,264 @@
+<div class="warehouse-page">
+  <header class="warehouse-header">
+    <div>
+      <a class="warehouse-header__brand" routerLink="/account">SwiftDrop</a>
+      <span class="warehouse-header__section">Warehouse operations</span>
+    </div>
+    <a class="sd-button sd-button--secondary" routerLink="/account">Back to account</a>
+  </header>
+
+  <main class="warehouse-main">
+    <div class="warehouse-title-row">
+      <div>
+        <p class="warehouse-eyebrow">Operations overview</p>
+        <h1>Warehouse dashboard</h1>
+        <p class="warehouse-intro">
+          Monitor parcels being received, sorted, and transferred through the warehouse network.
+        </p>
+      </div>
+      <button
+        class="sd-button sd-button--primary"
+        type="button"
+        (click)="refresh()"
+        [disabled]="loadingWarehouses() || loadingDashboard()"
+        [attr.aria-busy]="loadingDashboard()"
+      >
+        @if (loadingDashboard()) {
+          <span class="sd-spinner" aria-hidden="true"></span>
+          Refreshing…
+        } @else {
+          Refresh dashboard
+        }
+      </button>
+    </div>
+
+    <section class="sd-card warehouse-selector" aria-labelledby="warehouse-selection-heading">
+      <div>
+        <h2 id="warehouse-selection-heading">Select warehouse</h2>
+        <p>Choose the warehouse whose current workload you want to review.</p>
+      </div>
+
+      @if (loadingWarehouses()) {
+        <p class="warehouse-loading" role="status">
+          <span class="sd-spinner" aria-hidden="true"></span>
+          Loading warehouses…
+        </p>
+      } @else if (warehouses().length > 0) {
+        <div class="sd-field warehouse-selector__field">
+          <label class="sd-label" for="warehouse">Warehouse</label>
+          <select id="warehouse" class="sd-input" [formControl]="warehouseControl">
+            @for (warehouse of warehouses(); track warehouse.id) {
+              <option [value]="warehouse.id">
+                {{ warehouse.name }} ({{ warehouse.code }}) — {{ warehouse.city }}
+              </option>
+            }
+          </select>
+        </div>
+      } @else if (!errorMessage()) {
+        <p class="warehouse-empty">No warehouses have been created yet.</p>
+      }
+    </section>
+
+    @if (errorMessage(); as message) {
+      <div class="sd-alert sd-alert--error warehouse-error" role="alert">
+        <span>{{ message }}</span>
+        <button class="sd-button sd-button--secondary" type="button" (click)="refresh()">
+          Try again
+        </button>
+      </div>
+    }
+
+    @if (loadingDashboard() && !dashboard()) {
+      <div class="sd-card warehouse-loading-panel" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Loading warehouse activity…
+      </div>
+    } @else if (dashboard(); as data) {
+      <section class="warehouse-summary" aria-labelledby="warehouse-summary-heading">
+        <div class="warehouse-summary__heading">
+          <div>
+            <h2 id="warehouse-summary-heading">{{ data.warehouse.name }}</h2>
+            <p>
+              {{ data.warehouse.code }} · {{ data.warehouse.city }},
+              {{ data.warehouse.district }}
+            </p>
+          </div>
+          <span class="sd-badge" [class]="statusBadgeClass(data.warehouse.status)">
+            {{ warehouseStatusLabel(data.warehouse.status) }}
+          </span>
+        </div>
+
+        <div class="warehouse-metrics">
+          <article class="sd-card warehouse-metric">
+            <span>Awaiting sorting</span>
+            <strong class="sd-tabular">{{ data.arrivedParcels }}</strong>
+          </article>
+          <article class="sd-card warehouse-metric">
+            <span>Sorted parcels</span>
+            <strong class="sd-tabular">{{ data.sortedParcels }}</strong>
+          </article>
+          <article class="sd-card warehouse-metric">
+            <span>Parcels in transfer</span>
+            <strong class="sd-tabular">{{ data.parcelsInTransfer }}</strong>
+          </article>
+          <article class="sd-card warehouse-metric">
+            <span>Incoming in transit</span>
+            <strong class="sd-tabular">{{ data.incomingTransfers }}</strong>
+          </article>
+          <article class="sd-card warehouse-metric">
+            <span>Outgoing in transit</span>
+            <strong class="sd-tabular">{{ data.outgoingTransfers }}</strong>
+          </article>
+          <article class="sd-card warehouse-metric">
+            <span>Total sorting records</span>
+            <strong class="sd-tabular">{{ data.totalSortingRecords }}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="sd-card warehouse-table-card" aria-labelledby="recent-parcels-heading">
+        <div class="warehouse-section-heading">
+          <div>
+            <h2 id="recent-parcels-heading">Recent parcel activity</h2>
+            <p>Latest parcels recorded at this warehouse.</p>
+          </div>
+          <span class="sd-badge">{{ data.recentParcels.length }} shown</span>
+        </div>
+
+        @if (data.recentParcels.length > 0) {
+          <div
+            class="warehouse-table-wrap"
+            role="region"
+            aria-labelledby="recent-parcels-heading"
+            tabindex="0"
+          >
+            <table>
+              <caption class="sd-visually-hidden">
+                Recent parcels at
+                {{
+                  data.warehouse.name
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Parcel reference</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Arrived</th>
+                  <th scope="col">Last updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (parcel of data.recentParcels; track parcel.id) {
+                  <tr>
+                    <td class="warehouse-reference">{{ parcel.parcelReference }}</td>
+                    <td>
+                      <span class="sd-badge" [class]="statusBadgeClass(parcel.state)">
+                        {{ parcelStateLabel(parcel.state) }}
+                      </span>
+                    </td>
+                    <td class="sd-tabular">{{ parcel.arrivedAt | date: 'medium' : '+0530' }}</td>
+                    <td class="sd-tabular">{{ parcel.updatedAt | date: 'medium' : '+0530' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="warehouse-empty">No parcel activity has been recorded for this warehouse.</p>
+        }
+      </section>
+
+      <div class="warehouse-transfer-grid">
+        <section class="sd-card warehouse-table-card" aria-labelledby="incoming-heading">
+          <div class="warehouse-section-heading">
+            <div>
+              <h2 id="incoming-heading">Incoming transfers</h2>
+              <p>Parcels moving into this warehouse.</p>
+            </div>
+          </div>
+          @if (data.recentIncomingTransfers.length > 0) {
+            <div
+              class="warehouse-table-wrap"
+              role="region"
+              aria-labelledby="incoming-heading"
+              tabindex="0"
+            >
+              <table>
+                <caption class="sd-visually-hidden">
+                  Recent incoming warehouse transfers
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Parcel</th>
+                    <th scope="col">From</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (transfer of data.recentIncomingTransfers; track transfer.id) {
+                    <tr>
+                      <td class="warehouse-reference">{{ transfer.parcelReference }}</td>
+                      <td>{{ transfer.sourceWarehouseCode }}</td>
+                      <td>
+                        <span class="sd-badge" [class]="statusBadgeClass(transfer.status)">
+                          {{ transferStatusLabel(transfer.status) }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="warehouse-empty">No incoming transfers to show.</p>
+          }
+        </section>
+
+        <section class="sd-card warehouse-table-card" aria-labelledby="outgoing-heading">
+          <div class="warehouse-section-heading">
+            <div>
+              <h2 id="outgoing-heading">Outgoing transfers</h2>
+              <p>Parcels moving from this warehouse.</p>
+            </div>
+          </div>
+          @if (data.recentOutgoingTransfers.length > 0) {
+            <div
+              class="warehouse-table-wrap"
+              role="region"
+              aria-labelledby="outgoing-heading"
+              tabindex="0"
+            >
+              <table>
+                <caption class="sd-visually-hidden">
+                  Recent outgoing warehouse transfers
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Parcel</th>
+                    <th scope="col">To</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (transfer of data.recentOutgoingTransfers; track transfer.id) {
+                    <tr>
+                      <td class="warehouse-reference">{{ transfer.parcelReference }}</td>
+                      <td>{{ transfer.destinationWarehouseCode }}</td>
+                      <td>
+                        <span class="sd-badge" [class]="statusBadgeClass(transfer.status)">
+                          {{ transferStatusLabel(transfer.status) }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="warehouse-empty">No outgoing transfers to show.</p>
+          }
+        </section>
+      </div>
+    }
+  </main>
+</div>
