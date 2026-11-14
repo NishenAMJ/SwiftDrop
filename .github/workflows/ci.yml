@@ -20,6 +20,7 @@ jobs:
       IDENTITY_DB_PASSWORD: ci-identity-password
       PARCEL_DB_PASSWORD: ci-parcel-password
       PAYMENT_DB_PASSWORD: ci-payment-password
+      DELIVERY_DB_PASSWORD: ci-delivery-password
     steps:
       - uses: actions/checkout@v4
 
