@@ -53,7 +53,8 @@ public class PricingClient {
         return c;
     }
     static void validate(Context c, String bookingId) {
-        if(c==null || !bookingId.equals(c.bookingId()) || c.pricingSnapshotId()==null || c.amount()==null
+        if(c==null || !bookingId.equals(c.bookingId()) || c.pricingSnapshotId()==null
+            || c.pricingSnapshotId().isBlank() || c.pricingSnapshotId().length()>64 || c.amount()==null
             || c.amount().signum()<=0 || c.amount().scale()>2 || c.amount().precision()-c.amount().scale()>10
             || !"LKR".equals(c.currency()) || !Set.of("DIRECT_WEBSITE","MERCHANT_API").contains(Objects.toString(c.channel(),""))
             || ("MERCHANT_API".equals(c.channel()) && c.merchantId()==null)

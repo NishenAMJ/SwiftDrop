@@ -56,10 +56,10 @@ public class Payment {
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String value) { this.idempotencyKey = value; }
 
-    @Column(name = "pricing_snapshot_id")
-    private UUID pricingSnapshotId;
-    public UUID getPricingSnapshotId() { return pricingSnapshotId; }
-    public void setPricingSnapshotId(UUID value) { this.pricingSnapshotId = value; }
+    @Column(name = "pricing_snapshot_id", length = 64)
+    private String pricingSnapshotId;
+    public String getPricingSnapshotId() { return pricingSnapshotId; }
+    public void setPricingSnapshotId(String value) { this.pricingSnapshotId = value; }
 
     @Column(name = "booking_channel")
     private String bookingChannel;

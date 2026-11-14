@@ -1,7 +1,8 @@
 # Payment integration draft
 
-Status: payment-side client/adapter implemented; pricing API remains a proposal for
-the upstream owner. Real-provider sandbox verification is outstanding.
+Status: payment-side client/adapter implemented; Parcel & Pricing now exposes the
+payment-context endpoint for direct bookings. Merchant-order lookup and
+real-provider sandbox refund verification remain outstanding.
 
 ## PayHere review
 
@@ -56,7 +57,7 @@ as released history rather than being deleted.
 Repeated partial refunds and ambiguous timeout recovery remain mandatory sandbox
 acceptance checks; automated tests use a mocked provider for these workflows.
 
-## Proposed Parcel & Pricing lookup
+## Parcel & Pricing lookup
 
 `GET /api/v1/bookings/{bookingId}/payment-context`
 
@@ -64,16 +65,22 @@ Forward the initiating caller's bearer JWT; Parcel & Pricing must validate it an
 authorize the booking. This proposal avoids inventing a service credential flow.
 Payment independently checks the returned ownership and booking channel.
 
+The current endpoint resolves a Parcel booking by its UUID. Use the booking response
+`id` as `bookingId`; the human-facing `trackingNumber` is not accepted in this path.
+The current Parcel implementation creates `DIRECT_WEBSITE` contexts. Merchant API
+orders remain a separate Parcel workflow and are not yet available through this
+payment-context endpoint.
+
 Example 200 response (synthetic data):
 
 ```json
 {
-  "bookingId": "SWD-2026-000125",
-  "channel": "MERCHANT_API",
+  "bookingId": "f879bd1f-379d-49ad-ae13-60fcc2a475f9",
+  "channel": "DIRECT_WEBSITE",
   "customerId": "f2249d4c-a134-4bc0-b9ed-ffea97ad8791",
   "merchantId": "846c790e-497a-4340-8039-79e25c95f40e",
   "payable": true,
-  "pricingSnapshotId": "d0dafc29-38c0-4e45-bebd-594bca0f620c",
+  "pricingSnapshotId": "SNP-1234ABCD",
   "amount": 1000.00,
   "currency": "LKR",
   "payer": {
@@ -88,7 +95,9 @@ Example 200 response (synthetic data):
 }
 ```
 
-- channel is MERCHANT_API or DIRECT_WEBSITE. customerId identifies the authorized
+- `pricingSnapshotId` is an opaque string (maximum 64 characters); Payment stores
+  and returns it unchanged. It must not be parsed as a UUID.
+- When merchant contexts are added, channel will be MERCHANT_API or DIRECT_WEBSITE. customerId identifies the authorized
   customer account, not an arbitrary recipient. merchantId is required for
   MERCHANT_API and omitted for DIRECT_WEBSITE. If merchant bookings have no linked
   customer account, omit customerId and allow only the owning merchant/dispatcher

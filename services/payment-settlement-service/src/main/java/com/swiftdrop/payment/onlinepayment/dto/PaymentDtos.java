@@ -39,5 +39,5 @@ public final class PaymentDtos {
     public record Payer(String firstName, String lastName, String email, String phone,
                         String address, String city, String country) {}
     public record Context(String bookingId, String channel, UUID customerId, UUID merchantId,
-                          boolean payable, UUID pricingSnapshotId, BigDecimal amount, String currency, Payer payer) {}
+                          boolean payable, String pricingSnapshotId, BigDecimal amount, String currency, Payer payer) {}
 }
