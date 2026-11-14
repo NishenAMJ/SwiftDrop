@@ -1,0 +1,66 @@
+<div class="sd-page sd-aura">
+  <div class="sd-aura__content" style="padding: var(--sd-space-6); max-width:1200px; margin:auto;">
+    <h1 class="sd-page-title" style="font-size: clamp(1.5rem,3vw,2rem); margin-bottom: var(--sd-space-5);">My Orders</h1>
+
+    <div class="sd-toolbar" style="display:flex; gap:var(--sd-space-4); margin-bottom: var(--sd-space-5); align-items:center; flex-wrap:wrap;">
+      <button class="sd-button sd-button--primary" routerLink="/merchant/create-order">Create New Order</button>
+      <input type="text" placeholder="Search orders..." [formControl]="searchCtrl" class="sd-input" style="flex:1; max-width:300px;" />
+      <select [formControl]="statusCtrl" class="sd-select" style="max-width:150px;">
+        <option value="ALL">All Statuses</option>
+        <option value="PENDING">Pending</option>
+        <option value="IN_TRANSIT">In Transit</option>
+        <option value="DELIVERED">Delivered</option>
+        <option value="CANCELLED">Cancelled</option>
+      </select>
+    </div>
+
+    <ng-container *ngIf="loading()">
+      <div class="sd-spinner" style="margin:auto;"></div>
+    </ng-container>
+
+    <ng-container *ngIf="errorMessage() as errMsg">
+      <div class="sd-alert sd-alert--error" role="alert">{{ errMsg }}</div>
+    </ng-container>
+
+    <ng-container *ngIf="!loading() && !errorMessage()">
+      <ng-container *ngIf="filteredOrders().length > 0; else emptyState">
+        <table class="sd-table" style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th>Order Ref</th>
+              <th>Created Date</th>
+              <th>Delivery Destination</th>
+              <th>Fee (LKR)</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let order of filteredOrders()">
+              <td class="sd-font-mono">{{ order.id }}</td>
+              <td class="sd-tabular">{{ order.createdAt | date:'mediumDate' }}</td>
+              <td>{{ order.deliveryAddress }}</td>
+              <td class="sd-tabular">Rs. {{ order.fee | number:'1.2-2' }}</td>
+              <td>
+                <span class="sd-badge" [ngClass]="{'sd-badge--success': order.status === 'DELIVERED',
+                                                'sd-badge--warning': order.status === 'PENDING',
+                                                'sd-badge--info': order.status === 'IN_TRANSIT',
+                                                'sd-badge--danger': order.status === 'CANCELLED'}">
+                  {{ order.status }}
+                </span>
+              </td>
+              <td>
+                <a [routerLink]="['/merchant/order', order.id]" class="sd-button sd-button--secondary">View</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </ng-container>
+      <ng-template #emptyState>
+        <div class="sd-card" style="text-align:center; padding: var(--sd-space-6);">
+          <p>No orders found.</p>
+        </div>
+      </ng-template>
+    </ng-container>
+  </div>
+</div>
