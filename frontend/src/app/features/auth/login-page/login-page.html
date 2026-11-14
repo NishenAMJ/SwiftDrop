@@ -32,15 +32,17 @@
 
     <div class="sd-field">
       <label class="sd-label" for="login-password">Password</label>
-      <input
-        id="login-password"
-        class="sd-input"
-        type="password"
-        formControlName="password"
-        autocomplete="current-password"
-        [attr.aria-invalid]="showError('password')"
-        [attr.aria-describedby]="showError('password') ? 'login-password-error' : null"
-      />
+      <app-password-field>
+        <input
+          id="login-password"
+          class="sd-input"
+          type="password"
+          formControlName="password"
+          autocomplete="current-password"
+          [attr.aria-invalid]="showError('password')"
+          [attr.aria-describedby]="showError('password') ? 'login-password-error' : null"
+        />
+      </app-password-field>
       @if (showError('password')) {
         <p id="login-password-error" class="sd-error">Enter your password.</p>
       }

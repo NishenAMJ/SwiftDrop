@@ -109,18 +109,20 @@
             <div class="sd-field">
               @let passwordError = error('initialPassword');
               <label class="sd-label" for="dispatcher-initialPassword">Initial password</label>
-              <input
-                id="dispatcher-initialPassword"
-                class="sd-input"
-                type="password"
-                formControlName="initialPassword"
-                autocomplete="new-password"
-                [attr.aria-invalid]="!!passwordError"
-                [attr.aria-describedby]="
-                  'dispatcher-initialPassword-help' +
-                  (passwordError ? ' dispatcher-initialPassword-error' : '')
-                "
-              />
+              <app-password-field label="initial password">
+                <input
+                  id="dispatcher-initialPassword"
+                  class="sd-input"
+                  type="password"
+                  formControlName="initialPassword"
+                  autocomplete="new-password"
+                  [attr.aria-invalid]="!!passwordError"
+                  [attr.aria-describedby]="
+                    'dispatcher-initialPassword-help' +
+                    (passwordError ? ' dispatcher-initialPassword-error' : '')
+                  "
+                />
+              </app-password-field>
               <p id="dispatcher-initialPassword-help" class="sd-help">{{ passwordHelp }}</p>
               @if (passwordError) {
                 <p id="dispatcher-initialPassword-error" class="sd-error">{{ passwordError }}</p>

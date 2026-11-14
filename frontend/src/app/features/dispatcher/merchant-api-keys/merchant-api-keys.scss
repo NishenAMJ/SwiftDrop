@@ -1,0 +1,37 @@
+@use '../../../shared/styles/page';
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+}
+
+.keys__toggle {
+  align-self: flex-start;
+}
+
+.keys__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+.keys__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.keys__prefix {
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+}
+
+.keys__actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.keys__retry {
+  margin-top: var(--sd-space-3);
+}

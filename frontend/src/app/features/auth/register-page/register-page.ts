@@ -16,13 +16,14 @@ import { passwordRules } from '../../../core/auth/password-rules';
 import { PHONE_E164 } from '../../../shared/models/application';
 import { AuthService, GOOGLE_LOGIN_URL } from '../../../core/auth/auth.service';
 import { errorMessage, readProblem } from '../../../core/auth/problem-messages';
+import { PasswordField } from '../../../shared/components/password-field/password-field';
 
 type Field = 'fullName' | 'email' | 'phoneNumber' | 'password';
 
 
 @Component({
   selector: 'app-register-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PasswordField],
   templateUrl: './register-page.html',
   styleUrl: './register-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
