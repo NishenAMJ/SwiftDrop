@@ -1,0 +1,59 @@
+server:
+  port: 8086
+
+spring:
+  config:
+    # Loads the root .env when you run from the service folder or the SwiftDrop root.
+    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
+  application:
+    name: notification-webhook-service
+
+  datasource:
+    url: ${COMMUNICATION_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
+    username: ${COMMUNICATION_DB_USER:communication_user}
+    password: ${COMMUNICATION_DB_PASSWORD}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: notification_webhook
+
+  flyway:
+    enabled: true
+    default-schema: notification_webhook
+    schemas:
+      - notification_webhook
+    create-schemas: false
+    locations: classpath:db/migration
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          issuer-uri: swiftdrop-identity
+          audiences: swiftdrop-api
+          authorities-claim-name: roles
+          authority-prefix: ROLE_
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
