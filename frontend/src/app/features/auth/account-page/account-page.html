@@ -51,6 +51,18 @@
           </div>
         </dl>
       </section>
+
+      @if (canManageWarehouses()) {
+        <section class="sd-card account__card" aria-labelledby="operations-heading">
+          <h2 id="operations-heading" class="account__card-title">Operations</h2>
+          <p class="account__card-copy">
+            Review parcel arrivals, sorting workload, and warehouse transfers.
+          </p>
+          <a class="sd-button sd-button--primary" routerLink="/warehouse">
+            Open warehouse dashboard
+          </a>
+        </section>
+      }
     }
   </main>
 </div>

@@ -42,6 +42,11 @@
   margin: 0 0 var(--sd-space-4);
 }
 
+.account__card-copy {
+  color: var(--sd-text-secondary);
+  margin-bottom: var(--sd-space-4);
+}
+
 .account__details {
   display: grid;
   gap: var(--sd-space-4);

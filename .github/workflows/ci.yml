@@ -20,6 +20,8 @@ jobs:
       IDENTITY_DB_PASSWORD: ci-identity-password
       PARCEL_DB_PASSWORD: ci-parcel-password
       PAYMENT_DB_PASSWORD: ci-payment-password
+      DELIVERY_DB_PASSWORD: ci-delivery-password
+      COMMUNICATION_DB_PASSWORD: ci-communication-password
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +32,7 @@ jobs:
           cache: maven
 
       - name: Start PostgreSQL (same setup as local)
-        run: docker compose up -d --wait
+        run: docker compose up -d --wait postgres
 
       - name: Build and test
         working-directory: services/identity-merchant-service
