@@ -56,6 +56,10 @@
           </svg>
           My Bookings
         </a>
+        <!-- Identity: roles, password, and applying as a merchant or courier. -->
+        <a routerLink="/account" routerLinkActive="navbar__link--active" class="navbar__link">
+          Account &amp; roles
+        </a>
       </nav>
 
       <!-- Desktop Right Actions -->
@@ -166,6 +170,13 @@
             (click)="closeMobileMenu()"
           >
             Customer Profile &amp; Settings
+          </a>
+          <a
+            routerLink="/account"
+            class="mobile-drawer__link"
+            (click)="closeMobileMenu()"
+          >
+            Account &amp; roles
           </a>
           <button
             type="button"

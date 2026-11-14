@@ -82,10 +82,16 @@ export IDENTITY_JWT_PRIVATE_KEY_PATH=~/swiftdrop-jwt-key.pem
 
 ## Google login
 
-1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application**.
-2. Add the authorized redirect URI `http://localhost:8081/login/oauth2/code/google`.
-3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (never commit them), then start the service.
-4. Open http://localhost:8081/oauth2/authorization/google in a browser. After signing in at Google you land on `http://localhost:4200/auth/callback` with the `sd_refresh` cookie set; the Angular page then calls `POST /api/v1/auth/refresh`.
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), set up the **OAuth consent screen** with audience **External**, and add every Google account that will test login under **Test users** (while the app is in testing mode, only those accounts can log in).
+2. Create an **OAuth client ID** of type **Web application**.
+3. Add both authorized redirect URIs:
+   - `http://localhost:4200/login/oauth2/code/google`: used by the "Continue with Google" button, which starts login through the Angular dev proxy, so the callback comes back on port 4200.
+   - `http://localhost:8081/login/oauth2/code/google`: used when you start login on the service directly.
+4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in the root `.env` (never commit them), then start (or restart) the service.
+5. Check it is on: `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/oauth2/authorization/google` prints `302` (a redirect to Google). `401` means the credentials were not picked up.
+6. Open http://localhost:4200/login and choose **Continue with Google** (or open http://localhost:8081/oauth2/authorization/google directly). After signing in at Google you land on `http://localhost:4200/auth/callback` with the `sd_refresh` cookie set; the Angular page then calls `POST /api/v1/auth/refresh`.
+
+If Google shows `redirect_uri_mismatch`, its "error details" link shows the exact URI it received; register that one exactly.
 
 Errors arrive as `/auth/callback?error=email_not_verified | account_suspended | account_mismatch | google_login_failed`.
 

@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { problem, tokenResponse } from '../../../testing/auth-fixtures';
+import { exampleUser, problem, tokenResponse } from '../../../testing/auth-fixtures';
 import { LoginPage } from './login-page';
 
 describe('LoginPage', () => {
@@ -55,7 +55,7 @@ describe('LoginPage', () => {
     expect(page.querySelector('#login-password-error')?.textContent).toContain('Enter your password.');
   });
 
-  it('logs in and goes to the account page', async () => {
+  it('logs in and goes to the start page of the role', async () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     fill(' nimal@example.com ', 'Secret-pass-1');
     await submit();
@@ -65,7 +65,17 @@ describe('LoginPage', () => {
     expect(page.querySelector('button[type="submit"]')?.textContent).toContain('Logging in');
     request.flush(tokenResponse());
 
-    expect(navigate).toHaveBeenCalledWith('/account');
+    expect(navigate).toHaveBeenCalledWith('/customer');
+  });
+
+  it('sends a dispatcher to the dispatcher tools', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    fill('dispatch@example.com', 'Secret-pass-1');
+    await submit();
+
+    http.expectOne('/api/v1/auth/login').flush(tokenResponse({ ...exampleUser, roles: ['DISPATCHER'] }));
+
+    expect(navigate).toHaveBeenCalledWith('/dispatcher');
   });
 
   it('explains a wrong password in its own words and keeps what was typed', async () => {

@@ -2,6 +2,13 @@
 
 export type Role = 'CUSTOMER' | 'MERCHANT' | 'COURIER' | 'DISPATCHER';
 
+export const ROLE_LABELS: Record<Role, string> = {
+  CUSTOMER: 'Customer',
+  MERCHANT: 'Merchant',
+  COURIER: 'Courier',
+  DISPATCHER: 'Dispatcher',
+};
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -32,6 +39,21 @@ export interface RegisterRequest {
   password: string;
   fullName: string;
   phoneNumber?: string;
+}
+
+export interface ChangePasswordRequest {
+  /** Omitted when a Google-only account sets its first password. */
+  currentPassword?: string;
+  newPassword: string;
+}
+
+/** One page of a list (contracts/README.md, "Paging"). */
+export interface Page<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 }
 
 /** RFC 9457 Problem Details with SwiftDrop's code and field errors. */
