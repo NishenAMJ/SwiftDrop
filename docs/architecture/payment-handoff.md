@@ -62,11 +62,12 @@ tokens and PayHere sandbox payments/refunds, agree pricing snapshots and event
 consumers with teammates, and coordinate gateway routes. No live payments, deployment
 or remote push has been performed by the assistant.
 
-Known limits: uncertain partial refunds require investigation (no automatic
-per-attempt provider lookup/manual resolution API); failed payment booking claims
-cannot be reset through an API; consumer replay and audit-queue retention are not
-implemented; broker restart and real downstream consumption are not tested. Further
-concurrency/security coverage and operational review are appropriate before production.
+Known limits: PayHere has no automatic per-attempt lookup for uncertain partial
+refunds. Dispatcher-only evidence-based refund resolution and terminal-failure booking
+claim release are implemented with audit records, but rely on correct operator-cited
+provider evidence. Consumer replay and audit-queue retention are not implemented;
+broker restart and real downstream consumption are not tested. The new recovery flows
+still require isolated integration testing and operational review before production.
 
 Root .gitignore has separate user edits. Preserve them. This handoff remains a local,
 untracked file unless the user chooses to include it in a commit.

@@ -47,7 +47,12 @@ SUCCESS, confirming that provider operation, not bank settlement. Explicit statu
 0/-1 maps to FAILED; exceptions and ambiguous responses retain PENDING. Pre-refund
 retrieval failures can also leave a claimed attempt pending. Retrieval-based
 recovery only resolves a matching aggregate REFUNDED payment when one outstanding
-refund covers the remaining balance. There is no manual resolution endpoint.
+refund covers the remaining balance. A dispatcher-only manual resolution endpoint
+records the cited PayHere evidence and reason in the recovery audit before resolving
+an uncertain attempt; it does not contact PayHere or independently prove the evidence.
+Failed booking claims can be released only after a verified terminal failure callback,
+an empty fresh retrieval, and dispatcher-cited provider evidence. The claim remains
+as released history rather than being deleted.
 Repeated partial refunds and ambiguous timeout recovery remain mandatory sandbox
 acceptance checks; automated tests use a mocked provider for these workflows.
 

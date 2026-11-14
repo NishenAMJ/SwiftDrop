@@ -12,6 +12,23 @@ public final class PaymentDtos {
     public record RefundRequest(@NotNull @DecimalMin("0.01") @Digits(integer=10, fraction=2) BigDecimal amount,
                                 @NotBlank @Size(max=500) String reason) {}
     public record RefundRetryRequest(@NotNull @AssertTrue Boolean confirmNoRefundAtProvider) {}
+    public record RefundResolutionRequest(
+        @NotBlank @Pattern(regexp="CONFIRMED_SUCCESS|CONFIRMED_FAILURE") String resolution,
+        @NotBlank @Pattern(regexp="PAYHERE_DASHBOARD|PAYHERE_SUPPORT_CASE") String evidenceType,
+        @NotBlank @Size(max=200) String evidenceReference,
+        @Size(max=30) String providerRefundReference,
+        @NotBlank @Size(max=500) String reason,
+        @NotNull @AssertTrue Boolean confirmProviderEvidence
+    ) {}
+    public record BookingClaimReleaseRequest(
+        @NotNull @AssertTrue Boolean confirmProviderTerminalFailure,
+        @NotBlank @Pattern(regexp="PAYHERE_DASHBOARD|PAYHERE_SUPPORT_CASE") String evidenceType,
+        @NotBlank @Size(max=200) String evidenceReference,
+        @NotBlank @Size(max=500) String reason
+    ) {}
+    public record RecoveryAudit(UUID id, UUID paymentId, UUID refundId, String action,
+        String priorStatus, String resultingStatus, UUID actorId, String evidenceType,
+        String evidenceReference, String providerReference, String reason, Instant createdAt) {}
     public record Checkout(String provider, String checkoutUrl, String method, Map<String,String> fields) {}
     public record View(UUID id, String bookingId, BigDecimal amount, String currency, PaymentStatus status,
                        BigDecimal refundedAmount, String provider, String providerReference,

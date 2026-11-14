@@ -36,6 +36,16 @@ class PaymentSecurityTest {
             .contentType("application/json").content("{\"confirmNoRefundAtProvider\":true}"))
             .andExpect(status().isForbidden());
     }
+    @Test void customerCannotManuallyResolveRefundOrReleaseBookingClaim() throws Exception {
+        mvc.perform(post("/api/v1/payments/00000000-0000-0000-0000-000000000001/refunds/00000000-0000-0000-0000-000000000002/resolve")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))).contentType("application/json").content("{}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/payments/00000000-0000-0000-0000-000000000001/booking-claim/release")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))).contentType("application/json").content("{}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/payments/00000000-0000-0000-0000-000000000001/recovery-audit")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER")))).andExpect(status().isForbidden());
+    }
     @Test void callbackDoesNotRequireCustomerJwtButRejectsDuplicateFields() throws Exception {
         mvc.perform(post("/api/v1/payments/callbacks/payhere").contentType("application/x-www-form-urlencoded")
             .param("merchant_id","1","2")).andExpect(status().isBadRequest());
