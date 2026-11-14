@@ -11,6 +11,7 @@ public final class PaymentDtos {
     public record Create(@NotBlank @Size(max=100) String bookingId) {}
     public record RefundRequest(@NotNull @DecimalMin("0.01") @Digits(integer=10, fraction=2) BigDecimal amount,
                                 @NotBlank @Size(max=500) String reason) {}
+    public record RefundRetryRequest(@NotNull @AssertTrue Boolean confirmNoRefundAtProvider) {}
     public record Checkout(String provider, String checkoutUrl, String method, Map<String,String> fields) {}
     public record View(UUID id, String bookingId, BigDecimal amount, String currency, PaymentStatus status,
                        BigDecimal refundedAmount, String provider, String providerReference,

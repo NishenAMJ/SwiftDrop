@@ -85,6 +85,24 @@ class PaymentIntegrationTest {
         assertThrows(PaymentProblem.class,()->service.refund(id,new RefundRequest(new BigDecimal("250"),"Another"),"refund-key-000002",admin));
         verify(provider,times(1)).refund(anyString(),any(),anyString());
     }
+    @Test void uncertainRefundCanOnlyBeRetriedAfterOperatorConfirmationAndProviderPreflight() {
+        UUID id=paid();
+        when(provider.refund(anyString(),any(),anyString())).thenReturn(
+            new PaymentProvider.RefundResult("UNKNOWN",null),new PaymentProvider.RefundResult("SUCCESS","987655"));
+        Refund pending=service.refund(id,new RefundRequest(new BigDecimal("250"),"Adjustment"),"refund-key-000001",admin);
+        assertEquals("PENDING",pending.status());
+
+        when(provider.retrieve(id)).thenReturn(List.of(new PaymentProvider.RemotePayment("123456",id.toString(),
+            new BigDecimal("1000"),"LKR","REFUND REQUESTED")));
+        assertThrows(PaymentProblem.class,()->service.retryRefund(id,pending.id(),true,admin));
+        verify(provider,times(1)).refund(anyString(),any(),anyString());
+
+        when(provider.retrieve(id)).thenReturn(List.of(new PaymentProvider.RemotePayment("123456",id.toString(),
+            new BigDecimal("1000"),"LKR","RECEIVED")));
+        Refund retried=service.retryRefund(id,pending.id(),true,admin);
+        assertEquals("SUCCESS",retried.status());
+        verify(provider,times(2)).refund(anyString(),any(),anyString());
+    }
     @Test void failedRefundReleasesReservation() {
         UUID id=paid(); when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("FAILED",null));
         assertEquals("FAILED",service.refund(id,new RefundRequest(new BigDecimal("250"),"Adjustment"),"refund-key-000001",admin).status());

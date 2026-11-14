@@ -30,6 +30,10 @@ public class PaymentController {
         @RequestHeader("Idempotency-Key") String key,@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.accepted().body(service.refund(id,body,key,Actor.from(jwt)));
     }
+    @PostMapping("/{id}/refunds/{refundId}/retry") ResponseEntity<Refund> retryRefund(@PathVariable UUID id,@PathVariable UUID refundId,
+        @Valid @RequestBody RefundRetryRequest body,@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok().body(service.retryRefund(id,refundId,body.confirmNoRefundAtProvider(),Actor.from(jwt)));
+    }
     @GetMapping("/{id}/refunds/{refundId}") Refund refundStatus(@PathVariable UUID id,@PathVariable UUID refundId,@AuthenticationPrincipal Jwt jwt) {
         return service.refundView(refundId,id,Actor.from(jwt));
     }

@@ -30,6 +30,12 @@ class PaymentSecurityTest {
             .header("Idempotency-Key","unique-key-123456").contentType("application/json").content("{\"amount\":10,\"reason\":\"Test\"}"))
             .andExpect(status().isForbidden());
     }
+    @Test void customerCannotRetryUncertainRefund() throws Exception {
+        mvc.perform(post("/api/v1/payments/00000000-0000-0000-0000-000000000001/refunds/00000000-0000-0000-0000-000000000002/retry")
+            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER")))
+            .contentType("application/json").content("{\"confirmNoRefundAtProvider\":true}"))
+            .andExpect(status().isForbidden());
+    }
     @Test void callbackDoesNotRequireCustomerJwtButRejectsDuplicateFields() throws Exception {
         mvc.perform(post("/api/v1/payments/callbacks/payhere").contentType("application/x-www-form-urlencoded")
             .param("merchant_id","1","2")).andExpect(status().isBadRequest());

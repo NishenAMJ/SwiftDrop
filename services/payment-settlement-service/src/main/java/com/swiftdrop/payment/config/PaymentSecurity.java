@@ -19,6 +19,7 @@ public class PaymentSecurity{
                 .requestMatchers("/actuator/health","/actuator/health/**","/error").permitAll()
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/callbacks/payhere").permitAll()
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/*/refund").hasRole("DISPATCHER")
+                .requestMatchers(HttpMethod.POST,"/api/v1/payments/*/refunds/*/retry").hasRole("DISPATCHER")
                 .requestMatchers("/api/v1/payments","/api/v1/payments/**").hasAnyRole("CUSTOMER","MERCHANT","DISPATCHER")
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o->o.jwt(j->j.jwtAuthenticationConverter(converter))

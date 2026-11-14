@@ -15,10 +15,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
 public class PaymentService {
+    private static final Logger log=LoggerFactory.getLogger(PaymentService.class);
     private final PaymentRepository payments;
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
@@ -170,6 +173,37 @@ public class PaymentService {
         submitRefund(refundId);
         return refundView(refundId,id,actor);
     }
+    public Refund retryRefund(UUID paymentId, UUID refundId, boolean confirmedNoRefundAtProvider, Actor actor) {
+        actor.requireAdmin();
+        if(!confirmedNoRefundAtProvider)
+            throw new PaymentProblem(400,"VALIDATION_FAILED","Confirm that PayHere shows no refund before retrying.");
+        var rows=db.queryForList("SELECT * FROM payment_settlement.payment_transactions WHERE id=? AND payment_id=?",refundId,paymentId);
+        if(rows.isEmpty()) throw new PaymentProblem(404,"NOT_FOUND","Refund was not found.");
+        var row=rows.getFirst();
+        if(!"PENDING".equals(row.get("status")) || row.get("submitted_at")==null)
+            throw PaymentProblem.conflict("Only an uncertain pending refund can be retried.");
+
+        Payment payment=required(paymentId,false);
+        var matches=provider.retrieve(paymentId);
+        boolean verified=matches.size()==1 && matches.getFirst().reference().equals(payment.getProviderReference())
+            && matches.getFirst().orderId().equals(paymentId.toString()) && matches.getFirst().amount().compareTo(payment.getAmount())==0
+            && matches.getFirst().currency().equals(payment.getCurrency()) && "RECEIVED".equals(matches.getFirst().status());
+        if(!verified) {
+            log.warn("Refund retry blocked because PayHere does not confirm an unrefunded payment refundId={} paymentId={} matches={} providerStatus={}",
+                refundId,paymentId,matches.size(),matches.size()==1?matches.getFirst().status():"NONE_OR_MULTIPLE");
+            throw PaymentProblem.conflict("PayHere must report exactly one matching payment with status RECEIVED before a retry.");
+        }
+
+        Integer claimed=tx.execute(s->{
+            var current=db.queryForList("SELECT status,submitted_at FROM payment_settlement.payment_transactions WHERE id=? AND payment_id=? FOR UPDATE",refundId,paymentId);
+            if(current.isEmpty() || !"PENDING".equals(current.getFirst().get("status")) || current.getFirst().get("submitted_at")==null) return 0;
+            return db.update("UPDATE payment_settlement.payment_transactions SET submitted_at=NULL,updated_at=? WHERE id=? AND status='PENDING'",now(),refundId);
+        });
+        if(claimed==null || claimed!=1) throw PaymentProblem.conflict("Refund state changed while preparing the retry.");
+        log.warn("Refund retry explicitly authorized after PayHere preflight refundId={} paymentId={}",refundId,paymentId);
+        submitRefund(refundId);
+        return refundView(refundId,paymentId,actor);
+    }
     public Refund refundView(UUID rid, UUID paymentId, Actor actor) {
         get(paymentId,actor);
         var rows=db.queryForList("SELECT r.*,p.currency FROM payment_settlement.payment_transactions r JOIN payment_settlement.payments p ON p.id=r.payment_id WHERE r.id=? AND p.id=?",rid,paymentId);
@@ -179,6 +213,7 @@ public class PaymentService {
             ((Timestamp)r.get("created_at")).toLocalDateTime().toInstant(ZoneOffset.UTC),((Timestamp)r.get("updated_at")).toLocalDateTime().toInstant(ZoneOffset.UTC));
     }
     public void submitRefund(UUID rid) {
+        log.info("Refund submission started refundId={}",rid);
         // Claim once before network I/O. A crash afterwards leaves an uncertain attempt, never a blind resend.
         Map<String,Object> r=tx.execute(s->{
             var rows=db.queryForList("SELECT * FROM payment_settlement.payment_transactions WHERE id=? FOR UPDATE",rid);
@@ -188,17 +223,30 @@ public class PaymentService {
             db.update("UPDATE payment_settlement.payment_transactions SET submitted_at=?,updated_at=? WHERE id=?",now(),now(),rid);
             return row;
         });
-        if(r==null) return;
+        if(r==null) {
+            log.info("Refund submission skipped because it is missing, complete, or already claimed refundId={}",rid);
+            return;
+        }
         Payment p=required((UUID)r.get("payment_id"),false);
+        log.info("Refund submission claimed refundId={} paymentId={}",rid,p.getId());
         PaymentProvider.RefundResult result;
         try {
+            log.info("Refund preflight retrieval started refundId={} paymentId={}",rid,p.getId());
             var matches=provider.retrieve(p.getId());
             boolean verified=matches.size()==1 && matches.getFirst().reference().equals(p.getProviderReference())
                 && matches.getFirst().orderId().equals(p.getId().toString()) && matches.getFirst().amount().compareTo(p.getAmount())==0
                 && matches.getFirst().currency().equals(p.getCurrency()) && "RECEIVED".equals(matches.getFirst().status());
-            if(!verified) return;
+            if(!verified) {
+                log.warn("Refund preflight verification failed refundId={} paymentId={} matches={}",rid,p.getId(),matches.size());
+                return;
+            }
             result=provider.refund(p.getProviderReference(),(BigDecimal)r.get("amount"),(String)r.get("reason"));
-        } catch(RuntimeException e) { return; }
+        } catch(RuntimeException e) {
+            log.warn("Refund preflight failed refundId={} paymentId={} error={}",rid,p.getId(),e.getClass().getSimpleName());
+            return;
+        }
+        log.info("Refund provider result refundId={} paymentId={} outcome={} hasReference={}",
+            rid,p.getId(),result.outcome(),result.reference()!=null && !result.reference().isBlank());
         tx.executeWithoutResult(s->{
             Payment locked=required(p.getId(),true);
             if("SUCCESS".equals(result.outcome())) {
@@ -223,9 +271,20 @@ public class PaymentService {
         Payment snapshot=required(id,false);
         var remote=provider.retrieve(id);
         // Multiple results need investigation; never silently choose a second charge.
-        if(remote.size()!=1) return;
+        if(remote.size()!=1) {
+            log.warn("Payment reconciliation found unexpected provider match count paymentId={} matches={}",id,remote.size());
+            return;
+        }
         var r=remote.getFirst();
-        if(!r.orderId().equals(id.toString()) || r.amount().compareTo(snapshot.getAmount())!=0 || !r.currency().equals(snapshot.getCurrency())) return;
+        boolean detailsMatch=r.orderId().equals(id.toString()) && r.amount().compareTo(snapshot.getAmount())==0
+            && r.currency().equals(snapshot.getCurrency());
+        if(!detailsMatch) {
+            log.warn("Payment reconciliation details mismatch paymentId={} orderMatches={} amountMatches={} currencyMatches={}",
+                id,r.orderId().equals(id.toString()),r.amount().compareTo(snapshot.getAmount())==0,r.currency().equals(snapshot.getCurrency()));
+            return;
+        }
+        log.info("Payment reconciliation verified provider payment paymentId={} providerStatus={} refundReserved={}",
+            id,r.status(),snapshot.getReservedAmount().signum()>0);
         tx.executeWithoutResult(s->{
             Payment p=required(id,true);
             if(p.getProviderReference()!=null && !p.getProviderReference().equals(r.reference())) return;

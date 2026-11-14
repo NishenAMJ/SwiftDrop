@@ -142,6 +142,55 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/v1/payments/{paymentId}/refunds/{refundId}/retry:
+    post:
+      tags: [Refunds]
+      operationId: retryUncertainRefund
+      summary: Explicitly retry an uncertain pending refund
+      description: |
+        DISPATCHER only. This recovery action is for a refund left PENDING after a
+        provider call with an uncertain result. The dispatcher must confirm that no
+        refund appears in PayHere's dashboard. The service independently checks the
+        authenticated PayHere retrieval API and retries only when exactly one matching
+        payment remains in RECEIVED status. If PayHere reports a refund-related status,
+        the retry is blocked and the pending reservation is preserved. This operation
+        can move funds and must only be used after checking the provider dashboard.
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - name: refundId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmNoRefundAtProvider]
+              additionalProperties: false
+              properties:
+                confirmNoRefundAtProvider:
+                  type: boolean
+                  const: true
+                  description: Explicit dispatcher confirmation that PayHere shows no refund record.
+      responses:
+        '200':
+          description: Current refund state after the recovery attempt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Refund' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The refund is not in an uncertain state or PayHere does not confirm that no refund was initiated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502': { $ref: '#/components/responses/ProviderNotConfigured' }
+
   /api/v1/payments/{paymentId}:
     get:
       tags: [Payments]

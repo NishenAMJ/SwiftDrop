@@ -12,11 +12,14 @@ import java.time.Duration;
 import java.util.*;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public class PayHereProvider implements PaymentProvider {
+    private static final Logger log=LoggerFactory.getLogger(PayHereProvider.class);
     private final Environment env;
     private final JsonMapper json;
     private final HttpClient http;
@@ -73,10 +76,13 @@ public class PayHereProvider implements PaymentProvider {
     private JsonNode request(HttpRequest request) {
         try {
             HttpResponse<String> response=http.send(request,HttpResponse.BodyHandlers.ofString());
-            if(response.statusCode()<200 || response.statusCode()>=300) throw PaymentProblem.unavailable();
+            if(response.statusCode()<200 || response.statusCode()>=300) {
+                log.warn("PayHere request failed endpoint={} status={}",request.uri().getPath(),response.statusCode());
+                throw PaymentProblem.unavailable();
+            }
             return json.readTree(response.body());
-        } catch(InterruptedException e) { Thread.currentThread().interrupt(); throw PaymentProblem.unavailable(); }
-        catch(java.io.IOException | tools.jackson.core.JacksonException e) { throw PaymentProblem.unavailable(); }
+        } catch(InterruptedException e) { Thread.currentThread().interrupt(); log.warn("PayHere request interrupted endpoint={}",request.uri().getPath()); throw PaymentProblem.unavailable(); }
+        catch(java.io.IOException | tools.jackson.core.JacksonException e) { log.warn("PayHere request failed endpoint={} error={}",request.uri().getPath(),e.getClass().getSimpleName()); throw PaymentProblem.unavailable(); }
     }
     private String token() {
         String credentials=Base64.getEncoder().encodeToString((setting("app-id")+":"+setting("app-secret")).getBytes(StandardCharsets.UTF_8));
@@ -97,15 +103,23 @@ public class PayHereProvider implements PaymentProvider {
                     "amount",amount.setScale(2).toPlainString(),"description",reason)))).build());
             int status=response.path("status").asInt(Integer.MIN_VALUE);
             String refundReference=response.path("data").asText("");
+            log.info("PayHere refund response status={} hasReference={}",status,refundReference.matches("[0-9]{1,30}"));
             if(status==1 && refundReference.matches("[0-9]{1,30}")) return new RefundResult("SUCCESS",refundReference);
             if(status==0 || status==-1) return new RefundResult("FAILED",null);
             return new RefundResult("UNKNOWN",null);
-        } catch(RuntimeException e) { return new RefundResult("UNKNOWN",null); }
+        } catch(RuntimeException e) {
+            log.warn("PayHere refund request failed paymentReference={} error={}",reference,e.getClass().getSimpleName());
+            return new RefundResult("UNKNOWN",null);
+        }
     }
     @Override public List<RemotePayment> retrieve(UUID orderId) {
         JsonNode root=request(HttpRequest.newBuilder(URI.create(base()+"/merchant/v1/payment/search?order_id="+orderId))
             .timeout(Duration.ofSeconds(5)).header("Authorization","Bearer "+token()).GET().build());
-        if(root.path("status").asInt()==-1) return List.of();
+        int responseStatus=root.path("status").asInt(Integer.MIN_VALUE);
+        if(responseStatus==-1) {
+            log.info("PayHere retrieval completed orderId={} responseStatus={} matches=0",orderId,responseStatus);
+            return List.of();
+        }
         if(!root.path("data").isArray()) throw PaymentProblem.unavailable();
         List<RemotePayment> result=new ArrayList<>();
         for(JsonNode n:root.path("data")) {
@@ -113,6 +127,8 @@ public class PayHereProvider implements PaymentProvider {
                 new BigDecimal(n.path("amount").asText()),n.path("currency").asText(),n.path("status").asText())); }
             catch(RuntimeException e) { throw PaymentProblem.unavailable(); }
         }
+        log.info("PayHere retrieval completed orderId={} responseStatus={} matches={} paymentStatus={}",
+            orderId,responseStatus,result.size(),result.size()==1?result.getFirst().status():"MULTIPLE_OR_NONE");
         return result;
     }
 }
