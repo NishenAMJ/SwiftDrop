@@ -42,7 +42,7 @@ class PaymentIntegrationTest {
     @BeforeEach void setup() {
         db.execute("TRUNCATE payment_settlement.payment_callbacks,payment_settlement.payment_transactions,payment_settlement.payment_outbox,payment_settlement.payment_booking_claims,payment_settlement.payments CASCADE");
         when(pricing.lookup(anyString(),any())).thenAnswer(a->new Context(a.getArgument(0),"MERCHANT_API",customerId,merchantId,true,
-            UUID.randomUUID(),new BigDecimal("1000.00"),"LKR",new Payer("Test","Payer","test@example.com","0770000000","Address","Colombo","Sri Lanka")));
+            UUID.randomUUID().toString(),new BigDecimal("1000.00"),"LKR",new Payer("Test","Payer","test@example.com","0770000000","Address","Colombo","Sri Lanka")));
         when(provider.checkout(any(),any())).thenReturn(new Checkout("PAYHERE","https://sandbox.payhere.lk/pay/checkout","POST",Map.of("hash","test")));
     }
     UUID create(String booking,String key) { return UUID.fromString(service.create(new Create(booking),key,customer).get("id").toString()); }
