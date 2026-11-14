@@ -96,7 +96,9 @@ rejected without the local profile and when prod/production is active.
 1. Controller validates the request; Actor checks permissions/ownership.
 2. PricingClient obtains trusted price, ownership, channel and payer details.
 3. PaymentService stores PENDING, the snapshot and idempotency key. Per-booking claims
-   block another payment even with a new key. There is no failed-payment reset API yet.
+   block another payment even with a new key. A failed claim can be released only by a
+   dispatcher after a verified terminal failure callback, empty PayHere retrieval and
+   provider evidence; the prior payment remains in history.
 4. PayHereProvider returns a POST action and signed form fields. The browser submits
    them to PayHere; backend creation alone does not charge a card.
 5. Verified callbacks update payment state and create an outbox event atomically.
@@ -110,6 +112,10 @@ rejected without the local profile and when prod/production is active.
 | GET /{id}, GET /history | Owner or dispatcher; history filtered before pagination |
 | GET /{id}/checkout | Owner or dispatcher; pending payments only |
 | POST /{id}/refund | Dispatcher only; amount and reason required |
+| POST /{id}/refunds/{refundId}/retry | Dispatcher only; uncertain refund, explicit confirmation and PayHere preflight required |
+| POST /{id}/refunds/{refundId}/resolve | Dispatcher only; resolve an uncertain submitted refund with provider evidence |
+| POST /{id}/booking-claim/release | Dispatcher only; release a terminally failed payment's booking claim with provider evidence |
+| GET /{id}/recovery-audit | Dispatcher only; read recovery actions and cited evidence |
 | GET /{id}/refunds/{refundId} | Owner or dispatcher |
 | POST /callbacks/payhere | Public to JWT auth; verified provider form required |
 
@@ -127,11 +133,23 @@ checkout screens and the notification/handoff to the customer are still separate
 Uncertain refunds keep their reservation and are not blindly submitted again.
 Successful Refund API responses with a refund reference confirm the operation; this
 does not assert recipient-bank settlement. Lost partial-refund responses may need
-operational investigation: no per-attempt reconciliation or manual resolution API
-exists. A failed pre-refund retrieval can also leave a claimed attempt pending.
+operational investigation: there is no per-attempt provider lookup. Dispatchers can
+record a manual outcome only after reviewing PayHere dashboard/support evidence; the
+decision, evidence reference and reason are stored in `payment_recovery_audit` in the
+same transaction as the status and reservation update. The endpoint does not contact
+PayHere and must never be used as a substitute for provider evidence. A failed
+pre-refund retrieval can also leave a claimed attempt pending.
 Recovery can confirm an outstanding refund covering the remaining balance when the
 provider reports the matching payment REFUNDED. Multiple provider matches are not
-automatically selected. Do not manually clear reservations or resend money blindly.
+automatically selected. Never edit reservations directly in the database or resend
+money blindly; use the dispatcher recovery API with verifiable evidence.
+
+A booking claim can be released only for a payment marked FAILED by a verified
+PayHere terminal failure callback (-1 or -2), with no payment reference and no result
+from a fresh retrieval. An empty retrieval alone is not proof: dispatchers must cite
+dashboard/support evidence and confirm the provider's terminal failure. The claim is
+soft-released rather than deleted, and the action is audited. Investigate any later
+conflicting provider evidence; never release a claim for an uncertain or pending payment.
 
 Recovery processes at most one eligible payment per pass (default ten seconds),
 deferring its next lookup five minutes; it also submits previously unclaimed refunds.

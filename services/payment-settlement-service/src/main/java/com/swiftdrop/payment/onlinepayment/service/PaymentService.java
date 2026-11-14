@@ -69,7 +69,7 @@ public class PaymentService {
                 return replay.get();
             }
             db.execute("SELECT pg_advisory_xact_lock("+lockNumber("booking:"+request.bookingId())+")");
-            if(!db.queryForList("SELECT payment_id FROM payment_settlement.payment_booking_claims WHERE booking_id=?",request.bookingId()).isEmpty())
+            if(!db.queryForList("SELECT payment_id FROM payment_settlement.payment_booking_claims WHERE booking_id=? AND released_at IS NULL",request.bookingId()).isEmpty())
                 throw PaymentProblem.conflict("A payment already exists for this booking. Inspect it before starting another payment.");
             Payment p=new Payment();
             p.setBookingId(request.bookingId()); p.setAmount(context.amount()); p.setCurrency(context.currency());
@@ -80,7 +80,12 @@ public class PaymentService {
             payments.saveAndFlush(p);
             // Validate provider configuration before committing a pending payment.
             provider.checkout(p,context.payer());
-            db.update("INSERT INTO payment_settlement.payment_booking_claims(booking_id,payment_id) VALUES (?,?)",p.getBookingId(),p.getId());
+            int claim=db.update("""
+                INSERT INTO payment_settlement.payment_booking_claims AS existing_claim(booking_id,payment_id,released_at) VALUES (?,?,NULL)
+                ON CONFLICT (booking_id) DO UPDATE SET payment_id=EXCLUDED.payment_id,released_at=NULL
+                WHERE existing_claim.released_at IS NOT NULL
+                """,p.getBookingId(),p.getId());
+            if(claim!=1) throw PaymentProblem.conflict("A payment already exists for this booking. Inspect it before starting another payment.");
             return p;
         });
         return replay(payment,request,actor);
@@ -113,9 +118,9 @@ public class PaymentService {
             if(p.getAmount().compareTo(c.amount())!=0 || !p.getCurrency().equals(c.currency()))
                 throw new PaymentProblem(400,"INVALID_CALLBACK","Payment details do not match.");
             int inserted=db.update("""
-                INSERT INTO payment_settlement.payment_callbacks(id,fingerprint,payment_id,provider_reference,outcome,received_at)
-                VALUES (?,?,?,?,?,?) ON CONFLICT(fingerprint) DO NOTHING
-                """,UUID.randomUUID(),c.fingerprint(),p.getId(),c.reference(),"RECEIVED",now());
+                INSERT INTO payment_settlement.payment_callbacks(id,fingerprint,payment_id,provider_reference,outcome,received_at,status_code)
+                VALUES (?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO NOTHING
+                """,UUID.randomUUID(),c.fingerprint(),p.getId(),c.reference(),"RECEIVED",now(),c.status());
             if(inserted==0) return;
             String outcome="IGNORED";
             if(c.status()==2 && p.getStatus()==PaymentStatus.PENDING) {
@@ -203,6 +208,118 @@ public class PaymentService {
         log.warn("Refund retry explicitly authorized after PayHere preflight refundId={} paymentId={}",refundId,paymentId);
         submitRefund(refundId);
         return refundView(refundId,paymentId,actor);
+    }
+    public Refund resolveUncertainRefund(UUID paymentId, UUID refundId, RefundResolutionRequest request, Actor actor) {
+        actor.requireAdmin();
+        if(request==null || request.resolution()==null || !Set.of("CONFIRMED_SUCCESS","CONFIRMED_FAILURE").contains(request.resolution())
+            || request.evidenceType()==null || !Set.of("PAYHERE_DASHBOARD","PAYHERE_SUPPORT_CASE").contains(request.evidenceType())
+            || request.evidenceReference()==null || request.evidenceReference().isBlank() || request.evidenceReference().length()>200
+            || request.reason()==null || request.reason().isBlank() || request.reason().length()>500
+            || !Boolean.TRUE.equals(request.confirmProviderEvidence()))
+            throw new PaymentProblem(400,"VALIDATION_FAILED","A valid provider-evidence resolution is required.");
+        boolean success="CONFIRMED_SUCCESS".equals(request.resolution());
+        String providerReference=request.providerRefundReference();
+        if(success && (providerReference==null || !providerReference.matches("[0-9]{1,30}")))
+            throw new PaymentProblem(400,"VALIDATION_FAILED","A PayHere refund reference is required to confirm success.");
+        if(!success && providerReference!=null && !providerReference.isBlank())
+            throw new PaymentProblem(400,"VALIDATION_FAILED","A failed refund resolution cannot include a provider refund reference.");
+
+        tx.executeWithoutResult(s->{
+            Payment payment=required(paymentId,true);
+            var rows=db.queryForList("SELECT * FROM payment_settlement.payment_transactions WHERE id=? AND payment_id=? FOR UPDATE",refundId,paymentId);
+            if(rows.isEmpty()) throw new PaymentProblem(404,"NOT_FOUND","Refund was not found.");
+            var row=rows.getFirst();
+            if(!"PENDING".equals(row.get("status")) || row.get("submitted_at")==null)
+                throw PaymentProblem.conflict("Only an uncertain submitted refund can be manually resolved.");
+            BigDecimal amount=(BigDecimal)row.get("amount");
+            if(payment.getReservedAmount().compareTo(amount)<0)
+                throw PaymentProblem.conflict("Refund reservation does not match the pending attempt.");
+
+            String newStatus=success?"SUCCESS":"FAILED";
+            int changed=db.update("""
+                UPDATE payment_settlement.payment_transactions SET status=?,provider_reference=?,updated_at=?
+                WHERE id=? AND payment_id=? AND status='PENDING' AND submitted_at IS NOT NULL
+                """,newStatus,success?providerReference:null,now(),refundId,paymentId);
+            if(changed!=1) throw PaymentProblem.conflict("Refund state changed while resolving the attempt.");
+
+            payment.setReservedAmount(payment.getReservedAmount().subtract(amount));
+            if(success) {
+                payment.setRefundedAmount(payment.getRefundedAmount().add(amount));
+                if(payment.getStatus()!=PaymentStatus.CHARGEBACKED)
+                    payment.setStatus(payment.getRefundedAmount().compareTo(payment.getAmount())==0
+                        ?PaymentStatus.REFUNDED:PaymentStatus.PARTIALLY_REFUNDED);
+                event(payment,"payment.refunded",Map.of("refundId",refundId,"refundAmount",amount));
+            }
+            payment.setUpdatedAt(now());
+            recoveryAudit(paymentId,refundId,success?"REFUND_CONFIRMED_SUCCESS":"REFUND_CONFIRMED_FAILURE",
+                "PENDING",newStatus,actor,request.evidenceType(),request.evidenceReference().trim(),
+                success?providerReference:null,request.reason().trim());
+        });
+        return refundView(refundId,paymentId,actor);
+    }
+    public void releaseFailedBookingClaim(UUID paymentId, BookingClaimReleaseRequest request, Actor actor) {
+        actor.requireAdmin();
+        if(request==null || !Boolean.TRUE.equals(request.confirmProviderTerminalFailure())
+            || request.evidenceType()==null || !Set.of("PAYHERE_DASHBOARD","PAYHERE_SUPPORT_CASE").contains(request.evidenceType())
+            || request.evidenceReference()==null || request.evidenceReference().isBlank() || request.evidenceReference().length()>200
+            || request.reason()==null || request.reason().isBlank() || request.reason().length()>500)
+            throw new PaymentProblem(400,"VALIDATION_FAILED","Provider terminal-failure evidence and confirmation are required.");
+
+        Payment snapshot=required(paymentId,false);
+        if(snapshot.getStatus()!=PaymentStatus.FAILED || snapshot.getProviderReference()!=null)
+            throw PaymentProblem.conflict("Only a failed payment without a provider payment reference can have its booking claim reviewed.");
+        boolean failedCallback=!db.queryForList("""
+            SELECT id FROM payment_settlement.payment_callbacks
+            WHERE payment_id=? AND status_code IN (-1,-2) AND outcome='APPLIED' LIMIT 1
+            """,paymentId).isEmpty();
+        if(!failedCallback)
+            throw PaymentProblem.conflict("A verified terminal failure callback is required before releasing a booking claim.");
+        // A missing retrieval result is not proof by itself. Require explicit provider evidence above,
+        // and block release if PayHere currently returns any payment for this order.
+        if(!provider.retrieve(paymentId).isEmpty())
+            throw PaymentProblem.conflict("PayHere returned a payment for this order; investigate it before releasing the claim.");
+
+        tx.executeWithoutResult(s->{
+            db.execute("SELECT pg_advisory_xact_lock("+lockNumber("booking:"+snapshot.getBookingId())+")");
+            Payment payment=required(paymentId,true);
+            if(payment.getStatus()!=PaymentStatus.FAILED || payment.getProviderReference()!=null)
+                throw PaymentProblem.conflict("Payment state changed while reviewing the booking claim.");
+            var claims=db.queryForList("""
+                SELECT payment_id,released_at FROM payment_settlement.payment_booking_claims
+                WHERE booking_id=? FOR UPDATE
+                """,payment.getBookingId());
+            if(claims.isEmpty() || !paymentId.equals(claims.getFirst().get("payment_id")) || claims.getFirst().get("released_at")!=null)
+                throw PaymentProblem.conflict("The failed payment no longer owns an active booking claim.");
+            int changed=db.update("""
+                UPDATE payment_settlement.payment_booking_claims SET released_at=?
+                WHERE booking_id=? AND payment_id=? AND released_at IS NULL
+                """,now(),payment.getBookingId(),paymentId);
+            if(changed!=1) throw PaymentProblem.conflict("Booking claim changed while it was being released.");
+            recoveryAudit(paymentId,null,"BOOKING_CLAIM_RELEASED","FAILED","FAILED",actor,
+                request.evidenceType(),request.evidenceReference().trim(),null,request.reason().trim());
+        });
+    }
+    public List<RecoveryAudit> recoveryAudit(UUID paymentId, Actor actor) {
+        actor.requireAdmin();
+        required(paymentId,false);
+        return db.queryForList("""
+            SELECT id,payment_id,refund_id,action_type,prior_status,resulting_status,actor_id,evidence_type,
+                   evidence_reference,provider_reference,reason,created_at
+            FROM payment_settlement.payment_recovery_audit WHERE payment_id=? ORDER BY created_at,id
+            """,paymentId).stream().map(r->new RecoveryAudit((UUID)r.get("id"),(UUID)r.get("payment_id"),
+                (UUID)r.get("refund_id"),(String)r.get("action_type"),(String)r.get("prior_status"),
+                (String)r.get("resulting_status"),(UUID)r.get("actor_id"),(String)r.get("evidence_type"),
+                (String)r.get("evidence_reference"),(String)r.get("provider_reference"),(String)r.get("reason"),
+                ((Timestamp)r.get("created_at")).toLocalDateTime().toInstant(ZoneOffset.UTC))).toList();
+    }
+    private void recoveryAudit(UUID paymentId, UUID refundId, String action, String priorStatus, String resultingStatus,
+                               Actor actor, String evidenceType, String evidenceReference, String providerReference, String reason) {
+        db.update("""
+            INSERT INTO payment_settlement.payment_recovery_audit
+                (id,payment_id,refund_id,action_type,prior_status,resulting_status,actor_id,evidence_type,evidence_reference,provider_reference,reason,created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            """,UUID.randomUUID(),paymentId,refundId,action,priorStatus,resultingStatus,actor.id(),evidenceType,
+            evidenceReference,providerReference,reason,now());
     }
     public Refund refundView(UUID rid, UUID paymentId, Actor actor) {
         get(paymentId,actor);
