@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/delivery-operations/warehouse-parcel-events.schema.json",
+  "title": "Warehouse parcel events",
+  "description": "Proposal for team review. Published to the swiftdrop.delivery-operations topic exchange when a parcel is recorded at a warehouse or dispatched on a warehouse transfer. Tracking & Reporting binds parcel.*.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "enum": [
+            "parcel.received-at-warehouse",
+            "parcel.transferred"
+          ]
+        },
+        "version": { "const": 1 },
+        "producer": { "const": "delivery-operations-service" },
+        "data": {
+          "type": "object",
+          "required": [
+            "parcelId",
+            "trackingNumber",
+            "deliveryStatus",
+            "publicDescription",
+            "publicLocation"
+          ],
+          "properties": {
+            "parcelId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Parcel & Pricing parcel identifier carried through Delivery Operations"
+            },
+            "trackingNumber": {
+              "type": "string",
+              "pattern": "^SWD-[0-9]{4}-[0-9]{6,}$"
+            },
+            "deliveryStatus": {
+              "enum": ["AT_WAREHOUSE", "IN_TRANSIT"]
+            },
+            "publicDescription": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Customer-safe timeline text without internal notes"
+            },
+            "publicLocation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "description": "Warehouse name, city or route label. Never a full address."
+            },
+            "warehouseId": { "type": "string", "format": "uuid" },
+            "transferId": { "type": "string", "format": "uuid" },
+            "sourceWarehouseId": { "type": "string", "format": "uuid" },
+            "destinationWarehouseId": { "type": "string", "format": "uuid" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "eventType": { "const": "parcel.received-at-warehouse" } },
+            "required": ["eventType"]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "properties": { "deliveryStatus": { "const": "AT_WAREHOUSE" } },
+                "required": ["warehouseId"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "eventType": { "const": "parcel.transferred" } },
+            "required": ["eventType"]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "properties": { "deliveryStatus": { "const": "IN_TRANSIT" } },
+                "required": ["transferId", "sourceWarehouseId", "destinationWarehouseId"]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
