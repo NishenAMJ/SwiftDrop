@@ -48,6 +48,7 @@ POSTGRES_ADMIN_PASSWORD=choose-a-password
 IDENTITY_DB_PASSWORD=choose-another-password
 PAYMENT_DB_PASSWORD=choose-another-password
 PARCEL_DB_PASSWORD=choose-another-password
+COMMUNICATION_DB_PASSWORD=choose-another-password
 ```
 
 Each person can pick their own passwords, because the database runs only on their own computer.
