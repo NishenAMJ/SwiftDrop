@@ -40,13 +40,56 @@ class TrackingIdempotencyIntegrationTests {
         assertThat(trackingHistory.countByParcelId(parcelId)).isEqualTo(1);
     }
 
-    private EventEnvelope parcelBookedEvent(UUID parcelId) {
-        TrackingEventData data = new TrackingEventData(
+    @Test
+    void updatesTheCurrentProjectionAndAppendsHistoryForANewerEvent() {
+        UUID parcelId = UUID.randomUUID();
+        EventEnvelope booked = parcelBookedEvent(parcelId);
+        EventEnvelope inTransit = trackingEvent(
                 parcelId,
-                "SWD-2026-" + String.format("%06d", Math.floorMod(parcelId.hashCode(), 1_000_000)),
+                booked.data().trackingNumber(),
+                "delivery.in-transit",
+                "IN_TRANSIT",
+                "Parcel is moving to the destination area",
+                "Western Route",
+                Instant.parse("2026-11-14T11:00:00Z"));
+
+        updater.process(booked);
+        updater.process(inTransit);
+
+        TrackingRecord current = trackingRecords.findById(parcelId).orElseThrow();
+        assertThat(current.currentStatus()).isEqualTo("IN_TRANSIT");
+        assertThat(current.latestSafeLocationLabel()).isEqualTo("Western Route");
+        assertThat(current.lastUpdatedAt()).isEqualTo(Instant.parse("2026-11-14T11:00:00Z"));
+        assertThat(trackingHistory.countByParcelId(parcelId)).isEqualTo(2);
+    }
+
+    private EventEnvelope parcelBookedEvent(UUID parcelId) {
+        String trackingNumber = "SWD-2026-" + String.format(
+                "%06d", Math.floorMod(parcelId.hashCode(), 1_000_000));
+        return trackingEvent(
+                parcelId,
+                trackingNumber,
+                "parcel.booked",
                 "BOOKED",
                 "Parcel booking confirmed",
                 "Colombo Hub",
+                Instant.parse("2026-11-14T10:00:00Z"));
+    }
+
+    private EventEnvelope trackingEvent(
+            UUID parcelId,
+            String trackingNumber,
+            String eventType,
+            String status,
+            String description,
+            String location,
+            Instant occurredAt) {
+        TrackingEventData data = new TrackingEventData(
+                parcelId,
+                trackingNumber,
+                status,
+                description,
+                location,
                 null,
                 null,
                 null,
@@ -57,10 +100,12 @@ class TrackingIdempotencyIntegrationTests {
                 null);
         return new EventEnvelope(
                 UUID.randomUUID(),
-                "parcel.booked",
+                eventType,
                 1,
-                Instant.parse("2026-11-14T10:00:00Z"),
-                "parcel-pricing-service",
+                occurredAt,
+                eventType.startsWith("parcel.")
+                        ? "parcel-pricing-service"
+                        : "delivery-operations-service",
                 data);
     }
 }
