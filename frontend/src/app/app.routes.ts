@@ -3,7 +3,7 @@ import { Routes } from '@angular/router';
 import { authGuard, guestGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'account' },
+  { path: '', pathMatch: 'full', redirectTo: 'customer' },
   {
     // Login, register and the Google callback share the Arctic Frost auth layout.
     path: '',
@@ -32,6 +32,13 @@ export const routes: Routes = [
           ),
       },
     ],
+  },
+  {
+    path: 'customer',
+    loadComponent: () =>
+      import('./core/layout/customer-layout/customer-layout').then((m) => m.CustomerLayout),
+    loadChildren: () =>
+      import('./features/customer/customer.routes').then((m) => m.CUSTOMER_ROUTES),
   },
   {
     path: 'account',

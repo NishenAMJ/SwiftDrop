@@ -29,8 +29,9 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Permit bookings endpoints for easy local development and integration
+                // Permit bookings and customer endpoints for easy local development and integration
                 .requestMatchers("/api/v1/bookings/**").permitAll()
+                .requestMatchers("/api/v1/customer/**").permitAll()
                 .anyRequest().authenticated()
             );
          //   .oauth2ResourceServer(oauth2 -> oauth2
