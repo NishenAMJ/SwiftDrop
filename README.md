@@ -41,13 +41,14 @@ The `.env` file holds the database passwords. It is **never committed** to Git, 
 Copy-Item .env.example .env        # macOS/Linux: cp .env.example .env
 ```
 
-Open `.env` and set a value for both lines:
+Open `.env` and set a value for all lines:
 
 ```
 POSTGRES_ADMIN_PASSWORD=choose-a-password
 IDENTITY_DB_PASSWORD=choose-another-password
 PAYMENT_DB_PASSWORD=choose-another-password
 PARCEL_DB_PASSWORD=choose-another-password
+COMMUNICATION_DB_PASSWORD=choose-another-password
 ```
 
 Each person can pick their own passwords, because the database runs only on their own computer.
@@ -165,6 +166,9 @@ The service connects to `jdbc:postgresql://localhost:5432/swiftdrop` as `identit
 
 **"password authentication failed for user identity_merchant_user"**
 The configured password differs from the one the database was created with. Clear any outdated terminal override. The database keeps its original password even if you edit `.env` later. To reset it without deleting data, run `docker compose exec postgres psql -U postgres -d swiftdrop` from the root, enter `\password identity_merchant_user`, supply the password from `.env` at the prompts, then enter `\q` and restart the service.
+
+**"password authentication failed for user communication_user"**
+The root `.env` file is missing `COMMUNICATION_DB_PASSWORD`, or the database role was created using a different password than the one in `.env`. Update `.env`, then reset the user password in PostgreSQL with `\password communication_user` if needed, and restart the service.
 
 **"Could not resolve placeholder 'IDENTITY_DB_PASSWORD'"**
 Check that the root `.env` contains `IDENTITY_DB_PASSWORD` and the working directory is the service directory or the SwiftDrop root. For other working directories, set the variable in the terminal or IDE run configuration.
