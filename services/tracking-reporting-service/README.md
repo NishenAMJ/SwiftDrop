@@ -59,6 +59,20 @@ Committed state changes are sent to SSE subscribers at:
 GET /api/v1/tracking/{trackingNumber}/stream
 ```
 
+## Tracking APIs
+
+Anonymous callers can use:
+
+- `GET /api/v1/public/tracking/{trackingNumber}`
+- `GET /api/v1/public/tracking/{trackingNumber}/history`
+
+Authenticated callers can use:
+
+- `GET /api/v1/tracking/{trackingNumber}`
+- `GET /api/v1/tracking/{trackingNumber}/stream`
+
+All responses are limited to the tracking number, public delivery state and description, safe general location labels and timestamps. Unknown tracking numbers return a generic `404` Problem Details response. See `contracts/openapi/tracking-reporting-service.yaml` for the complete contract.
+
 ## Current status
 
-The service has its tracking tables, event consumers, idempotent projection updates and live SSE delivery. Tracking query APIs, report APIs and final endpoint authorization are implemented in later phases.
+The service has tracking tables, event consumers, idempotent projection updates, privacy-safe tracking APIs and authenticated live SSE delivery. Report APIs are implemented in a later phase.

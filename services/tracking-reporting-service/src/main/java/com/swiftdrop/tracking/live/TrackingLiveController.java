@@ -10,21 +10,26 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import jakarta.validation.constraints.Pattern;
 
+import com.swiftdrop.tracking.tracking.TrackingQueryService;
+
 @Validated
 @RestController
 @RequestMapping("/api/v1/tracking")
 public class TrackingLiveController {
 
     private final TrackingLiveUpdateService liveUpdates;
+    private final TrackingQueryService trackingQueries;
 
-    public TrackingLiveController(TrackingLiveUpdateService liveUpdates) {
+    public TrackingLiveController(TrackingLiveUpdateService liveUpdates, TrackingQueryService trackingQueries) {
         this.liveUpdates = liveUpdates;
+        this.trackingQueries = trackingQueries;
     }
 
     @GetMapping(path = "/{trackingNumber}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(
             @PathVariable
             @Pattern(regexp = "^SWD-[0-9]{4}-[0-9]{6,}$") String trackingNumber) {
+        trackingQueries.requireTrackingNumber(trackingNumber);
         return liveUpdates.subscribe(trackingNumber);
     }
 }

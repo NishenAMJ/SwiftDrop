@@ -68,4 +68,24 @@ public class TrackingRecord {
     public TrackingState toState() {
         return new TrackingState(trackingNumber, currentStatus, latestSafeLocationLabel, lastUpdatedAt);
     }
+
+    UUID parcelId() {
+        return parcelId;
+    }
+
+    String trackingNumber() {
+        return trackingNumber;
+    }
+
+    String currentStatus() {
+        return currentStatus;
+    }
+
+    String latestSafeLocationLabel() {
+        return latestSafeLocationLabel;
+    }
+
+    Instant lastUpdatedAt() {
+        return lastUpdatedAt;
+    }
 }

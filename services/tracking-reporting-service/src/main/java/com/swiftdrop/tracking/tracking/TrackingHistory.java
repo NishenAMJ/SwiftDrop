@@ -52,4 +52,20 @@ public class TrackingHistory {
     public static TrackingHistory from(EventEnvelope event) {
         return new TrackingHistory(event);
     }
+
+    String status() {
+        return status;
+    }
+
+    String publicDescription() {
+        return publicDescription;
+    }
+
+    String safeLocationLabel() {
+        return safeLocationLabel;
+    }
+
+    Instant eventTime() {
+        return eventTime;
+    }
 }
