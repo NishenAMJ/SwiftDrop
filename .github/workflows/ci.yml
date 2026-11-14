@@ -32,6 +32,7 @@ jobs:
             echo "PARCEL_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "PAYMENT_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "COMMUNICATION_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "RABBITMQ_PASSWORD=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
 
       - name: Start PostgreSQL (same setup as local)

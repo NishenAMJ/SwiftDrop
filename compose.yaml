@@ -20,30 +20,54 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   payment-settlement-service:
     build:
-      context: .
-      dockerfile: Dockerfile.payment
+      context: ./services/payment-settlement-service
+      dockerfile: Dockerfile
     ports:
       - "8085:8085"
     environment:
       PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
       PAYMENT_DB_USER: payment_settlement_user
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+      PAYMENT_PRICING_BASE_URL: ${PAYMENT_PRICING_BASE_URL:-http://host.docker.internal:8082}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      PAYMENT_PRICING_STUB_ENABLED: ${PAYMENT_PRICING_STUB_ENABLED:-false}
+      PAYMENT_PAYHERE_MERCHANT_ID: ${PAYMENT_PAYHERE_MERCHANT_ID:-}
+      PAYMENT_PAYHERE_MERCHANT_SECRET: ${PAYMENT_PAYHERE_MERCHANT_SECRET:-}
+      PAYMENT_PAYHERE_APP_ID: ${PAYMENT_PAYHERE_APP_ID:-}
+      PAYMENT_PAYHERE_APP_SECRET: ${PAYMENT_PAYHERE_APP_SECRET:-}
+      PAYMENT_PAYHERE_BASE_URL: ${PAYMENT_PAYHERE_BASE_URL:-https://sandbox.payhere.lk}
+      PAYMENT_PAYHERE_NOTIFY_URL: ${PAYMENT_PAYHERE_NOTIFY_URL:-}
+      PAYMENT_PAYHERE_RETURN_URL: ${PAYMENT_PAYHERE_RETURN_URL:-http://localhost:4200/payments/return}
+      PAYMENT_PAYHERE_CANCEL_URL: ${PAYMENT_PAYHERE_CANCEL_URL:-http://localhost:4200/payments/cancel}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
-
-  rabbitmq:
-    image: rabbitmq:4-management
-    ports:
-      - "127.0.0.1:5672:5672"     # apps connect here
-      - "127.0.0.1:15672:15672"   # web UI: http://localhost:15672 (guest / guest)
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      rabbitmq:
+        condition: service_healthy
 
   mailpit:
     image: axllent/mailpit
@@ -53,3 +77,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
