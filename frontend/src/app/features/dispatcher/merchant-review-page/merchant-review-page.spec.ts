@@ -136,10 +136,14 @@ describe('MerchantReviewPage', () => {
     expect(request.request.params.has('status')).toBe(false);
 
     const actions = [...page.querySelectorAll('.review-item')].map((item) =>
-      [...item.querySelectorAll('button')].map((b) => b.textContent?.trim().split(' ')[0]),
+      [...item.querySelectorAll('.review-item__actions button')].map((b) => b.textContent?.trim().split(' ')[0]),
     );
     expect(actions).toEqual([['Suspend'], ['Reactivate'], []]);
     expect(page.textContent).toContain('Fraud report');
+
+    // API keys exist only for merchants that were approved at some point.
+    const keyToggles = [...page.querySelectorAll('.review-item')].map((item) => !!item.querySelector('app-merchant-api-keys'));
+    expect(keyToggles).toEqual([true, true, false]);
   });
 
   it('reloads instead of failing when another dispatcher decided first', async () => {

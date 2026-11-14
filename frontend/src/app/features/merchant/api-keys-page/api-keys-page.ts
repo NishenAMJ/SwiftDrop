@@ -21,16 +21,15 @@ import {
   focusFirstInvalid,
 } from '../../../shared/forms/form-errors';
 import { ColomboDatePipe } from '../../../shared/pipes/colombo-date.pipe';
-import { ApiKey, CreatedApiKey, MAX_ACTIVE_API_KEYS } from '../merchant.models';
+import {
+  API_KEY_STATE,
+  ApiKey,
+  ApiKeyState,
+  CreatedApiKey,
+  MAX_ACTIVE_API_KEYS,
+  apiKeyState,
+} from '../merchant.models';
 import { MerchantService } from '../merchant.service';
-
-type KeyState = 'active' | 'expired' | 'revoked';
-
-const KEY_STATE: Record<KeyState, { label: string; badge: string }> = {
-  active: { label: 'Active', badge: 'sd-badge sd-badge--success' },
-  expired: { label: 'Expired', badge: 'sd-badge' },
-  revoked: { label: 'Revoked', badge: 'sd-badge sd-badge--danger' },
-};
 
 const MESSAGES: Record<'name' | 'expiresOn', FieldMessages> = {
   name: { required: 'Give the key a name, such as the system that will use it.' },
@@ -125,22 +124,16 @@ export class ApiKeysPage implements OnInit {
     });
   }
 
-  protected stateOf(key: ApiKey): KeyState {
-    if (key.revokedAt) {
-      return 'revoked';
-    }
-    if (key.expiresAt && new Date(key.expiresAt).getTime() <= Date.now()) {
-      return 'expired';
-    }
-    return 'active';
+  protected stateOf(key: ApiKey): ApiKeyState {
+    return apiKeyState(key);
   }
 
   protected stateLabel(key: ApiKey): string {
-    return KEY_STATE[this.stateOf(key)].label;
+    return API_KEY_STATE[this.stateOf(key)].label;
   }
 
   protected stateBadge(key: ApiKey): string {
-    return KEY_STATE[this.stateOf(key)].badge;
+    return API_KEY_STATE[this.stateOf(key)].badge;
   }
 
   protected error(field: 'name' | 'expiresOn'): string | null {

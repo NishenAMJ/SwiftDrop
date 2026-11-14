@@ -25,8 +25,9 @@ import com.swiftdrop.identity.auth.TokenResponse;
 import com.swiftdrop.identity.ratelimit.RateLimits;
 
 /**
- * API keys tag of the contract, plus the key exchange. Managing keys needs a person's MERCHANT
- * token (API-key tokens are refused in SecurityConfig).
+ * API keys tag of the contract, plus the key exchange. Managing your own keys needs a person's
+ * MERCHANT token (API-key tokens are refused in SecurityConfig); the {merchantId} routes are for
+ * dispatchers.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -57,6 +58,17 @@ public class ApiKeyController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID keyId) {
         apiKeys.revoke(userId(jwt), keyId);
+    }
+
+    @GetMapping("/merchants/{merchantId}/api-keys")
+    List<ApiKeyResponse> listForMerchant(@PathVariable UUID merchantId) {
+        return apiKeys.listForMerchant(merchantId);
+    }
+
+    @DeleteMapping("/merchants/{merchantId}/api-keys/{keyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revokeForMerchant(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID merchantId, @PathVariable UUID keyId) {
+        apiKeys.revokeForMerchant(merchantId, keyId, userId(jwt));
     }
 
     @PostMapping("/auth/token")

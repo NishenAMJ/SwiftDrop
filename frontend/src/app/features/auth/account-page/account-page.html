@@ -110,15 +110,17 @@
           <div class="sd-field">
             @let currentError = error('currentPassword');
             <label class="sd-label" for="account-currentPassword">Current password</label>
-            <input
-              id="account-currentPassword"
-              class="sd-input"
-              type="password"
-              formControlName="currentPassword"
-              autocomplete="current-password"
-              [attr.aria-invalid]="!!currentError"
-              [attr.aria-describedby]="currentError ? 'account-currentPassword-error' : null"
-            />
+            <app-password-field label="current password">
+              <input
+                id="account-currentPassword"
+                class="sd-input"
+                type="password"
+                formControlName="currentPassword"
+                autocomplete="current-password"
+                [attr.aria-invalid]="!!currentError"
+                [attr.aria-describedby]="currentError ? 'account-currentPassword-error' : null"
+              />
+            </app-password-field>
             @if (currentError) {
               <p id="account-currentPassword-error" class="sd-error">{{ currentError }}</p>
             }
@@ -129,15 +131,17 @@
           <div class="sd-field">
             @let newError = error('newPassword');
             <label class="sd-label" for="account-newPassword">New password</label>
-            <input
-              id="account-newPassword"
-              class="sd-input"
-              type="password"
-              formControlName="newPassword"
-              autocomplete="new-password"
-              [attr.aria-invalid]="!!newError"
-              [attr.aria-describedby]="'account-newPassword-help' + (newError ? ' account-newPassword-error' : '')"
-            />
+            <app-password-field label="new password">
+              <input
+                id="account-newPassword"
+                class="sd-input"
+                type="password"
+                formControlName="newPassword"
+                autocomplete="new-password"
+                [attr.aria-invalid]="!!newError"
+                [attr.aria-describedby]="'account-newPassword-help' + (newError ? ' account-newPassword-error' : '')"
+              />
+            </app-password-field>
             <p id="account-newPassword-help" class="sd-help">{{ passwordHelp }}</p>
             @if (newError) {
               <p id="account-newPassword-error" class="sd-error">{{ newError }}</p>
@@ -147,15 +151,17 @@
           <div class="sd-field">
             @let confirmError = error('confirmPassword');
             <label class="sd-label" for="account-confirmPassword">Confirm new password</label>
-            <input
-              id="account-confirmPassword"
-              class="sd-input"
-              type="password"
-              formControlName="confirmPassword"
-              autocomplete="new-password"
-              [attr.aria-invalid]="!!confirmError"
-              [attr.aria-describedby]="confirmError ? 'account-confirmPassword-error' : null"
-            />
+            <app-password-field label="new password confirmation">
+              <input
+                id="account-confirmPassword"
+                class="sd-input"
+                type="password"
+                formControlName="confirmPassword"
+                autocomplete="new-password"
+                [attr.aria-invalid]="!!confirmError"
+                [attr.aria-describedby]="confirmError ? 'account-confirmPassword-error' : null"
+              />
+            </app-password-field>
             @if (confirmError) {
               <p id="account-confirmPassword-error" class="sd-error">{{ confirmError }}</p>
             }

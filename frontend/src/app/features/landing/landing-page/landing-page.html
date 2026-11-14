@@ -1,0 +1,155 @@
+<div class="landing-hero">
+  <div class="sd-aura landing-hero__aura">
+    <div class="sd-aura__layer sd-aura__layer--one" aria-hidden="true"></div>
+    <div class="sd-aura__layer sd-aura__layer--two" aria-hidden="true"></div>
+    <div class="sd-aura__content">
+      <header class="landing-header">
+        <a class="landing-header__brand" routerLink="/">SwiftDrop</a>
+        <nav class="landing-header__nav" aria-label="Main">
+          <a class="landing-link" routerLink="/tracking">Track a parcel</a>
+          <a class="sd-button sd-button--secondary" routerLink="/login">Log in</a>
+          <a class="sd-button sd-button--primary" routerLink="/register">Create account</a>
+        </nav>
+      </header>
+
+      <section class="sd-card landing-hero__card" aria-labelledby="landing-title">
+        <h1 id="landing-title" class="landing-hero__title">
+          Send, track and deliver parcels in one place
+        </h1>
+        <p class="landing-hero__intro">
+          SwiftDrop connects customers, merchants and couriers. Book a delivery, check the fee
+          before you confirm, and follow your parcel with its tracking number.
+        </p>
+        <div class="landing-hero__actions">
+          <a class="sd-button sd-button--primary" routerLink="/register">Create an account</a>
+          <a class="sd-button sd-button--secondary" routerLink="/tracking">Track a parcel</a>
+        </div>
+        <p class="landing-hero__login">
+          Already have an account? <a class="landing-link" routerLink="/login">Log in</a>
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<main class="landing-main">
+  <section class="landing-section" aria-labelledby="audiences-title">
+    <h2 id="audiences-title" class="landing-section__title">One account, three ways to use it</h2>
+    <p class="landing-section__intro">
+      Everyone starts with the same account. Merchants and couriers then apply, and SwiftDrop
+      reviews each application before it is approved.
+    </p>
+
+    <ul class="landing-audiences" role="list">
+      <li class="sd-card landing-audience">
+        <span class="landing-audience__icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+            <path d="m7.5 4.27 9 5.15" />
+            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+            <path d="m3.3 7 8.7 5 8.7-5" />
+            <path d="M12 22V12" />
+          </svg>
+        </span>
+        <h3 class="landing-audience__title">Customers</h3>
+        <p class="landing-audience__text">
+          Book parcel deliveries, choose standard or urgent service, and see the fee before you
+          confirm. Follow every booking from your dashboard.
+        </p>
+        <a class="landing-link landing-audience__link" routerLink="/register">
+          Create a customer account
+        </a>
+      </li>
+
+      <li class="sd-card landing-audience">
+        <span class="landing-audience__icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+            <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+            <path d="M2 7h20" />
+            <path d="M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7" />
+          </svg>
+        </span>
+        <h3 class="landing-audience__title">Merchants</h3>
+        <p class="landing-audience__text">
+          Apply for a merchant account. Once approved, connect your online store or business system
+          with API keys so it can send orders to SwiftDrop.
+        </p>
+        <a class="landing-link landing-audience__link" routerLink="/register">
+          Get started as a merchant
+        </a>
+      </li>
+
+      <li class="sd-card landing-audience">
+        <span class="landing-audience__icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+            <path d="M15 18H9" />
+            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" />
+            <circle cx="17" cy="18" r="2" />
+            <circle cx="7" cy="18" r="2" />
+          </svg>
+        </span>
+        <h3 class="landing-audience__title">Couriers</h3>
+        <p class="landing-audience__text">
+          Apply to deliver with SwiftDrop. Once approved, see the parcels assigned to you and update
+          their delivery progress as you go.
+        </p>
+        <a class="landing-link landing-audience__link" routerLink="/register">
+          Get started as a courier
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  <section class="landing-section" aria-labelledby="steps-title">
+    <h2 id="steps-title" class="landing-section__title">How it works</h2>
+    <ol class="landing-steps" role="list">
+      <li class="landing-step">
+        <span class="landing-step__number" aria-hidden="true">1</span>
+        <div>
+          <h3 class="landing-step__title">Create your account</h3>
+          <p class="landing-step__text">Sign up with your email address or your Google account.</p>
+        </div>
+      </li>
+      <li class="landing-step">
+        <span class="landing-step__number" aria-hidden="true">2</span>
+        <div>
+          <h3 class="landing-step__title">Book a parcel</h3>
+          <p class="landing-step__text">
+            Enter the pickup and drop-off details, choose the service, and check the fee before
+            you confirm.
+          </p>
+        </div>
+      </li>
+      <li class="landing-step">
+        <span class="landing-step__number" aria-hidden="true">3</span>
+        <div>
+          <h3 class="landing-step__title">Follow it to the door</h3>
+          <p class="landing-step__text">
+            Anyone with the tracking number can follow its progress. No login needed.
+          </p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="sd-card landing-track" aria-labelledby="track-title">
+    <div>
+      <h2 id="track-title" class="landing-track__title">Have a tracking number?</h2>
+      <p class="landing-track__text">
+        Tracking numbers look like <span class="landing-track__example">SWD-2026-000123</span>.
+      </p>
+    </div>
+    <a class="sd-button sd-button--primary" routerLink="/tracking">Track a parcel</a>
+  </section>
+</main>
+
+<footer class="landing-footer">
+  <p class="landing-footer__copy">&copy; {{ year }} SwiftDrop</p>
+  <nav class="landing-footer__nav" aria-label="Footer">
+    <a class="landing-link" routerLink="/tracking">Track a parcel</a>
+    <a class="landing-link" routerLink="/login">Log in</a>
+    <a class="landing-link" routerLink="/register">Create account</a>
+  </nav>
+</footer>

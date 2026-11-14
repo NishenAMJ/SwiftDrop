@@ -1,10 +1,17 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, guestGuard, redirectHome, roleGuard } from './core/auth/auth.guards';
+import { authGuard, guestGuard, roleGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
-  // Each user starts on their own role's page; signed-out visitors go to login.
-  { path: '', pathMatch: 'full', redirectTo: redirectHome },
+  // Signed-out visitors see the landing page; signed-in users go to their own role's page.
+  {
+    path: '',
+    pathMatch: 'full',
+    title: 'SwiftDrop | Parcel delivery',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/landing/landing-page/landing-page').then((m) => m.LandingPage),
+  },
   {
     // Login, register and the Google callback share the Arctic Frost auth layout.
     path: '',

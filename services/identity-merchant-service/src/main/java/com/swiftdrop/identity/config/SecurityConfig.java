@@ -58,6 +58,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/v1/dispatchers").hasRole("DISPATCHER")
                 .requestMatchers(HttpMethod.GET, "/api/v1/merchants", "/api/v1/merchants/*").hasRole("DISPATCHER")
                 .requestMatchers(HttpMethod.POST, "/api/v1/merchants/*/*").hasRole("DISPATCHER")
+                .requestMatchers(HttpMethod.GET, "/api/v1/merchants/*/api-keys").hasRole("DISPATCHER")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/merchants/*/api-keys/*").hasRole("DISPATCHER")
                 .requestMatchers(HttpMethod.GET, "/api/v1/couriers", "/api/v1/couriers/*").hasRole("DISPATCHER")
                 .requestMatchers(HttpMethod.POST, "/api/v1/couriers/*/*").hasRole("DISPATCHER")
 
