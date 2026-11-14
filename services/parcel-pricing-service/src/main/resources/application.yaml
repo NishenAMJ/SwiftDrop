@@ -1,4 +1,3 @@
-
 server:
   port: 8082
 
@@ -29,6 +28,13 @@ spring:
     create-schemas: false
     locations: classpath:db/migration
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          audiences: swiftdrop-api
+
 management:
   health:
     rabbit:
@@ -40,3 +46,12 @@ management:
   endpoint:
     health:
       show-details: never
+
+# Temporary delivery fee calculator configuration
+swiftdrop:
+  orders:
+    fee:
+      mode: interim
+      base: 300.00
+      per-kg: 50.00
+      urgent-surcharge: 200.00

@@ -4,10 +4,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -17,6 +20,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -29,15 +33,33 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Permit bookings endpoints for easy local development and integration
+                // Pricing calculation is accessible to calculate delivery fee estimates
+                .requestMatchers(HttpMethod.POST, "/api/pricing/calculate").permitAll()
+                // Pricing rules management endpoints restricted to administrators / dispatchers
+                .requestMatchers("/api/pricing/rules", "/api/pricing/rules/**").hasAnyRole("DISPATCHER", "ADMIN")
+                // Delivery Zones
+                .requestMatchers(HttpMethod.GET, "/api/zones", "/api/zones/**").permitAll()
+                .requestMatchers("/api/zones", "/api/zones/**").hasAnyRole("DISPATCHER", "ADMIN")
+                // Customer Bookings
                 .requestMatchers("/api/v1/bookings/**").permitAll()
                 .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
             );
-         //   .oauth2ResourceServer(oauth2 -> oauth2
-         //       .jwt(Customizer.withDefaults())
-         //   );
 
         return http.build();
+    }
+
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("roles");
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return converter;
     }
 
     @Bean
@@ -53,4 +75,3 @@ public class SecurityConfig {
         return source;
     }
 }
-
