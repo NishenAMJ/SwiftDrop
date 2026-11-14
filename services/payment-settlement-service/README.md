@@ -10,10 +10,11 @@ cash reconciliation and merchant settlements remain Member 9 responsibilities.
 - [Pricing integration proposal and provider notes](../../docs/architecture/payment-integrations.md)
 - [Authentication agreement](../../docs/architecture/authentication.md)
 
-On 2026-11-11 the user's full `mvn clean test` run reported **22 tests, 0 failures,
-0 errors, 0 skipped**, including PostgreSQL and RabbitMQ. This does not establish
-live PayHere, actual identity/pricing integration, gateway routing or Docker-image
-end-to-end readiness. The pricing endpoint is still a proposal.
+On 2026-11-15 `mvn -B clean test` against the isolated payment test database and
+RabbitMQ reported **32 tests, 0 failures, 0 errors, 0 skipped**, including Flyway
+migrations and simulated outbox recovery. This does not establish live PayHere,
+actual identity/pricing integration, gateway routing or Docker-image end-to-end
+readiness. The pricing endpoint is still a proposal.
 
 ## Run locally (PowerShell)
 
@@ -77,6 +78,24 @@ routes are denied. Authentication is not implemented by this service.
 JWT issuer is `swiftdrop-identity`, audience `swiftdrop-api`. Role checks use `roles`,
 ownership uses `sub` and `merchant_id`. No locally fabricated JWT bypass exists.
 HTTP connect/request timeouts are currently hardcoded to 2/5 seconds.
+
+## PayHere sandbox refunds
+
+The Refund API uses the App ID and App Secret from a PayHere API Key, not the
+Merchant ID/Secret used to sign checkout. PayHere's current Refund API guide requires
+the API Key permission **Automated Charging API**. For sandbox domain-resolution
+problems, PayHere advises setting that API Key's allowed domain to `*`. This API Key
+setting is separate from the checkout Domain/App entry used for the Merchant Secret.
+See the [PayHere Refund API guide](https://support.payhere.lk/api-%26-mobile-sdk/refund-api).
+
+For a payment refund, the service sends `payment_id`, `description`, and `amount` for
+partial refunds, with a Bearer token obtained from the API Key credentials. If a
+refund call is rejected, first verify the sandbox base URL, that the API Key has the
+required permission, and that its allowed domain is valid for sandbox. OAuth success
+and payment retrieval success do not prove that the Refund API is authorized. Do not
+retry a request whose outcome is uncertain; keep it pending and use provider evidence
+and the dispatcher recovery endpoints. The sandbox call still needs to be verified
+with a real test payment before treating refunds as integration-tested.
 
 For the pricing fixture, before launching Maven:
 
@@ -198,10 +217,12 @@ $env:PAYMENT_TEST_RABBIT = 'true'
 mvn clean test
 ```
 
-The current suite has 22 tests. Without the database variable, integration tests skip;
-without PAYMENT_TEST_RABBIT=true, the broker test skips. Provider/pricing dependencies
-are mocked in the database tests; no live money is moved. A retry warning is expected
-in the broker test because its first publication deliberately fails.
+The current suite has 32 tests, including 15 PostgreSQL-backed integration tests.
+Without the database variable, those 15 tests skip; without
+`PAYMENT_TEST_RABBIT=true`, the broker recovery test skips. Provider/pricing
+dependencies are mocked in the database tests; no live money is moved. A retry
+warning is expected in the broker test because its first publication deliberately
+fails.
 
 ```powershell
 # Only the RabbitMQ recovery test:

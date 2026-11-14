@@ -4,7 +4,11 @@ import com.swiftdrop.payment.onlinepayment.dto.PaymentDtos.Payer;
 import com.swiftdrop.payment.onlinepayment.entity.Payment;
 import com.swiftdrop.payment.onlinepayment.service.PaymentProblem;
 import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;
 import org.springframework.mock.env.MockEnvironment;
 import tools.jackson.databind.json.JsonMapper;
@@ -42,5 +46,44 @@ class PayHereProviderTest {
     }
     @Test void successRequiresReference() {
         var f=callback(); f.remove("payment_id"); assertThrows(PaymentProblem.class,()->provider.verify(f));
+    }
+
+    @Test void partialRefundUsesPayHereDocumentedRequestAndBearerToken() throws Exception {
+        var refundBody=new AtomicReference<String>();
+        var authorization=new AtomicReference<String>();
+        HttpServer server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/merchant/v1/oauth/token",exchange->{
+            exchange.getRequestBody().readAllBytes();
+            byte[] response="{\"access_token\":\"test-access-token\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length);
+            try(var body=exchange.getResponseBody()){ body.write(response); }
+        });
+        server.createContext("/merchant/v1/payment/refund",exchange->{
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            refundBody.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));
+            byte[] response="{\"status\":1,\"data\":560034010257}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length);
+            try(var body=exchange.getResponseBody()){ body.write(response); }
+        });
+        server.start();
+        try {
+            var testEnv=new MockEnvironment()
+                .withProperty("payment.payhere.base-url","http://127.0.0.1:"+server.getAddress().getPort())
+                .withProperty("payment.payhere.app-id","test-app")
+                .withProperty("payment.payhere.app-secret","test-secret");
+            var testProvider=new PayHereProvider(testEnv,JsonMapper.builder().build());
+            var result=testProvider.refund("320027150501",new BigDecimal("100.50"),"Partial refund test");
+
+            assertEquals("SUCCESS",result.outcome());
+            assertEquals("560034010257",result.reference());
+            assertEquals("Bearer test-access-token",authorization.get());
+            var sent=JsonMapper.builder().build().readTree(refundBody.get());
+            assertEquals("320027150501",sent.path("payment_id").asText());
+            assertEquals("100.50",sent.path("amount").asText());
+            assertEquals("Partial refund test",sent.path("description").asText());
+            assertFalse(sent.has("authorization_token"));
+        } finally {
+            server.stop(0);
+        }
     }
 }
