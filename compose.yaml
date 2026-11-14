@@ -38,8 +38,8 @@ services:
 
   payment-settlement-service:
     build:
-      context: .
-      dockerfile: Dockerfile.payment
+      context: ./services/payment-settlement-service
+      dockerfile: Dockerfile
     ports:
       - "8085:8085"
     environment:
