@@ -32,6 +32,3 @@ CREATE TABLE payment_settlement.payments (
 
 CREATE INDEX idx_payments_booking_id
 ON payment_settlement.payments (booking_id);
-
-
-

@@ -1,6 +1,67 @@
+server:
+  port: 8084
+
 spring:
+  config:
+    # Loads the root .env when run from this service directory or the repository root.
+    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
   application:
     name: tracking-reporting-service
 
-server:
-  port: 8084
+  datasource:
+    url: ${TRACKING_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
+    username: ${TRACKING_DB_USER:tracking_user}
+    password: ${TRACKING_DB_PASSWORD}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: tracking_reporting
+
+  flyway:
+    enabled: true
+    default-schema: tracking_reporting
+    schemas:
+      - tracking_reporting
+    create-schemas: false
+    locations: classpath:db/migration
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1s
+          max-attempts: 3
+          max-interval: 10s
+          multiplier: 2
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          issuer-uri: swiftdrop-identity
+          audiences: swiftdrop-api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+tracking:
+  sse:
+    timeout: ${TRACKING_SSE_TIMEOUT:30m}
+    heartbeat-interval: ${TRACKING_SSE_HEARTBEAT_INTERVAL:25s}
