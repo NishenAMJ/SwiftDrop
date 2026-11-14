@@ -30,6 +30,8 @@ public class TrackingLiveController {
             @PathVariable
             @Pattern(regexp = "^SWD-[0-9]{4}-[0-9]{6,}$") String trackingNumber) {
         trackingQueries.requireTrackingNumber(trackingNumber);
-        return liveUpdates.subscribe(trackingNumber);
+        SseEmitter emitter = liveUpdates.subscribe(trackingNumber);
+        liveUpdates.sendSnapshot(emitter, trackingQueries.getCurrentState(trackingNumber));
+        return emitter;
     }
 }

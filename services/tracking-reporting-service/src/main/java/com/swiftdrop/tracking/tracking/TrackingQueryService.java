@@ -55,6 +55,11 @@ public class TrackingQueryService {
         requireRecord(trackingNumber);
     }
 
+    @Transactional(readOnly = true)
+    public TrackingState getCurrentState(String trackingNumber) {
+        return requireRecord(trackingNumber).toState();
+    }
+
     private TrackingRecord requireRecord(String trackingNumber) {
         return trackingRecords.findByTrackingNumber(trackingNumber)
                 .orElseThrow(TrackingQueryService::notFound);

@@ -84,7 +84,9 @@ paths:
         - $ref: '#/components/parameters/TrackingNumber'
       responses:
         '200':
-          description: SSE stream containing `connected` and `tracking-update` events
+          description: |
+            SSE stream containing `connected`, `tracking-snapshot`, `tracking-update` and
+            `heartbeat` events. A current snapshot is sent whenever a client reconnects.
           content:
             text/event-stream:
               schema:

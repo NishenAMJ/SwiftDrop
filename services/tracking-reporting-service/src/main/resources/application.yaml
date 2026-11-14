@@ -62,3 +62,8 @@ management:
   endpoint:
     health:
       show-details: never
+
+tracking:
+  sse:
+    timeout: ${TRACKING_SSE_TIMEOUT:30m}
+    heartbeat-interval: ${TRACKING_SSE_HEARTBEAT_INTERVAL:25s}

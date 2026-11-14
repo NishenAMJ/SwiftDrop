@@ -23,6 +23,8 @@ Local defaults connect to PostgreSQL and RabbitMQ on `localhost`. The service va
 | `RABBITMQ_USER` | `guest` | RabbitMQ username for local development |
 | `RABBITMQ_PASSWORD` | `guest` | RabbitMQ password for local development |
 | `IDENTITY_JWKS_URI` | `http://localhost:8081/.well-known/jwks.json` | Identity service public signing keys |
+| `TRACKING_SSE_TIMEOUT` | `30m` | Maximum lifetime of one SSE connection before reconnect |
+| `TRACKING_SSE_HEARTBEAT_INTERVAL` | `25s` | Interval between SSE heartbeat events |
 
 ## Build
 
@@ -58,6 +60,13 @@ Committed state changes are sent to SSE subscribers at:
 ```text
 GET /api/v1/tracking/{trackingNumber}/stream
 ```
+
+The stream uses Spring MVC `SseEmitter`. It sends `connected`, an immediate
+`tracking-snapshot`, committed `tracking-update` events, and periodic `heartbeat` events. A
+reconnecting frontend receives a fresh snapshot and should compare each event's `updatedAt`
+value before replacing newer state. Emitters are removed on completion, timeout, error or a
+failed send. Configure the defaults with `TRACKING_SSE_TIMEOUT` and
+`TRACKING_SSE_HEARTBEAT_INTERVAL`.
 
 ## Tracking APIs
 

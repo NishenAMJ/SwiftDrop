@@ -1,10 +1,14 @@
 package com.swiftdrop.tracking.live;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -13,22 +17,27 @@ import com.swiftdrop.tracking.tracking.TrackingState;
 @Service
 public class TrackingLiveUpdateService {
 
-    private static final long SSE_TIMEOUT_MILLIS = 30L * 60L * 1_000L;
-
     private final ConcurrentMap<String, Set<SseEmitter>> clients = new ConcurrentHashMap<>();
     private final SseEmitterFactory emitterFactory;
+    private final long timeoutMillis;
 
-    public TrackingLiveUpdateService(SseEmitterFactory emitterFactory) {
+    public TrackingLiveUpdateService(
+            SseEmitterFactory emitterFactory,
+            @Value("${tracking.sse.timeout:30m}") Duration timeout) {
         this.emitterFactory = emitterFactory;
+        this.timeoutMillis = timeout.toMillis();
     }
 
     public SseEmitter subscribe(String trackingNumber) {
-        SseEmitter emitter = emitterFactory.create(SSE_TIMEOUT_MILLIS);
+        SseEmitter emitter = emitterFactory.create(timeoutMillis);
         clients.computeIfAbsent(trackingNumber, ignored -> ConcurrentHashMap.newKeySet()).add(emitter);
 
         Runnable remove = () -> remove(trackingNumber, emitter);
         emitter.onCompletion(remove);
-        emitter.onTimeout(remove);
+        emitter.onTimeout(() -> {
+            remove.run();
+            emitter.complete();
+        });
         emitter.onError(ignored -> remove.run());
 
         try {
@@ -46,15 +55,43 @@ public class TrackingLiveUpdateService {
             return;
         }
         for (SseEmitter emitter : subscribers) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .id(state.updatedAt().toString())
-                        .name("tracking-update")
-                        .data(state));
-            } catch (IOException | IllegalStateException exception) {
-                remove(state.trackingNumber(), emitter);
-                emitter.complete();
+            send(state.trackingNumber(), emitter, SseEmitter.event()
+                    .id(state.updatedAt().toString())
+                    .name("tracking-update")
+                    .data(state));
+        }
+    }
+
+    public void sendSnapshot(SseEmitter emitter, TrackingState state) {
+        send(state.trackingNumber(), emitter, SseEmitter.event()
+                .id(state.updatedAt().toString())
+                .name("tracking-snapshot")
+                .data(state));
+    }
+
+    @Scheduled(fixedDelayString = "${tracking.sse.heartbeat-interval:25s}")
+    public void sendHeartbeats() {
+        String heartbeatTime = Instant.now().toString();
+        clients.forEach((trackingNumber, subscribers) -> {
+            for (SseEmitter emitter : subscribers) {
+                send(trackingNumber, emitter, SseEmitter.event()
+                        .name("heartbeat")
+                        .data(heartbeatTime));
             }
+        });
+    }
+
+    int activeClientCount(String trackingNumber) {
+        Set<SseEmitter> subscribers = clients.get(trackingNumber);
+        return subscribers == null ? 0 : subscribers.size();
+    }
+
+    private void send(String trackingNumber, SseEmitter emitter, SseEmitter.SseEventBuilder event) {
+        try {
+            emitter.send(event);
+        } catch (IOException | IllegalStateException exception) {
+            remove(trackingNumber, emitter);
+            emitter.complete();
         }
     }
 
