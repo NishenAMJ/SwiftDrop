@@ -70,6 +70,27 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      IDENTITY_ISSUER_URI: ${IDENTITY_ISSUER_URI:-swiftdrop-identity}
+      IDENTITY_AUDIENCE: ${IDENTITY_AUDIENCE:-swiftdrop-api}
+      IDENTITY_JWKS_URI: ${GATEWAY_IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+      IDENTITY_SERVICE_URI: ${GATEWAY_IDENTITY_SERVICE_URI:-http://host.docker.internal:8081}
+      PARCEL_SERVICE_URI: ${GATEWAY_PARCEL_SERVICE_URI:-http://host.docker.internal:8082}
+      DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://host.docker.internal:8083}
+      TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://host.docker.internal:8084}
+      PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      payment-settlement-service:
+        condition: service_started
+
   mailpit:
     image: axllent/mailpit
     ports:
