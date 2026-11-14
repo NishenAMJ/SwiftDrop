@@ -1,0 +1,238 @@
+<div class="receipt-page">
+  <div class="receipt-actions-bar no-print">
+    <a routerLink="/customer/bookings" class="sd-link back-link">
+      &larr; Back to My Bookings
+    </a>
+    <div class="action-buttons">
+      <button type="button" class="sd-button sd-button--secondary" (click)="printReceipt()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        Print Receipt
+      </button>
+      <a routerLink="/customer/book" class="sd-button sd-button--primary">
+        + Book Another
+      </a>
+    </div>
+  </div>
+
+  @if (isNewBooking()) {
+    <div class="sd-alert sd-alert--info new-booking-banner no-print" role="status">
+      <strong>Booking Confirmed!</strong> Your parcel delivery request has been registered and scheduled for dispatch.
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="sd-card loading-state">
+      <span class="sd-spinner" aria-hidden="true"></span>
+      <span>Generating receipt details...</span>
+    </div>
+  } @else if (errorMessage()) {
+    <div class="sd-alert sd-alert--error">
+      {{ errorMessage() }}
+      <a routerLink="/customer/bookings" class="sd-link">Return to Bookings</a>
+    </div>
+  } @else {
+    <!-- The Official Receipt Card -->
+    <article class="sd-card receipt-card" id="printable-receipt">
+      <!-- Receipt Header -->
+      <header class="receipt-header">
+        <div class="receipt-header__brand">
+          <div class="brand-logo" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+          </div>
+          <div>
+            <h1 class="receipt-title">SwiftDrop Delivery Receipt</h1>
+            <p class="receipt-subtitle">Official Customer Booking &amp; Consignment Voucher</p>
+          </div>
+        </div>
+
+        <div class="receipt-header__meta">
+          <div class="meta-row">
+            <span class="meta-label">Receipt No:</span>
+            <span class="meta-val sd-font-mono">{{ receipt()?.receiptNumber || parcel()?.receiptNumber || 'RCP-PENDING' }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Date Issued:</span>
+            <span class="meta-val sd-tabular">
+              {{ (receipt()?.issuedAt || parcel()?.createdAt) | date:'medium' }}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <div class="receipt-divider"></div>
+
+      <!-- Tracking Reference Banner -->
+      <section class="tracking-banner">
+        <div class="tracking-banner__left">
+          <span class="tracking-banner__label">Tracking Number (Consignment Reference)</span>
+          <div class="tracking-banner__number">
+            <span class="sd-font-mono ref-code">{{ receipt()?.trackingNumber || parcel()?.trackingNumber }}</span>
+            <button
+              type="button"
+              class="btn-copy no-print"
+              (click)="copyTracking(receipt()?.trackingNumber || parcel()?.trackingNumber || '')"
+              title="Copy tracking reference"
+            >
+              @if (copiedRef()) {
+                <span class="copied-indicator">&check; Copied</span>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
+
+        <div class="tracking-banner__right">
+          <div class="badge-stack">
+            @if ((receipt()?.urgency || parcel()?.urgency) === 'URGENT') {
+              <span class="sd-badge sd-badge--warning">Urgent - requested today</span>
+            } @else {
+              <span class="sd-badge">Standard Service</span>
+            }
+
+            <span class="sd-badge sd-badge--info">
+              {{ receipt()?.status || parcel()?.status || 'BOOKED' }}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Addresses Grid (Sender vs Recipient) -->
+      <section class="addresses-section">
+        <div class="address-box">
+          <div class="address-box__tag">Pickup (Sender)</div>
+          <div class="address-box__content">
+            <strong class="contact-name">
+              {{ (receipt()?.pickupAddress || parcel()?.pickupAddress)?.contactName }}
+            </strong>
+            <div class="contact-phone sd-tabular">
+              {{ (receipt()?.pickupAddress || parcel()?.pickupAddress)?.contactPhone }}
+            </div>
+            <div class="contact-street">
+              {{ (receipt()?.pickupAddress || parcel()?.pickupAddress)?.streetAddress }}
+            </div>
+            <div class="contact-city">
+              {{ (receipt()?.pickupAddress || parcel()?.pickupAddress)?.city }}
+              @if ((receipt()?.pickupAddress || parcel()?.pickupAddress)?.postalCode) {
+                <span> - {{ (receipt()?.pickupAddress || parcel()?.pickupAddress)?.postalCode }}</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="address-box">
+          <div class="address-box__tag address-box__tag--dest">Delivery (Recipient)</div>
+          <div class="address-box__content">
+            <strong class="contact-name">
+              {{ (receipt()?.deliveryAddress || parcel()?.deliveryAddress)?.contactName }}
+            </strong>
+            <div class="contact-phone sd-tabular">
+              {{ (receipt()?.deliveryAddress || parcel()?.deliveryAddress)?.contactPhone }}
+            </div>
+            <div class="contact-street">
+              {{ (receipt()?.deliveryAddress || parcel()?.deliveryAddress)?.streetAddress }}
+            </div>
+            <div class="contact-city">
+              {{ (receipt()?.deliveryAddress || parcel()?.deliveryAddress)?.city }}
+              @if ((receipt()?.deliveryAddress || parcel()?.deliveryAddress)?.postalCode) {
+                <span> - {{ (receipt()?.deliveryAddress || parcel()?.deliveryAddress)?.postalCode }}</span>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Parcel Specs -->
+      <section class="parcel-specs">
+        <div class="spec-col">
+          <span class="spec-label">Package Description</span>
+          <span class="spec-value">{{ receipt()?.description || parcel()?.description || 'General Parcel' }}</span>
+        </div>
+        <div class="spec-col">
+          <span class="spec-label">Estimated Weight</span>
+          <span class="spec-value sd-tabular">{{ receipt()?.weightKg || parcel()?.weightKg }} kg</span>
+        </div>
+        <div class="spec-col">
+          <span class="spec-label">Handling Priority</span>
+          <span class="spec-value">
+            {{ (receipt()?.urgency || parcel()?.urgency) === 'URGENT' ? 'Urgent Express' : 'Standard Routine' }}
+          </span>
+        </div>
+      </section>
+
+      <!-- Itemized Cost Calculation -->
+      <section class="receipt-pricing">
+        <h2 class="pricing-title">Fee Breakdown</h2>
+        <table class="receipt-table" aria-label="Fee Breakdown">
+          <thead>
+            <tr>
+              <th scope="col">Description</th>
+              <th scope="col" class="text-right">Rate / Basis</th>
+              <th scope="col" class="text-right">Amount (LKR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Standard Base Courier Fee</td>
+              <td class="text-right sd-tabular">Flat</td>
+              <td class="text-right sd-tabular">Rs. {{ getBaseFee() | number:'1.2-2' }}</td>
+            </tr>
+            <tr>
+              <td>
+                Weight Handling Surcharge
+                <span class="item-sub">({{ receipt()?.weightKg || parcel()?.weightKg }} kg @ Rs. 150/kg)</span>
+              </td>
+              <td class="text-right sd-tabular">Rs. 150.00 / kg</td>
+              <td class="text-right sd-tabular">
+                Rs. {{ getWeightFee(receipt()?.weightKg || parcel()?.weightKg) | number:'1.2-2' }}
+              </td>
+            </tr>
+            @if ((receipt()?.urgency || parcel()?.urgency) === 'URGENT') {
+              <tr class="urgent-row">
+                <td>
+                  Urgent Priority Surcharge
+                  <span class="sd-badge sd-badge--warning pill-small">Urgent</span>
+                </td>
+                <td class="text-right sd-tabular">Express Priority</td>
+                <td class="text-right sd-tabular">+Rs. 300.00</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="total-row">
+              <th scope="row" colspan="2">Total Delivery Amount</th>
+              <td class="text-right sd-tabular total-figure">
+                Rs. {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }} LKR
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+      <!-- Footer & Instructions -->
+      <footer class="receipt-footer">
+        <div class="receipt-footer__terms">
+          <p>
+            <strong>Note:</strong> Keep this receipt for tracking and handover verification. Couriers will inspect parcel weight and condition at pickup. For support inquiries, quote reference number <code>{{ receipt()?.trackingNumber || parcel()?.trackingNumber }}</code>.
+          </p>
+        </div>
+        <div class="receipt-footer__signature">
+          <div class="signature-line"></div>
+          <span>Authorized Dispatch / Customer Signature</span>
+        </div>
+      </footer>
+    </article>
+  }
+</div>
+

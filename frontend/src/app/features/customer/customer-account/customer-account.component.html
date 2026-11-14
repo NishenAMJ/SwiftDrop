@@ -1,0 +1,273 @@
+<div class="account-page">
+  <header class="account-page__header">
+    <div>
+      <a routerLink="/customer/dashboard" class="sd-link back-link">
+        &larr; Back to Dashboard
+      </a>
+      <h1 class="account-page__title">Customer Profile &amp; Account</h1>
+      <p class="account-page__subtitle">
+        Manage your contact details, default delivery address, and profile picture.
+      </p>
+    </div>
+    <button type="button" class="sd-button sd-button--primary btn-edit" (click)="openEditModal()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+      </svg>
+      Edit Profile
+    </button>
+  </header>
+
+  @if (successMessage()) {
+    <div class="sd-alert sd-alert--info" role="status">
+      {{ successMessage() }}
+    </div>
+  }
+
+  <!-- Profile Hero Overview Card -->
+  <section class="sd-card profile-hero">
+    <div class="profile-hero__left">
+      <div class="profile-avatar-wrap">
+        @if (profile().avatarBase64) {
+          <img [src]="profile().avatarBase64" alt="{{ profile().fullName }}" class="profile-avatar-img" />
+        } @else {
+          <div class="profile-avatar-placeholder">
+            {{ profile().fullName.slice(0, 2).toUpperCase() }}
+          </div>
+        }
+      </div>
+
+      <div class="profile-hero__info">
+        <h2 class="profile-hero__name">{{ profile().fullName }}</h2>
+        <div class="profile-hero__email">{{ profile().email }}</div>
+        <div class="profile-hero__badges">
+          <span class="sd-badge sd-badge--info">Customer Account</span>
+          <span class="sd-badge sd-badge--success">Active &bull; Verified</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-hero__stats">
+      <div class="stat-box">
+        <span class="stat-label">Total Shipments</span>
+        <span class="stat-value sd-tabular">{{ totalBookings() }}</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">Country</span>
+        <span class="stat-value">Sri Lanka</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detailed Customer Profile Information -->
+  <section class="sd-card details-card">
+    <div class="details-card__header">
+      <h3 class="details-card__title">Personal &amp; Contact Information</h3>
+      <span class="details-card__hint">Used for courier pickup and delivery notifications</span>
+    </div>
+
+    <dl class="info-grid">
+      <div class="info-item">
+        <dt class="info-label">Full Name</dt>
+        <dd class="info-value">{{ profile().fullName }}</dd>
+      </div>
+
+      <div class="info-item">
+        <dt class="info-label">Email Address (Gmail)</dt>
+        <dd class="info-value">{{ profile().email }}</dd>
+      </div>
+
+      <div class="info-item">
+        <dt class="info-label">Contact Phone</dt>
+        <dd class="info-value sd-tabular">{{ profile().phoneNumber || 'Not provided' }}</dd>
+      </div>
+
+      <div class="info-item">
+        <dt class="info-label">Default Street Address</dt>
+        <dd class="info-value">{{ profile().streetAddress || 'Not set' }}</dd>
+      </div>
+
+      <div class="info-item">
+        <dt class="info-label">City</dt>
+        <dd class="info-value">{{ profile().city || 'Colombo' }}</dd>
+      </div>
+
+      <div class="info-item">
+        <dt class="info-label">Postal Code</dt>
+        <dd class="info-value sd-tabular">{{ profile().postalCode || '00100' }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- EDIT PROFILE MODAL DIALOG -->
+  @if (isEditModalOpen()) {
+    <div class="modal-backdrop" (click)="closeEditModal()" role="presentation">
+      <div class="modal-dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="modal-title" class="modal-title">Edit Customer Profile</h2>
+            <p class="modal-subtitle">Update your personal details, phone number, and profile picture</p>
+          </div>
+          <button type="button" class="btn-close" (click)="closeEditModal()" aria-label="Close modal">
+            &times;
+          </button>
+        </header>
+
+        @if (errorMessage()) {
+          <div class="sd-alert sd-alert--error modal-alert">
+            {{ errorMessage() }}
+          </div>
+        }
+
+        <form [formGroup]="editForm" (ngSubmit)="saveProfile()" class="modal-body">
+          <!-- Profile Picture Upload Section -->
+          <div class="avatar-upload-section">
+            <div class="avatar-preview-box">
+              @if (avatarPreview()) {
+                <img [src]="avatarPreview()" alt="Preview" class="avatar-preview-img" />
+              } @else {
+                <div class="avatar-preview-empty">
+                  {{ editForm.get('fullName')?.value?.slice(0, 2)?.toUpperCase() || 'CP' }}
+                </div>
+              }
+            </div>
+
+            <div class="avatar-controls">
+              <label class="sd-button sd-button--secondary btn-file-label" for="avatar-input">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Upload Profile Picture
+              </label>
+              <input
+                id="avatar-input"
+                type="file"
+                class="file-input-hidden"
+                accept="image/png, image/jpeg, image/webp"
+                (change)="onImageSelected($event)"
+              />
+
+              @if (avatarPreview()) {
+                <button type="button" class="btn-remove-avatar" (click)="removeAvatar()">
+                  Remove Picture
+                </button>
+              }
+
+              <p class="avatar-help">Supports JPG, PNG or WebP up to 2 MB. Stored securely in database.</p>
+              @if (imageError()) {
+                <p class="sd-error">{{ imageError() }}</p>
+              }
+            </div>
+          </div>
+
+          <div class="modal-divider"></div>
+
+          <!-- Form Fields with Strict Validations -->
+          <div class="modal-form-grid">
+            <div class="sd-field">
+              <label class="sd-label" for="edit-name">
+                Full Name <span class="required-star">*</span>
+              </label>
+              <input
+                id="edit-name"
+                type="text"
+                class="sd-input"
+                formControlName="fullName"
+                placeholder="Full name"
+                [attr.aria-invalid]="isFieldInvalid('fullName')"
+              />
+              @if (isFieldInvalid('fullName')) {
+                <p class="sd-error">Name must be at least 2 characters.</p>
+              }
+            </div>
+
+            <div class="sd-field">
+              <label class="sd-label" for="edit-email">
+                Email Address (Gmail) <span class="required-star">*</span>
+              </label>
+              <input
+                id="edit-email"
+                type="email"
+                class="sd-input"
+                formControlName="email"
+                placeholder="example@gmail.com"
+                [attr.aria-invalid]="isFieldInvalid('email')"
+              />
+              @if (isFieldInvalid('email')) {
+                <p class="sd-error">Please enter a valid email address (e.g. user&#64;gmail.com).</p>
+              }
+            </div>
+
+            <div class="sd-field">
+              <label class="sd-label" for="edit-phone">
+                Contact Number <span class="required-star">*</span>
+              </label>
+              <input
+                id="edit-phone"
+                type="tel"
+                class="sd-input"
+                formControlName="phoneNumber"
+                placeholder="+94 77 123 4567 or 0771234567"
+                [attr.aria-invalid]="isFieldInvalid('phoneNumber')"
+              />
+              <p class="sd-help">Format: +94 7X XXX XXXX or 07X XXX XXXX</p>
+              @if (isFieldInvalid('phoneNumber')) {
+                <p class="sd-error">Enter a valid 10-digit Sri Lankan phone number.</p>
+              }
+            </div>
+
+            <div class="sd-field">
+              <label class="sd-label" for="edit-city">City</label>
+              <input
+                id="edit-city"
+                type="text"
+                class="sd-input"
+                formControlName="city"
+                placeholder="Colombo 03"
+              />
+            </div>
+
+            <div class="sd-field modal-form-grid--full">
+              <label class="sd-label" for="edit-street">Default Street Address</label>
+              <input
+                id="edit-street"
+                type="text"
+                class="sd-input"
+                formControlName="streetAddress"
+                placeholder="45/2 Temple Road"
+              />
+            </div>
+
+            <div class="sd-field">
+              <label class="sd-label" for="edit-postal">Postal Code</label>
+              <input
+                id="edit-postal"
+                type="text"
+                class="sd-input"
+                formControlName="postalCode"
+                placeholder="00300"
+              />
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="sd-button sd-button--secondary" (click)="closeEditModal()" [disabled]="saving()">
+              Cancel
+            </button>
+            <button type="submit" class="sd-button sd-button--primary" [disabled]="saving()" [attr.aria-busy]="saving()">
+              @if (saving()) {
+                <span class="sd-spinner" aria-hidden="true"></span>
+                Saving Profile...
+              } @else {
+                Save Changes
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>
+

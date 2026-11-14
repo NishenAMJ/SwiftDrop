@@ -1,0 +1,6 @@
+CREATE TABLE parcel_pricing.parcels (
+    id UUID PRIMARY KEY,
+    customer_id UUID NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

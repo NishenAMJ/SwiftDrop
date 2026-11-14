@@ -14,11 +14,6 @@ jobs:
   backend:
     name: backend
     runs-on: ubuntu-latest
-    env:
-      # Throwaway values: the CI database only exists for this run.
-      POSTGRES_ADMIN_PASSWORD: ci-admin-password
-      IDENTITY_DB_PASSWORD: ci-identity-password
-      PAYMENT_DB_PASSWORD: ci-payment-password
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +22,17 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
+
+      - name: Generate ephemeral database credentials
+        shell: bash
+        run: |
+          {
+            echo "POSTGRES_ADMIN_PASSWORD=$(openssl rand -hex 32)"
+            echo "IDENTITY_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "PARCEL_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "PAYMENT_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "COMMUNICATION_DB_PASSWORD=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
 
       - name: Start PostgreSQL (same setup as local)
         run: docker compose up -d --wait
