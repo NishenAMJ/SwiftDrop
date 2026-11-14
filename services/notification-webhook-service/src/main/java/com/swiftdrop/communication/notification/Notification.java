@@ -21,6 +21,9 @@ public class Notification {
     @Column(name = "recipient_user_id", nullable = false)
     private UUID recipientUserId;
 
+    @Column(name = "parcel_id")
+    private UUID parcelId;
+
     @Column(name = "channel", nullable = false, length = 20)
     private String channel;
 
@@ -40,10 +43,11 @@ public class Notification {
     protected Notification() {
     }
 
-    public Notification(UUID id, UUID recipientUserId, String channel, String template,
+    public Notification(UUID id, UUID recipientUserId, UUID parcelId, String channel, String template,
                         NotificationStatus status, String failureReason, Instant createdAt) {
         this.id = id;
         this.recipientUserId = recipientUserId;
+        this.parcelId = parcelId;
         this.channel = channel;
         this.template = template;
         this.status = status;
@@ -57,6 +61,10 @@ public class Notification {
 
     public UUID getRecipientUserId() {
         return recipientUserId;
+    }
+
+    public UUID getParcelId() {
+        return parcelId;
     }
 
     public String getChannel() {

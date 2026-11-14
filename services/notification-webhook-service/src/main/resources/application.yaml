@@ -49,8 +49,22 @@ spring:
           authorities-claim-name: roles
           authority-prefix: ROLE_
 
-notification:
-  from-email: ${NOTIFICATION_FROM_EMAIL:noreply@swiftdrop.dev}
+swiftdrop:
+  notification:
+    from-email: ${NOTIFICATION_FROM_EMAIL:noreply@swiftdrop.dev}
+    tracking-base-url: ${TRACKING_BASE_URL:http://localhost:4200/track}
+    parcel:
+      email-statuses:
+        - CREATED
+        - PICKED_UP
+        - IN_TRANSIT
+        - OUT_FOR_DELIVERY
+        - DELIVERED
+        - FAILED
+      sms-statuses:
+        - OUT_FOR_DELIVERY
+        - DELIVERED
+        - FAILED
 
 management:
   endpoints:

@@ -52,4 +52,50 @@ public final class EmailTemplates {
             );
         };
     }
+
+    public static EmailContent parcelStatus(String status, String trackingNumber, String trackingBaseUrl, String failureReason) {
+        String baseUrl = trackingBaseUrl.endsWith("/") ? trackingBaseUrl : trackingBaseUrl + "/";
+        String trackingUrl = baseUrl + trackingNumber;
+
+        return switch (status.toUpperCase()) {
+            case "CREATED" -> new EmailContent(
+                    "SwiftDrop: Your Parcel Booking Confirmed (" + trackingNumber + ")",
+                    "Hello,\n\nYour parcel with tracking number " + trackingNumber + " has been booked.\n"
+                            + "Track your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+            );
+            case "PICKED_UP" -> new EmailContent(
+                    "SwiftDrop: Your Parcel Has Been Picked Up (" + trackingNumber + ")",
+                    "Hello,\n\nYour parcel with tracking number " + trackingNumber + " has been picked up by the courier.\n"
+                            + "Track your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+            );
+            case "IN_TRANSIT" -> new EmailContent(
+                    "SwiftDrop: Your Parcel Is In Transit (" + trackingNumber + ")",
+                    "Hello,\n\nYour parcel with tracking number " + trackingNumber + " is now in transit to its destination facility.\n"
+                            + "Track your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+            );
+            case "OUT_FOR_DELIVERY" -> new EmailContent(
+                    "SwiftDrop: Your Parcel Is Out for Delivery (" + trackingNumber + ")",
+                    "Hello,\n\nGood news! Your parcel with tracking number " + trackingNumber + " is out for delivery today.\n"
+                            + "Track your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+            );
+            case "DELIVERED" -> new EmailContent(
+                    "SwiftDrop: Your Parcel Has Been Delivered (" + trackingNumber + ")",
+                    "Hello,\n\nYour parcel with tracking number " + trackingNumber + " has been successfully delivered. Thank you for choosing SwiftDrop!\n"
+                            + "Track your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+            );
+            case "FAILED" -> {
+                String reasonText = (failureReason != null && !failureReason.isBlank()) ? "\nReason: " + failureReason : "";
+                yield new EmailContent(
+                        "SwiftDrop: Delivery Attempt Failed (" + trackingNumber + ")",
+                        "Hello,\n\nWe could not complete the delivery of your parcel (" + trackingNumber + ")."
+                                + reasonText + "\nTrack your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+                );
+            }
+            default -> new EmailContent(
+                    "SwiftDrop: Parcel Status Update (" + trackingNumber + ")",
+                    "Hello,\n\nYour parcel " + trackingNumber + " status is now " + status + ".\n"
+                            + "Track your parcel: " + trackingUrl + "\n\nBest regards,\nThe SwiftDrop Team"
+            );
+        };
+    }
 }

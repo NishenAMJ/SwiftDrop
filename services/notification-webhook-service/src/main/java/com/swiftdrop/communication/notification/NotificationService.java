@@ -1,17 +1,18 @@
 package com.swiftdrop.communication.notification;
 
 import java.time.Clock;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.swiftdrop.communication.config.NotificationProperties;
+import com.swiftdrop.communication.channel.NotificationChannel;
 import com.swiftdrop.communication.contact.Contact;
 
 @Service
@@ -19,32 +20,42 @@ public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
-    private final JavaMailSender mailSender;
+    private final Map<String, NotificationChannel> channelMap;
     private final NotificationRepository notificationRepository;
-    private final NotificationProperties notificationProperties;
     private final Clock clock;
 
-    public NotificationService(JavaMailSender mailSender,
+    public NotificationService(List<NotificationChannel> channels,
                                NotificationRepository notificationRepository,
-                               NotificationProperties notificationProperties,
                                Clock clock) {
-        this.mailSender = mailSender;
+        this.channelMap = channels.stream()
+                .collect(Collectors.toMap(c -> c.getChannelName().toUpperCase(), c -> c));
         this.notificationRepository = notificationRepository;
-        this.notificationProperties = notificationProperties;
         this.clock = clock;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void sendEmail(Contact contact, String templateName, EmailContent content) {
+    public void sendEmail(Contact contact, String templateName, EmailContent content, UUID parcelId) {
+        send("EMAIL", contact, templateName, content.subject(), content.body(), parcelId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void sendSms(Contact contact, String templateName, String message, UUID parcelId) {
+        send("SMS", contact, templateName, templateName, message, parcelId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void send(String channelName, Contact contact, String template, String subject, String body, UUID parcelId) {
         UUID userId = contact.getUserId();
+        String normalizedChannel = channelName.toUpperCase();
 
         if (!"ACTIVE".equalsIgnoreCase(contact.getStatus())) {
-            log.info("Skipping email for inactive contact user ID: {}", userId);
+            log.info("Skipping {} notification for inactive contact user ID: {}", normalizedChannel, userId);
             Notification failedNotification = new Notification(
                     UUID.randomUUID(),
                     userId,
-                    "EMAIL",
-                    templateName,
+                    parcelId,
+                    normalizedChannel,
+                    template,
                     NotificationStatus.FAILED,
                     "Recipient is not active",
                     clock.instant()
@@ -53,40 +64,53 @@ public class NotificationService {
             return;
         }
 
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(notificationProperties.getFromEmail());
-            message.setTo(contact.getEmail());
-            message.setSubject(content.subject());
-            message.setText(content.body());
+        NotificationChannel channel = channelMap.get(normalizedChannel);
+        if (channel == null) {
+            log.warn("Unsupported notification channel: {}", normalizedChannel);
+            Notification failedNotification = new Notification(
+                    UUID.randomUUID(),
+                    userId,
+                    parcelId,
+                    normalizedChannel,
+                    template,
+                    NotificationStatus.FAILED,
+                    "Unsupported channel: " + normalizedChannel,
+                    clock.instant()
+            );
+            notificationRepository.save(failedNotification);
+            return;
+        }
 
-            mailSender.send(message);
+        try {
+            channel.send(contact, subject, body, parcelId);
 
             Notification sentNotification = new Notification(
                     UUID.randomUUID(),
                     userId,
-                    "EMAIL",
-                    templateName,
+                    parcelId,
+                    normalizedChannel,
+                    template,
                     NotificationStatus.SENT,
                     null,
                     clock.instant()
             );
             notificationRepository.save(sentNotification);
-            log.info("Sent email notification for user ID: {}, template: {}", userId, templateName);
+            log.info("Sent {} notification for user ID: {}, template: {}", normalizedChannel, userId, template);
         } catch (Exception ex) {
             String reason = ex.getMessage();
             if (reason != null && reason.length() > 250) {
                 reason = reason.substring(0, 250);
             }
-            log.warn("Failed to send email for user ID: {}, error: {}", userId, ex.getClass().getSimpleName());
+            log.warn("Failed to send {} for user ID: {}, error: {}", normalizedChannel, userId, ex.getClass().getSimpleName());
 
             Notification failedNotification = new Notification(
                     UUID.randomUUID(),
                     userId,
-                    "EMAIL",
-                    templateName,
+                    parcelId,
+                    normalizedChannel,
+                    template,
                     NotificationStatus.FAILED,
-                    reason != null ? reason : "Unknown mail error",
+                    reason != null ? reason : "Unknown dispatch error",
                     clock.instant()
             );
             notificationRepository.save(failedNotification);

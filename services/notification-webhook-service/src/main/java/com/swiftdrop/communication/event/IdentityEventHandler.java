@@ -21,6 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class IdentityEventHandler {
 
+    public static final String CONSUMER = "identity-notifications";
     private static final Logger log = LoggerFactory.getLogger(IdentityEventHandler.class);
 
     private final ProcessedEventRepository processedEventRepository;
@@ -46,7 +47,7 @@ public class IdentityEventHandler {
         UUID eventId = envelope.getEventId();
         String eventType = envelope.getEventType();
 
-        if (processedEventRepository.existsById(eventId)) {
+        if (processedEventRepository.existsByEventIdAndConsumer(eventId, CONSUMER)) {
             log.info("Skipping duplicate event: {}", eventId);
             return;
         }
@@ -56,7 +57,7 @@ public class IdentityEventHandler {
                 UserEventData userData = jsonMapper.convertValue(envelope.getData(), UserEventData.class);
                 Contact contact = contactService.syncContact(userData, envelope.getOccurredAt());
                 EmailContent content = EmailTemplates.welcome(contact.getFullName());
-                notificationService.sendEmail(contact, "WELCOME", content);
+                notificationService.sendEmail(contact, "WELCOME", content, null);
             }
             case "user.updated" -> {
                 UserEventData userData = jsonMapper.convertValue(envelope.getData(), UserEventData.class);
@@ -76,15 +77,14 @@ public class IdentityEventHandler {
                             merchantData.getBusinessName(),
                             merchantData.getReason()
                     );
-                    notificationService.sendEmail(contact, eventType, content);
+                    notificationService.sendEmail(contact, eventType, content, null);
                 }
             }
             default -> {
-                // Ignore unknown event types
                 log.debug("Ignoring unhandled event type: {}", eventType);
             }
         }
 
-        processedEventRepository.save(new ProcessedEvent(eventId, eventType, clock.instant()));
+        processedEventRepository.save(new ProcessedEvent(eventId, CONSUMER, eventType, clock.instant()));
     }
 }
