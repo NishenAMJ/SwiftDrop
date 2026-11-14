@@ -14,6 +14,11 @@ import com.swiftdrop.tracking.common.SecurityProblemHandler;
 @Configuration
 public class SecurityConfig {
 
+    private static final String PUBLIC_TRACKING_SUMMARY =
+            "/api/v1/public/tracking/{trackingNumber}";
+    private static final String PUBLIC_TRACKING_HISTORY =
+            "/api/v1/public/tracking/{trackingNumber}/history";
+
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -22,7 +27,11 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/public/tracking/**").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                PUBLIC_TRACKING_SUMMARY,
+                                PUBLIC_TRACKING_HISTORY)
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/reports/**").hasRole("DISPATCHER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/tracking/**").authenticated()
                         .anyRequest().authenticated())

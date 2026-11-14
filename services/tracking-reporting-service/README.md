@@ -95,6 +95,15 @@ Each endpoint accepts optional inclusive `startDate` and `endDate` query paramet
 `YYYY-MM-DD` format. Calculations use UTC. The exact cohort, success-rate and delivery-count
 definitions are documented in `docs/requirements/tracking-report-calculations.md`.
 
+## Security
+
+Only the two documented `GET /api/v1/public/tracking/...` lookup endpoints and the Actuator
+health endpoint allow anonymous access. Internal tracking and SSE endpoints require a valid JWT.
+Report endpoints additionally require the `DISPATCHER` role from the token's `roles` claim. All
+other routes are authenticated by default. JWT signatures are verified with the Identity service
+JWKS endpoint configured by `IDENTITY_JWKS_URI`; issuer and audience validation use the values in
+`application.yaml`.
+
 ## Current status
 
 The service has tracking tables, event consumers, idempotent projection updates, privacy-safe
