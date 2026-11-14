@@ -1,0 +1,42 @@
+
+server:
+  port: 8082
+
+spring:
+  config:
+    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
+  application:
+    name: parcel-pricing-service
+
+  datasource:
+    url: ${PARCEL_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
+    username: ${PARCEL_DB_USER:parcel_pricing_user}
+    password: ${PARCEL_DB_PASSWORD}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: parcel_pricing
+
+  flyway:
+    enabled: true
+    default-schema: parcel_pricing
+    schemas:
+      - parcel_pricing
+    create-schemas: false
+    locations: classpath:db/migration
+
+management:
+  health:
+    rabbit:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

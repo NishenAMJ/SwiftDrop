@@ -6,7 +6,7 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 | Folder | What is in it |
 |---|---|
-| `services/` | Backend services. Currently `identity-merchant-service` (port 8081) |
+| `services/` | Backend services: `identity-merchant-service` (port 8081), `parcel-pricing-service` (port 8082) and `payment-settlement-service` (port 8085) |
 | `frontend/` | Angular frontend (port 4200) |
 | `infrastructure/` | Docker/database setup, for example `postgres/init` (runs when the database is first created) |
 | `contracts/` | API contracts shared between services |
@@ -46,6 +46,8 @@ Open `.env` and set a value for both lines:
 ```
 POSTGRES_ADMIN_PASSWORD=choose-a-password
 IDENTITY_DB_PASSWORD=choose-another-password
+PAYMENT_DB_PASSWORD=choose-another-password
+PARCEL_DB_PASSWORD=choose-another-password
 ```
 
 Each person can pick their own passwords, because the database runs only on their own computer.
@@ -83,7 +85,18 @@ If you run it from an IDE, set the working directory to the service directory or
 
 Environment variables override `.env`. If you previously set an outdated password in PowerShell, clear it with `Remove-Item Env:IDENTITY_DB_PASSWORD -ErrorAction SilentlyContinue` before restarting.
 
-## 6. Check that everything worked
+## 6. Run the parcel-pricing service
+
+In another PowerShell window:
+
+```powershell
+cd services\parcel-pricing-service
+.\mvnw.cmd spring-boot:run
+```
+
+The service runs on http://localhost:8082. It uses the `parcel_pricing` schema and applies migrations from `src/main/resources/db/migration`.
+
+## 7. Check that everything worked
 
 After step 4 (database running), confirm the `identity_merchant` schema exists:
 
@@ -91,7 +104,7 @@ After step 4 (database running), confirm the `identity_merchant` schema exists:
 docker compose exec postgres psql -U postgres -d swiftdrop -c "\dn"
 ```
 
-After step 5 (service started once), confirm the roles were created:
+After step 5 (identity service started once), confirm the roles were created:
 
 ```powershell
 docker compose exec postgres psql -U postgres -d swiftdrop -c "SELECT * FROM identity_merchant.roles;"
@@ -99,7 +112,13 @@ docker compose exec postgres psql -U postgres -d swiftdrop -c "SELECT * FROM ide
 
 You should see four rows: CUSTOMER, MERCHANT, COURIER and DISPATCHER.
 
-## 7. Run the frontend
+After step 6 (parcel service started once), confirm its schema:
+
+```powershell
+docker compose exec postgres psql -U postgres -d swiftdrop -c "\dt parcel_pricing.*"
+```
+
+## 8. Run the frontend
 
 The web client lives in [`frontend/`](frontend) (Angular, standalone components, SCSS, Vitest). It does not need the database to start.
 
