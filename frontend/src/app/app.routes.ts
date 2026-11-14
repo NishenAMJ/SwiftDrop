@@ -47,5 +47,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/auth/account-page/account-page').then((m) => m.AccountPage),
   },
+  {
+    path: 'tracking',
+    loadChildren: () =>
+      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
+  },
   { path: '**', redirectTo: 'account' },
 ];
