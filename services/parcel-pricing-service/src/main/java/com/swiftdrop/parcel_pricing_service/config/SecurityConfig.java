@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/zones", "/api/zones/**").hasAnyRole("DISPATCHER", "ADMIN")
                 // Customer Bookings
                 .requestMatchers("/api/v1/bookings/**").permitAll()
+                .requestMatchers("/api/v1/customer/**").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

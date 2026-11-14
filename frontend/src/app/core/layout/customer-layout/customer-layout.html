@@ -1,0 +1,204 @@
+<div class="customer-shell">
+  <!-- Top Navigation Bar -->
+  <header class="navbar" role="banner">
+    <div class="navbar__container">
+      <div class="navbar__left">
+        <a routerLink="/customer/dashboard" class="brand" (click)="closeMobileMenu()">
+          <span class="brand__logo" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+          </span>
+          <span class="brand__text">SwiftDrop</span>
+        </a>
+        <span class="brand__tag">Customer</span>
+      </div>
+
+      <!-- Desktop Navigation Links -->
+      <nav class="navbar__nav" aria-label="Customer navigation">
+        <a
+          routerLink="/customer/dashboard"
+          routerLinkActive="navbar__link--active"
+          class="navbar__link"
+        >
+          <svg class="navbar__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          Dashboard
+        </a>
+        <a
+          routerLink="/customer/book"
+          routerLinkActive="navbar__link--active"
+          class="navbar__link"
+        >
+          <svg class="navbar__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Book Parcel
+        </a>
+        <a
+          routerLink="/customer/bookings"
+          routerLinkActive="navbar__link--active"
+          class="navbar__link"
+        >
+          <svg class="navbar__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          My Bookings
+        </a>
+      </nav>
+
+      <!-- Desktop Right Actions -->
+      <div class="navbar__actions">
+        <!-- Customer Account Pill in Header (Clickable to Account View) -->
+        <a routerLink="/customer/account" class="user-pill user-pill--link" title="Customer Profile & Settings">
+          <div class="user-pill__avatar-container">
+            @if (displayAvatar()) {
+              <img [src]="displayAvatar()" alt="Profile photo" class="user-pill__avatar-img" />
+            } @else {
+              <div class="user-pill__avatar">{{ displayInitials() }}</div>
+            }
+          </div>
+          <div class="user-pill__meta">
+            <span class="user-pill__name">{{ displayName() }}</span>
+            <span class="user-pill__role">Customer</span>
+          </div>
+        </a>
+
+        <!-- Sign Out Button -->
+        <button
+          type="button"
+          class="sd-button sd-button--secondary btn-logout"
+          (click)="logout()"
+          [disabled]="loggingOut()"
+          title="Sign out of SwiftDrop"
+        >
+          @if (loggingOut()) {
+            <span class="sd-spinner" aria-hidden="true"></span>
+            <span>Signing Out...</span>
+          } @else {
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span class="btn-logout__label">Sign Out</span>
+          }
+        </button>
+
+        <!-- Mobile Menu Toggle Button -->
+        <button
+          type="button"
+          class="mobile-toggle"
+          (click)="toggleMobileMenu()"
+          [attr.aria-expanded]="mobileMenuOpen()"
+          aria-label="Toggle navigation menu"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            @if (mobileMenuOpen()) {
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            } @else {
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            }
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Drawer Navigation -->
+    @if (mobileMenuOpen()) {
+      <div class="mobile-drawer" role="dialog" aria-modal="true">
+        <a routerLink="/customer/account" class="mobile-drawer__user" (click)="closeMobileMenu()">
+          <div class="user-pill__avatar-container">
+            @if (displayAvatar()) {
+              <img [src]="displayAvatar()" alt="Profile photo" class="user-pill__avatar-img" />
+            } @else {
+              <div class="user-pill__avatar">{{ displayInitials() }}</div>
+            }
+          </div>
+          <div>
+            <div class="user-pill__name">{{ displayName() }}</div>
+            <div class="user-pill__role">{{ displayEmail() }}</div>
+          </div>
+        </a>
+        <nav class="mobile-drawer__links">
+          <a
+            routerLink="/customer/dashboard"
+            routerLinkActive="mobile-drawer__link--active"
+            class="mobile-drawer__link"
+            (click)="closeMobileMenu()"
+          >
+            Dashboard
+          </a>
+          <a
+            routerLink="/customer/book"
+            routerLinkActive="mobile-drawer__link--active"
+            class="mobile-drawer__link"
+            (click)="closeMobileMenu()"
+          >
+            Book Parcel
+          </a>
+          <a
+            routerLink="/customer/bookings"
+            routerLinkActive="mobile-drawer__link--active"
+            class="mobile-drawer__link"
+            (click)="closeMobileMenu()"
+          >
+            My Bookings
+          </a>
+          <a
+            routerLink="/customer/account"
+            routerLinkActive="mobile-drawer__link--active"
+            class="mobile-drawer__link"
+            (click)="closeMobileMenu()"
+          >
+            Customer Profile &amp; Settings
+          </a>
+          <button
+            type="button"
+            class="mobile-drawer__link mobile-drawer__logout"
+            (click)="logout()"
+            [disabled]="loggingOut()"
+          >
+            Sign Out
+          </button>
+        </nav>
+      </div>
+    }
+  </header>
+
+  <!-- Main View Area -->
+  <main class="customer-main">
+    <div class="customer-container">
+      <router-outlet />
+    </div>
+  </main>
+
+  <!-- Clean Footer -->
+  <footer class="customer-footer">
+    <div class="customer-footer__container">
+      <p class="customer-footer__text">
+        SwiftDrop Courier Management &copy; {{ 2026 }} &bull; Parcel &amp; Pricing Service (Member 3)
+      </p>
+      <div class="customer-footer__links">
+        <span class="customer-footer__status">
+          <span class="status-dot"></span> System Live &bull; Port 8082
+        </span>
+      </div>
+    </div>
+  </footer>
+</div>
+

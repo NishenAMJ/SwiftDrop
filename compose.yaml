@@ -8,6 +8,7 @@ services:
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD}
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
       PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
+      COMMUNICATION_DB_PASSWORD: ${COMMUNICATION_DB_PASSWORD:?Set COMMUNICATION_DB_PASSWORD}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -33,6 +34,22 @@ services:
       postgres:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "127.0.0.1:5672:5672"     # apps connect here
+      - "127.0.0.1:15672:15672"   # web UI: http://localhost:15672 (guest / guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:1025:1025"     # SMTP: the service sends email here
+      - "127.0.0.1:8025:8025"     # web UI: http://localhost:8025 (see sent emails)
 
 volumes:
   postgres_data:

@@ -193,6 +193,30 @@
   border-color: transparent;
 }
 
+.sd-badge--warning {
+  color: var(--sd-warning);
+  background: var(--sd-warning-bg);
+  border-color: var(--sd-warning);
+}
+
+.sd-badge--success {
+  color: var(--sd-success);
+  background: var(--sd-success-bg);
+  border-color: transparent;
+}
+
+.sd-badge--danger {
+  color: var(--sd-danger);
+  background: var(--sd-danger-bg);
+  border-color: transparent;
+}
+
+.sd-badge--accent {
+  color: var(--sd-accent);
+  background: var(--sd-accent-soft);
+  border-color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sd-button {
     transition: none;

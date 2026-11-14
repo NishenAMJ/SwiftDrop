@@ -1,0 +1,213 @@
+<div class="history-page">
+  <header class="history-page__header">
+    <div>
+      <h1 class="history-page__title">My Booking History</h1>
+      <p class="history-page__subtitle">
+        Review all past and ongoing deliveries, download receipts, and check courier progress.
+      </p>
+    </div>
+    <a routerLink="/customer/book" class="sd-button sd-button--primary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      New Booking
+    </a>
+  </header>
+
+  <!-- Filter & Search Toolbar -->
+  <section class="sd-card filter-card" aria-label="Filters">
+    <div class="filter-row">
+      <!-- Search Input -->
+      <div class="search-box">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="search"
+          class="sd-input search-input"
+          placeholder="Search by tracking #, recipient, city, or items..."
+          [(ngModel)]="searchTerm"
+          aria-label="Search bookings"
+        />
+      </div>
+
+      <!-- Urgency Filter Pills -->
+      <div class="filter-pills" role="radiogroup" aria-label="Filter by urgency">
+        <button
+          type="button"
+          class="filter-pill"
+          [class.filter-pill--active]="selectedUrgency() === 'ALL'"
+          (click)="setUrgencyFilter('ALL')"
+        >
+          All
+        </button>
+        <button
+          type="button"
+          class="filter-pill"
+          [class.filter-pill--active]="selectedUrgency() === 'NORMAL'"
+          (click)="setUrgencyFilter('NORMAL')"
+        >
+          Standard
+        </button>
+        <button
+          type="button"
+          class="filter-pill filter-pill--warning"
+          [class.filter-pill--active]="selectedUrgency() === 'URGENT'"
+          (click)="setUrgencyFilter('URGENT')"
+        >
+          Urgent
+        </button>
+      </div>
+
+      <!-- Status Filter Dropdown -->
+      <div class="status-select-wrap">
+        <select
+          class="sd-input status-select"
+          [(ngModel)]="selectedStatus"
+          aria-label="Filter by status"
+        >
+          <option value="ALL">All Statuses</option>
+          <option value="BOOKED">Booked</option>
+          <option value="IN_TRANSIT">In Transit</option>
+          <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+          <option value="DELIVERED">Delivered</option>
+          <option value="FAILED">Failed</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- Content Table Section -->
+  @if (loading()) {
+    <div class="sd-card loading-state">
+      <span class="sd-spinner" aria-hidden="true"></span>
+      <span>Loading bookings...</span>
+    </div>
+  } @else if (errorMessage()) {
+    <div class="sd-alert sd-alert--error">
+      {{ errorMessage() }}
+      <button type="button" class="sd-link retry-btn" (click)="loadHistory()">Retry</button>
+    </div>
+  } @else if (filteredBookings().length === 0) {
+    <div class="sd-card empty-state">
+      <div class="empty-state__icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </div>
+      <h3 class="empty-state__heading">No matching bookings found</h3>
+      <p class="empty-state__text">
+        Try adjusting your search criteria or clear the filters to see all your bookings.
+      </p>
+      @if (searchTerm() || selectedUrgency() !== 'ALL' || selectedStatus() !== 'ALL') {
+        <button
+          type="button"
+          class="sd-button sd-button--secondary"
+          (click)="searchTerm.set(''); selectedUrgency.set('ALL'); selectedStatus.set('ALL')"
+        >
+          Reset Filters
+        </button>
+      }
+    </div>
+  } @else {
+    <div class="sd-card table-card">
+      <div class="table-responsive">
+        <table class="data-table" aria-label="Customer Booking History">
+          <thead>
+            <tr>
+              <th scope="col">Tracking Number</th>
+              <th scope="col">Booking Date</th>
+              <th scope="col">Recipient</th>
+              <th scope="col">Destination</th>
+              <th scope="col">Weight</th>
+              <th scope="col">Priority</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="text-right">Estimated Fee</th>
+              <th scope="col" class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (booking of filteredBookings(); track booking.id) {
+              <tr>
+                <td>
+                  <div class="ref-cell">
+                    <span class="sd-font-mono tracking-tag">{{ booking.trackingNumber }}</span>
+                    <button
+                      type="button"
+                      class="btn-copy"
+                      title="Copy tracking number"
+                      (click)="copyTracking(booking.trackingNumber)"
+                    >
+                      @if (copiedRef() === booking.trackingNumber) {
+                        <span class="copied-indicator">&check;</span>
+                      } @else {
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                      }
+                    </button>
+                  </div>
+                </td>
+                <td class="sd-tabular">{{ booking.createdAt | date:'mediumDate' }}</td>
+                <td>
+                  <span class="recipient-name">{{ booking.recipientName || 'Recipient' }}</span>
+                </td>
+                <td>
+                  <span class="destination-city">{{ booking.destinationCity || 'Colombo' }}</span>
+                </td>
+                <td class="sd-tabular">{{ booking.weightKg }} kg</td>
+                <td>
+                  @if (booking.urgency === 'URGENT') {
+                    <span class="sd-badge sd-badge--warning">Urgent - requested today</span>
+                  } @else {
+                    <span class="sd-badge">Standard</span>
+                  }
+                </td>
+                <td>
+                  @switch (booking.status?.toUpperCase()) {
+                    @case ('DELIVERED') {
+                      <span class="sd-badge sd-badge--success">Delivered</span>
+                    }
+                    @case ('IN_TRANSIT') {
+                      <span class="sd-badge sd-badge--info">In Transit</span>
+                    }
+                    @case ('OUT_FOR_DELIVERY') {
+                      <span class="sd-badge sd-badge--accent">Out for Delivery</span>
+                    }
+                    @case ('FAILED') {
+                      <span class="sd-badge sd-badge--danger">Failed</span>
+                    }
+                    @default {
+                      <span class="sd-badge sd-badge--info">{{ booking.status }}</span>
+                    }
+                  }
+                </td>
+                <td class="text-right sd-tabular amount-cell">
+                  Rs. {{ booking.estimatedFee | number:'1.2-2' }}
+                </td>
+                <td class="text-right">
+                  <a
+                    [routerLink]="['/customer/receipt', booking.id]"
+                    class="sd-button sd-button--secondary btn-receipt"
+                    title="View official receipt"
+                  >
+                    View Receipt
+                  </a>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-footer">
+        <span>Showing {{ filteredBookings().length }} of {{ bookings().length }} bookings</span>
+      </div>
+    </div>
+  }
+</div>
+
