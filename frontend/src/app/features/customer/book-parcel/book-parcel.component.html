@@ -1,0 +1,398 @@
+<div class="booking-page">
+  <header class="booking-page__header">
+    <a routerLink="/customer/dashboard" class="sd-link back-link">
+      &larr; Back to Dashboard
+    </a>
+    <h1 class="booking-page__title">Create New Parcel Booking</h1>
+    <p class="booking-page__subtitle">
+      Fill in the sender and recipient details to calculate the delivery fee and generate your official tracking reference.
+    </p>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="sd-alert sd-alert--error booking-alert" role="alert">
+      {{ errorMessage() }}
+    </div>
+  }
+
+  <form [formGroup]="bookingForm" (ngSubmit)="onSubmit()" class="booking-layout">
+    <!-- Left Column: Booking Form -->
+    <div class="booking-form">
+      <!-- Section 1: Pickup Address -->
+      <section class="sd-card form-section" formGroupName="pickupAddress">
+        <div class="form-section__header">
+          <div class="section-badge">1</div>
+          <div>
+            <h2 class="form-section__title">Pickup Location (Sender)</h2>
+            <p class="form-section__desc">Where should our courier collect the parcel?</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="sd-field">
+            <label class="sd-label" for="pickup-contact">
+              Contact Name <span class="required-star">*</span>
+            </label>
+            <input
+              id="pickup-contact"
+              type="text"
+              class="sd-input"
+              formControlName="contactName"
+              placeholder="Full name"
+              [attr.aria-invalid]="isFieldInvalid('pickupAddress.contactName')"
+            />
+            @if (isFieldInvalid('pickupAddress.contactName')) {
+              <p class="sd-error">Sender contact name is required.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="pickup-phone">
+              Contact Phone <span class="required-star">*</span>
+            </label>
+            <input
+              id="pickup-phone"
+              type="tel"
+              class="sd-input"
+              formControlName="contactPhone"
+              placeholder="+94 7X XXX XXXX"
+              [attr.aria-invalid]="isFieldInvalid('pickupAddress.contactPhone')"
+            />
+            @if (isFieldInvalid('pickupAddress.contactPhone')) {
+              <p class="sd-error">Valid phone number is required.</p>
+            }
+          </div>
+
+          <div class="sd-field form-grid--full">
+            <label class="sd-label" for="pickup-street">
+              Street Address <span class="required-star">*</span>
+            </label>
+            <input
+              id="pickup-street"
+              type="text"
+              class="sd-input"
+              formControlName="streetAddress"
+              placeholder="House/Building No., Street name"
+              [attr.aria-invalid]="isFieldInvalid('pickupAddress.streetAddress')"
+            />
+            @if (isFieldInvalid('pickupAddress.streetAddress')) {
+              <p class="sd-error">Street address is required.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="pickup-city">
+              City <span class="required-star">*</span>
+            </label>
+            <input
+              id="pickup-city"
+              type="text"
+              class="sd-input"
+              formControlName="city"
+              placeholder="e.g. Colombo 03"
+              [attr.aria-invalid]="isFieldInvalid('pickupAddress.city')"
+            />
+            @if (isFieldInvalid('pickupAddress.city')) {
+              <p class="sd-error">City is required.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="pickup-postal">
+              Postal Code <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input
+              id="pickup-postal"
+              type="text"
+              class="sd-input"
+              formControlName="postalCode"
+              placeholder="00300"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Delivery Address -->
+      <section class="sd-card form-section" formGroupName="deliveryAddress">
+        <div class="form-section__header">
+          <div class="section-badge section-badge--dest">2</div>
+          <div>
+            <h2 class="form-section__title">Delivery Location (Recipient)</h2>
+            <p class="form-section__desc">Where should this parcel be delivered?</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="sd-field">
+            <label class="sd-label" for="delivery-contact">
+              Recipient Name <span class="required-star">*</span>
+            </label>
+            <input
+              id="delivery-contact"
+              type="text"
+              class="sd-input"
+              formControlName="contactName"
+              placeholder="Recipient's full name"
+              [attr.aria-invalid]="isFieldInvalid('deliveryAddress.contactName')"
+            />
+            @if (isFieldInvalid('deliveryAddress.contactName')) {
+              <p class="sd-error">Recipient name is required.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="delivery-phone">
+              Recipient Phone <span class="required-star">*</span>
+            </label>
+            <input
+              id="delivery-phone"
+              type="tel"
+              class="sd-input"
+              formControlName="contactPhone"
+              placeholder="+94 7X XXX XXXX"
+              [attr.aria-invalid]="isFieldInvalid('deliveryAddress.contactPhone')"
+            />
+            @if (isFieldInvalid('deliveryAddress.contactPhone')) {
+              <p class="sd-error">Recipient phone number is required.</p>
+            }
+          </div>
+
+          <div class="sd-field form-grid--full">
+            <label class="sd-label" for="delivery-street">
+              Destination Street Address <span class="required-star">*</span>
+            </label>
+            <input
+              id="delivery-street"
+              type="text"
+              class="sd-input"
+              formControlName="streetAddress"
+              placeholder="House/Apartment, Street address"
+              [attr.aria-invalid]="isFieldInvalid('deliveryAddress.streetAddress')"
+            />
+            @if (isFieldInvalid('deliveryAddress.streetAddress')) {
+              <p class="sd-error">Destination street address is required.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="delivery-city">
+              Destination City <span class="required-star">*</span>
+            </label>
+            <input
+              id="delivery-city"
+              type="text"
+              class="sd-input"
+              formControlName="city"
+              placeholder="e.g. Kandy, Galle, Gampaha"
+              [attr.aria-invalid]="isFieldInvalid('deliveryAddress.city')"
+            />
+            @if (isFieldInvalid('deliveryAddress.city')) {
+              <p class="sd-error">Destination city is required.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="delivery-postal">
+              Postal Code <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input
+              id="delivery-postal"
+              type="text"
+              class="sd-input"
+              formControlName="postalCode"
+              placeholder="20000"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Parcel Details -->
+      <section class="sd-card form-section">
+        <div class="form-section__header">
+          <div class="section-badge">3</div>
+          <div>
+            <h2 class="form-section__title">Parcel Specifications</h2>
+            <p class="form-section__desc">Estimated weight and description for courier handling</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="sd-field">
+            <label class="sd-label" for="parcel-weight">
+              Weight (kg) <span class="required-star">*</span>
+            </label>
+            <input
+              id="parcel-weight"
+              type="number"
+              step="0.05"
+              min="0.01"
+              max="500"
+              class="sd-input"
+              formControlName="weightKg"
+              [attr.aria-invalid]="isFieldInvalid('weightKg')"
+            />
+            <p class="sd-help">Base calculation: Rs. 150.00 per kg</p>
+            @if (isFieldInvalid('weightKg')) {
+              <p class="sd-error">Weight must be greater than 0 kg.</p>
+            }
+          </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="parcel-desc">
+              Package Description <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input
+              id="parcel-desc"
+              type="text"
+              class="sd-input"
+              formControlName="description"
+              placeholder="e.g. Documents, Electronic accessories, Apparel"
+            />
+            <p class="sd-help">Short summary of parcel contents</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Urgency Selection (Member 3 Urgency Tag Standard) -->
+      <section class="sd-card form-section">
+        <div class="form-section__header">
+          <div class="section-badge section-badge--warning">4</div>
+          <div>
+            <h2 class="form-section__title">Delivery Speed &amp; Urgency Tag</h2>
+            <p class="form-section__desc">Select dispatch priority according to SwiftDrop service levels</p>
+          </div>
+        </div>
+
+        <div class="urgency-cards">
+          <!-- Standard Delivery Card -->
+          <div
+            class="urgency-card"
+            [class.urgency-card--selected]="selectedUrgency === 'NORMAL'"
+            (click)="setUrgency('NORMAL')"
+            tabindex="0"
+            role="radio"
+            [attr.aria-checked]="selectedUrgency === 'NORMAL'"
+          >
+            <div class="urgency-card__top">
+              <span class="sd-badge">Standard Service</span>
+              <span class="urgency-card__radio">
+                <span class="radio-inner" *ngIf="selectedUrgency === 'NORMAL'"></span>
+              </span>
+            </div>
+            <h3 class="urgency-card__name">Standard Delivery</h3>
+            <p class="urgency-card__desc">
+              Regular courier dispatch with delivery in 1–2 business days.
+            </p>
+            <div class="urgency-card__tag">No additional priority fee</div>
+          </div>
+
+          <!-- Urgent Delivery Card -->
+          <div
+            class="urgency-card urgency-card--urgent"
+            [class.urgency-card--selected]="selectedUrgency === 'URGENT'"
+            (click)="setUrgency('URGENT')"
+            tabindex="0"
+            role="radio"
+            [attr.aria-checked]="selectedUrgency === 'URGENT'"
+          >
+            <div class="urgency-card__top">
+              <span class="sd-badge sd-badge--warning">Urgent - requested today</span>
+              <span class="urgency-card__radio urgency-card__radio--urgent">
+                <span class="radio-inner radio-inner--urgent" *ngIf="selectedUrgency === 'URGENT'"></span>
+              </span>
+            </div>
+            <h3 class="urgency-card__name">Urgent Priority Dispatch</h3>
+            <p class="urgency-card__desc">
+              Tagged for immediate pickup and high-priority sorting. Same-day or next-available express courier dispatch.
+            </p>
+            <div class="urgency-card__tag urgency-card__tag--warning">
+              +Rs. 300.00 Priority Surcharge
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Column: Sticky Price Summary & Confirm Button -->
+    <aside class="booking-sidebar">
+      <div class="sd-card summary-card">
+        <h2 class="summary-card__title">Delivery Fee Summary</h2>
+        <div class="summary-card__divider"></div>
+
+        <dl class="summary-breakdown">
+          <div class="breakdown-row">
+            <dt>Base Handling Fee</dt>
+            <dd class="sd-tabular">Rs. {{ feeBreakdown().baseFee | number:'1.2-2' }}</dd>
+          </div>
+
+          <div class="breakdown-row">
+            <dt>
+              Weight Charge
+              <span class="breakdown-sub sd-tabular">
+                ({{ bookingForm.get('weightKg')?.value || 0 }} kg &times; Rs. 150)
+              </span>
+            </dt>
+            <dd class="sd-tabular">Rs. {{ feeBreakdown().weightFee | number:'1.2-2' }}</dd>
+          </div>
+
+          @if (selectedUrgency === 'URGENT') {
+            <div class="breakdown-row breakdown-row--urgent">
+              <dt>
+                Urgent Priority Tag
+                <span class="sd-badge sd-badge--warning pill-small">Urgent</span>
+              </dt>
+              <dd class="sd-tabular">+Rs. {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }}</dd>
+            </div>
+          }
+
+          <div class="summary-total">
+            <dt>Total Estimated Fee</dt>
+            <dd class="sd-tabular total-val">
+              Rs. {{ feeBreakdown().totalFee | number:'1.2-2' }}
+            </dd>
+          </div>
+        </dl>
+
+        <div class="summary-perks">
+          <div class="perk-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Unique SwiftDrop reference (SWD-2026-XXXXXX)</span>
+          </div>
+          <div class="perk-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Printable official booking receipt</span>
+          </div>
+          <div class="perk-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Full lifecycle tracking timeline</span>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="sd-button sd-button--primary sd-button--block btn-confirm"
+          [disabled]="submitting() || bookingForm.invalid"
+          [attr.aria-busy]="submitting()"
+        >
+          @if (submitting()) {
+            <span class="sd-spinner" aria-hidden="true"></span>
+            Generating Booking Reference...
+          } @else {
+            Confirm &amp; Book Delivery
+          }
+        </button>
+
+        <p class="summary-footer-note">
+          By confirming, you agree to SwiftDrop courier terms of carriage. Fee will be collected at pickup or via online payment.
+        </p>
+      </div>
+    </aside>
+  </form>
+</div>
+
