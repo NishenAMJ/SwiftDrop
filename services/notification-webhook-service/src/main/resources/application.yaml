@@ -49,6 +49,9 @@ spring:
           authorities-claim-name: roles
           authority-prefix: ROLE_
 
+notification:
+  from-email: ${NOTIFICATION_FROM_EMAIL:noreply@swiftdrop.dev}
+
 management:
   endpoints:
     web:

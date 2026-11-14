@@ -1,0 +1,15 @@
+{
+  "eventId": "5d1e9c7a-2f3b-4a68-8e0d-7b4c6a2f1e93",
+  "eventType": "merchant.approved",
+  "version": 1,
+  "occurredAt": "2026-11-02T04:15:00Z",
+  "producer": "identity-merchant-service",
+  "data": {
+    "merchantId": "c71a4e2b-9d3f-4b8a-b6e1-2f5c8d0a7e64",
+    "userId": "8f3c2a10-4b7d-4e9a-a1c2-5d6e7f809a1b",
+    "businessName": "Perera Electronics",
+    "status": "APPROVED",
+    "previousStatus": "PENDING",
+    "decidedBy": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+  }
+}

@@ -103,6 +103,66 @@ class PaymentIntegrationTest {
         assertEquals("SUCCESS",retried.status());
         verify(provider,times(2)).refund(anyString(),any(),anyString());
     }
+    @Test void uncertainRefundResolutionRequiresEvidenceAndWritesAuditAtomically() {
+        UUID id=paid(); when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("UNKNOWN",null));
+        Refund pending=service.refund(id,new RefundRequest(new BigDecimal("200"),"Adjustment"),"refund-key-000001",admin);
+        Refund resolved=service.resolveUncertainRefund(id,pending.id(),new RefundResolutionRequest(
+            "CONFIRMED_SUCCESS","PAYHERE_DASHBOARD","refund-row-987654","987654","Confirmed in provider dashboard",true),admin);
+
+        assertEquals("SUCCESS",resolved.status());
+        assertEquals(new BigDecimal("200.00"),service.get(id,customer).refundedAmount());
+        List<RecoveryAudit> audit=service.recoveryAudit(id,admin);
+        assertEquals(1,audit.size());
+        assertEquals("REFUND_CONFIRMED_SUCCESS",audit.getFirst().action());
+        assertEquals("987654",audit.getFirst().providerReference());
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox WHERE event_type='payment.refunded'",Integer.class));
+        assertThrows(PaymentProblem.class,()->service.resolveUncertainRefund(id,pending.id(),new RefundResolutionRequest(
+            "CONFIRMED_FAILURE","PAYHERE_DASHBOARD","refund-row-987654",null,"Conflicting decision",true),admin));
+    }
+    @Test void confirmedRefundFailureReleasesOnlyItsReservation() {
+        UUID id=paid(); when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("UNKNOWN",null));
+        Refund pending=service.refund(id,new RefundRequest(new BigDecimal("200"),"Adjustment"),"refund-key-000001",admin);
+        Refund resolved=service.resolveUncertainRefund(id,pending.id(),new RefundResolutionRequest(
+            "CONFIRMED_FAILURE","PAYHERE_SUPPORT_CASE","case-987654",null,"Provider confirmed rejection",true),admin);
+
+        assertEquals("FAILED",resolved.status());
+        assertEquals(0,db.queryForObject("SELECT reserved_amount FROM payment_settlement.payments WHERE id=?",BigDecimal.class,id).signum());
+        assertEquals(BigDecimal.ZERO.setScale(2),service.get(id,customer).refundedAmount());
+        assertEquals("REFUND_CONFIRMED_FAILURE",service.recoveryAudit(id,admin).getFirst().action());
+    }
+    @Test void failedBookingClaimRequiresVerifiedFailureAndCanBeReleasedWithAudit() {
+        UUID id=create("BOOK-2","payment-key-000002");
+        when(provider.verify(anyMap())).thenReturn(new PaymentProvider.VerifiedCallback(id,null,new BigDecimal("1000"),"LKR",-1,"b".repeat(64)));
+        service.callback(Map.of());
+        when(provider.retrieve(id)).thenReturn(List.of());
+
+        service.releaseFailedBookingClaim(id,new BookingClaimReleaseRequest(true,"PAYHERE_SUPPORT_CASE",
+            "case-12345","PayHere confirmed terminal decline"),admin);
+
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_booking_claims WHERE booking_id='BOOK-2' AND released_at IS NOT NULL",Integer.class));
+        assertEquals("BOOKING_CLAIM_RELEASED",service.recoveryAudit(id,admin).getFirst().action());
+        UUID replacement=UUID.fromString(service.create(new Create("BOOK-2"),"payment-key-000003",customer).get("id").toString());
+        assertNotEquals(id,replacement);
+        assertEquals(replacement,db.queryForObject("SELECT payment_id FROM payment_settlement.payment_booking_claims WHERE booking_id='BOOK-2' AND released_at IS NULL",UUID.class));
+        assertEquals(PaymentStatus.FAILED,service.get(id,customer).status());
+    }
+    @Test void failedBookingClaimCannotBeReleasedFromAnEmptySearchWithoutTerminalFailureCallback() {
+        UUID id=create("BOOK-3","payment-key-000004");
+        when(provider.retrieve(id)).thenReturn(List.of());
+        assertThrows(PaymentProblem.class,()->service.releaseFailedBookingClaim(id,new BookingClaimReleaseRequest(true,
+            "PAYHERE_DASHBOARD","dashboard-123","No payment shown"),admin));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_booking_claims WHERE booking_id='BOOK-3' AND released_at IS NULL",Integer.class));
+    }
+    @Test void failedBookingClaimCannotBeReleasedWhenPayHereReturnsAnyPayment() {
+        UUID id=create("BOOK-4","payment-key-000005");
+        when(provider.verify(anyMap())).thenReturn(new PaymentProvider.VerifiedCallback(id,null,new BigDecimal("1000"),"LKR",-2,"c".repeat(64)));
+        service.callback(Map.of());
+        when(provider.retrieve(id)).thenReturn(List.of(new PaymentProvider.RemotePayment("987654",id.toString(),
+            new BigDecimal("1000"),"LKR","RECEIVED")));
+        assertThrows(PaymentProblem.class,()->service.releaseFailedBookingClaim(id,new BookingClaimReleaseRequest(true,
+            "PAYHERE_SUPPORT_CASE","case-987654","Provider dashboard checked"),admin));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_booking_claims WHERE booking_id='BOOK-4' AND released_at IS NOT NULL",Integer.class));
+    }
     @Test void failedRefundReleasesReservation() {
         UUID id=paid(); when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("FAILED",null));
         assertEquals("FAILED",service.refund(id,new RefundRequest(new BigDecimal("250"),"Adjustment"),"refund-key-000001",admin).status());

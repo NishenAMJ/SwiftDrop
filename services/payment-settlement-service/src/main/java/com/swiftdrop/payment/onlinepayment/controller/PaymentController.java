@@ -34,6 +34,18 @@ public class PaymentController {
         @Valid @RequestBody RefundRetryRequest body,@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok().body(service.retryRefund(id,refundId,body.confirmNoRefundAtProvider(),Actor.from(jwt)));
     }
+    @PostMapping("/{id}/refunds/{refundId}/resolve") ResponseEntity<Refund> resolveRefund(@PathVariable UUID id,@PathVariable UUID refundId,
+        @Valid @RequestBody RefundResolutionRequest body,@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(service.resolveUncertainRefund(id,refundId,body,Actor.from(jwt)));
+    }
+    @PostMapping("/{id}/booking-claim/release") ResponseEntity<Void> releaseBookingClaim(@PathVariable UUID id,
+        @Valid @RequestBody BookingClaimReleaseRequest body,@AuthenticationPrincipal Jwt jwt) {
+        service.releaseFailedBookingClaim(id,body,Actor.from(jwt));
+        return ResponseEntity.noContent().build();
+    }
+    @GetMapping("/{id}/recovery-audit") List<RecoveryAudit> recoveryAudit(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) {
+        return service.recoveryAudit(id,Actor.from(jwt));
+    }
     @GetMapping("/{id}/refunds/{refundId}") Refund refundStatus(@PathVariable UUID id,@PathVariable UUID refundId,@AuthenticationPrincipal Jwt jwt) {
         return service.refundView(refundId,id,Actor.from(jwt));
     }

@@ -17,6 +17,14 @@ export const authGuard: CanActivateFn = (_route, state) => {
 export const guestGuard: CanActivateFn = () =>
   inject(AuthService).isSignedIn() ? inject(Router).parseUrl(HOME_AFTER_LOGIN) : true;
 
+/** Dispatcher-only screens. Backend authorization remains the final authority. */
+export const dispatcherGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  return auth.user()?.roles.includes('DISPATCHER')
+    ? true
+    : inject(Router).createUrlTree(['/account'], { queryParams: { notice: 'forbidden' } });
+};
+
 /** Only same-app paths, so a crafted link can't send people to another site after login. */
 export function safeReturnUrl(value: string | null | undefined): string {
   return value && value.startsWith('/') && !value.startsWith('//') ? value : HOME_AFTER_LOGIN;

@@ -48,8 +48,9 @@ paths:
         idempotent PENDING payment and starts the configured provider checkout.
         Retrying with the same `Idempotency-Key` returns the existing payment with
         HTTP 201. checkout is included only while that payment is PENDING.
-        A different key cannot create another payment for an already claimed booking,
-        even if its existing payment has failed. No payment-reset API exists yet.
+        A different key cannot create another payment for an actively claimed booking.
+        A dispatcher may release a failed booking claim only after a verified terminal
+        failure callback, an empty PayHere retrieval, and recorded provider evidence.
         The key is scoped to the authenticated actor and operation. Reusing it with
         a different request returns 409, including while the original is pending.
 
@@ -190,6 +191,97 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
         '502': { $ref: '#/components/responses/ProviderNotConfigured' }
+
+  /api/v1/payments/{paymentId}/refunds/{refundId}/resolve:
+    post:
+      tags: [Refunds]
+      operationId: resolveUncertainRefund
+      summary: Record a dispatcher-reviewed outcome for an uncertain refund
+      description: |
+        DISPATCHER only. Use only after reviewing PayHere evidence for a submitted
+        refund that remains PENDING. The action and evidence are written to the
+        recovery audit table in the same transaction as the state change.
+        CONFIRMED_SUCCESS requires a numeric PayHere refund reference and increases
+        the confirmed refunded amount. CONFIRMED_FAILURE releases the reserved amount.
+        This endpoint does not contact PayHere and the dispatcher is responsible for
+        the accuracy of the cited evidence. It must not be used to retry a refund.
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - name: refundId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundResolutionRequest' }
+      responses:
+        '200':
+          description: Updated refund state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Refund' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Refund is not an uncertain submitted attempt or its reservation is inconsistent
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/payments/{paymentId}/booking-claim/release:
+    post:
+      tags: [Payments]
+      operationId: releaseFailedPaymentBookingClaim
+      summary: Release a booking claim after a provider-confirmed terminal payment failure
+      description: |
+        DISPATCHER only. Requires an applied, verified PayHere failure callback with
+        status -1 or -2, no provider payment reference, no result from a fresh PayHere
+        retrieval, and explicit dashboard/support-case evidence. An empty retrieval
+        alone is insufficient proof. The released claim remains in the database and
+        the action is recorded in the payment recovery audit. Once released, a new
+        payment may be created for the booking. Do not use this operation when the
+        provider outcome is uncertain.
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookingClaimReleaseRequest' }
+      responses:
+        '204': { description: Booking claim released; audit record created }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Payment lacks terminal failure evidence, has a provider reference, or PayHere returned a payment
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/payments/{paymentId}/recovery-audit:
+    get:
+      tags: [Payments]
+      operationId: getPaymentRecoveryAudit
+      summary: Read dispatcher-only recovery actions for a payment
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Recovery history in chronological order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RecoveryAudit' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/v1/payments/{paymentId}:
     get:
@@ -498,6 +590,74 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+
+    RefundResolutionRequest:
+      type: object
+      required: [resolution, evidenceType, evidenceReference, reason, confirmProviderEvidence]
+      additionalProperties: false
+      properties:
+        resolution:
+          type: string
+          enum: [CONFIRMED_SUCCESS, CONFIRMED_FAILURE]
+        evidenceType:
+          type: string
+          enum: [PAYHERE_DASHBOARD, PAYHERE_SUPPORT_CASE]
+        evidenceReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+        providerRefundReference:
+          type: string
+          pattern: '^[0-9]{1,30}$'
+          description: Required for CONFIRMED_SUCCESS; omit for CONFIRMED_FAILURE.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        confirmProviderEvidence:
+          type: boolean
+          const: true
+
+    BookingClaimReleaseRequest:
+      type: object
+      required: [confirmProviderTerminalFailure, evidenceType, evidenceReference, reason]
+      additionalProperties: false
+      properties:
+        confirmProviderTerminalFailure:
+          type: boolean
+          const: true
+        evidenceType:
+          type: string
+          enum: [PAYHERE_DASHBOARD, PAYHERE_SUPPORT_CASE]
+        evidenceReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    RecoveryAudit:
+      type: object
+      required: [id, paymentId, action, priorStatus, resultingStatus, actorId, evidenceType, evidenceReference, reason, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        paymentId: { type: string, format: uuid }
+        refundId: { type: string, format: uuid, nullable: true }
+        action:
+          type: string
+          enum: [REFUND_CONFIRMED_SUCCESS, REFUND_CONFIRMED_FAILURE, BOOKING_CLAIM_RELEASED]
+        priorStatus: { type: string }
+        resultingStatus: { type: string }
+        actorId: { type: string, format: uuid }
+        evidenceType:
+          type: string
+          enum: [PAYHERE_DASHBOARD, PAYHERE_SUPPORT_CASE]
+        evidenceReference: { type: string }
+        providerReference: { type: string, nullable: true }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
 
     Refund:
       type: object
