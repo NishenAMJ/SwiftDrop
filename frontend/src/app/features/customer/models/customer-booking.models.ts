@@ -8,6 +8,7 @@ export interface AddressDto {
 }
 
 export type UrgencyType = 'NORMAL' | 'URGENT';
+export type PaymentMethod = 'ONLINE' | 'COD';
 
 export type ParcelStatus =
   | 'BOOKED'
@@ -23,6 +24,7 @@ export interface CreateBookingRequest {
   description?: string;
   weightKg: number;
   urgency: UrgencyType;
+  paymentMethod?: PaymentMethod;
   pickupAddress: AddressDto;
   deliveryAddress: AddressDto;
 }
@@ -51,6 +53,7 @@ export interface BookingResponseDto {
   estimatedFee: number;
   createdAt: string;
   receiptNumber?: string;
+  paymentMethod?: PaymentMethod;
   pickupAddress?: AddressDto;
   deliveryAddress?: AddressDto;
 }
@@ -66,6 +69,7 @@ export interface BookingReceiptDto {
   weightKg?: number;
   urgency?: UrgencyType;
   status?: ParcelStatus;
+  paymentMethod?: PaymentMethod;
   pickupAddress?: AddressDto;
   deliveryAddress?: AddressDto;
 }
@@ -77,3 +81,22 @@ export interface FeeBreakdown {
   totalFee: number;
 }
 
+export interface PaymentContextResponse {
+  bookingId: string;
+  channel: string;
+  customerId: string;
+  merchantId?: string | null;
+  payable: boolean;
+  pricingSnapshotId: string;
+  amount: number;
+  currency: string;
+  payer: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    country: string;
+  };
+}

@@ -55,6 +55,14 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.getReceiptByParcelId(id));
     }
 
+    @GetMapping("/{id}/payment-context")
+    public ResponseEntity<PaymentContextResponse> getPaymentContext(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        PaymentContextResponse response = bookingService.getPaymentContext(id, jwt);
+        return ResponseEntity.ok(response);
+    }
+
     private UUID resolveCustomerId(Jwt jwt) {
         if (jwt != null && jwt.getSubject() != null) {
             try {
