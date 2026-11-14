@@ -21,6 +21,7 @@ jobs:
       PARCEL_DB_PASSWORD: ci-parcel-password
       PAYMENT_DB_PASSWORD: ci-payment-password
       DELIVERY_DB_PASSWORD: ci-delivery-password
+      COMMUNICATION_DB_PASSWORD: ci-communication-password
     steps:
       - uses: actions/checkout@v4
 
