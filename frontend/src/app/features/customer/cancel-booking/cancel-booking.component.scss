@@ -1,0 +1,21 @@
+.cancellation-content { display: grid; gap: var(--sd-space-5); }
+.steps { display: flex; flex-wrap: wrap; gap: var(--sd-space-3); list-style: none; padding: 0; margin: 0; font-size: 0.8125rem; color: var(--sd-text-muted); }
+.steps li { padding-bottom: var(--sd-space-2); border-bottom: 2px solid var(--sd-border); }
+.steps [aria-current='step'] { color: var(--sd-brand); border-color: var(--sd-brand); font-weight: 600; }
+.booking-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--sd-space-4); }
+.eyebrow, dt { color: var(--sd-text-muted); font-size: 0.8125rem; }
+.reference { margin: var(--sd-space-1) 0 0; font-weight: 700; color: var(--sd-brand); overflow-wrap: anywhere; }
+.summary { padding: var(--sd-space-4); border: 1px solid var(--sd-border); border-radius: var(--sd-radius-card); background: var(--sd-surface-subtle); }
+h3 { font-size: 1rem; font-weight: 600; margin: 0 0 var(--sd-space-3); }
+dl { margin: 0; }
+.details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sd-space-4); }
+dd { margin: var(--sd-space-1) 0 0; color: var(--sd-text); overflow-wrap: anywhere; }
+.financial dl { display: grid; gap: var(--sd-space-3); }
+.financial dl > div { display: flex; justify-content: space-between; gap: var(--sd-space-4); }
+.financial dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.financial-total { border-top: 1px solid var(--sd-border); padding-top: var(--sd-space-3); font-weight: 600; }
+.financial-total dt { color: var(--sd-text); }
+.sd-alert p, .irreversible p { margin: var(--sd-space-2) 0 0; }
+.irreversible { border-left: 3px solid var(--sd-danger); padding-left: var(--sd-space-4); }
+.loading { display: flex; align-items: center; gap: var(--sd-space-3); padding-block: var(--sd-space-8); }
+@media (max-width: 30rem) { .details-grid { grid-template-columns: minmax(0, 1fr); } .financial dl > div { flex-wrap: wrap; } }

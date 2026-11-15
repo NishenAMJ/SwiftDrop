@@ -3,7 +3,7 @@
   <section class="dashboard__hero">
     <div class="dashboard__hero-text">
       <h1 class="dashboard__title">
-        Hello, {{ customerName() || user()?.fullName || 'Customer' }}
+        Hello{{ customerName() ? ', ' + customerName() : '' }}
       </h1>
       <p class="dashboard__subtitle">
         Manage your deliveries, create new parcel bookings, and track shipments in real time.
@@ -31,7 +31,7 @@
           </svg>
         </div>
       </div>
-      <div class="metric-card__value sd-tabular">{{ totalCount }}</div>
+      <div class="metric-card__value sd-tabular">{{ loading() ? 'Loading...' : errorMessage() ? 'Not available' : totalCount }}</div>
       <div class="metric-card__footer">All-time customer shipments</div>
     </div>
 
@@ -47,7 +47,7 @@
           </svg>
         </div>
       </div>
-      <div class="metric-card__value sd-tabular">{{ activeCount }}</div>
+      <div class="metric-card__value sd-tabular">{{ loading() ? 'Loading...' : errorMessage() ? 'Not available' : activeCount }}</div>
       <div class="metric-card__footer">Parcels on the way</div>
     </div>
 
@@ -60,7 +60,7 @@
           </svg>
         </div>
       </div>
-      <div class="metric-card__value sd-tabular">{{ urgentCount }}</div>
+      <div class="metric-card__value sd-tabular">{{ loading() ? 'Loading...' : errorMessage() ? 'Not available' : urgentCount }}</div>
       <div class="metric-card__footer">Priority requested parcels</div>
     </div>
 
@@ -74,7 +74,7 @@
           </svg>
         </div>
       </div>
-      <div class="metric-card__value sd-tabular">{{ deliveredCount }}</div>
+      <div class="metric-card__value sd-tabular">{{ loading() ? 'Loading...' : errorMessage() ? 'Not available' : deliveredCount }}</div>
       <div class="metric-card__footer">Completed drop-offs</div>
     </div>
   </section>
@@ -91,7 +91,7 @@
           </svg>
           Quick Parcel Tracking
         </h2>
-        <span class="tool-card__hint">Enter reference e.g. SWD-2026-000001</span>
+        <span class="tool-card__hint">Enter the tracking reference from your receipt</span>
       </div>
 
       <form (ngSubmit)="onTrackSubmit()" class="track-form">
@@ -101,7 +101,7 @@
             class="sd-input track-form__input"
             [(ngModel)]="trackQuery"
             name="trackQuery"
-            placeholder="SWD-2026-000123"
+            placeholder="Enter your tracking reference"
             required
             aria-label="Tracking Number"
           />
@@ -132,13 +132,13 @@
           <div class="track-result__header">
             <div>
               <span class="track-result__ref sd-font-mono">{{ parcel.trackingNumber }}</span>
-              <div class="track-result__desc">{{ parcel.description || 'General Parcel' }} ({{ parcel.weightKg }} kg)</div>
+              <div class="track-result__desc">{{ parcel.description || 'Not provided' }} ({{ parcel.weightKg }} kg)</div>
             </div>
             <div>
               @if (parcel.urgency === 'URGENT') {
                 <span class="sd-badge sd-badge--warning">Urgent - Priority</span>
               } @else {
-                <span class="sd-badge">Standard</span>
+                <span class="sd-badge">{{ parcel.urgency === 'NORMAL' ? 'Standard' : 'Not provided' }}</span>
               }
             </div>
           </div>
@@ -146,12 +146,12 @@
           <div class="track-result__route">
             <div class="track-result__point">
               <span class="point-label">From:</span>
-              <span class="point-city">{{ parcel.pickupAddress?.city || 'Origin' }}</span>
+              <span class="point-city">{{ parcel.pickupAddress?.city || 'Not provided' }}</span>
             </div>
             <div class="track-result__arrow">&rarr;</div>
             <div class="track-result__point">
               <span class="point-label">To:</span>
-              <span class="point-city">{{ parcel.deliveryAddress?.city || 'Destination' }}</span>
+              <span class="point-city">{{ parcel.deliveryAddress?.city || 'Not provided' }}</span>
             </div>
           </div>
 
@@ -225,12 +225,12 @@
         <div class="estimator-display">
           <div class="estimator-price">
             <span class="price-caption">Estimated Fee:</span>
-            <span class="price-val sd-tabular">Rs. {{ feeBreakdown().totalFee | number:'1.2-2' }}</span>
+            <span class="price-val sd-tabular">{{ estimateWeight() && estimateWeight()! > 0 ? ('Rs. ' + (feeBreakdown().totalFee | number:'1.2-2')) : 'Enter parcel weight' }}</span>
           </div>
           <button
             type="button"
             class="sd-button sd-button--secondary btn-apply-estimate"
-            (click)="bookWithEstimate()"
+            (click)="bookWithEstimate()" [disabled]="!estimateWeight() || estimateWeight()! <= 0"
           >
             Book With This Rate
           </button>
@@ -247,7 +247,7 @@
         <p class="recent-subtitle">Your most recently created parcel deliveries</p>
       </div>
       <a routerLink="/customer/bookings" class="sd-link view-all-link">
-        View All Bookings ({{ totalCount }}) &rarr;
+        View All Bookings ({{ loading() ? 'Loading...' : errorMessage() ? 'Not available' : totalCount }}) &rarr;
       </a>
     </div>
 
@@ -318,8 +318,8 @@
                   <td class="sd-tabular">{{ booking.createdAt | date:'mediumDate' }}</td>
                   <td>
                     <div class="recipient-cell">
-                      <span class="recipient-name">{{ booking.recipientName || 'Recipient' }}</span>
-                      <span class="recipient-city">{{ booking.destinationCity || 'Colombo' }}</span>
+                      <span class="recipient-name">{{ booking.recipientName || 'Not provided' }}</span>
+                      <span class="recipient-city">{{ booking.destinationCity || 'Not provided' }}</span>
                     </div>
                   </td>
                   <td class="sd-tabular">{{ booking.weightKg }} kg</td>

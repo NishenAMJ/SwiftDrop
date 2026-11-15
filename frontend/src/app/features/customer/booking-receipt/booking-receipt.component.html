@@ -18,7 +18,7 @@
     </div>
   </div>
 
-  @if (isNewBooking()) {
+  @if (isNewBooking() && receipt() && !errorMessage()) {
     <div class="sd-alert sd-alert--info new-booking-banner no-print" role="status">
       <strong>Booking Confirmed!</strong> Your parcel delivery request has been registered and scheduled for dispatch.
     </div>
@@ -56,7 +56,7 @@
         <div class="receipt-header__meta">
           <div class="meta-row">
             <span class="meta-label">Receipt No:</span>
-            <span class="meta-val sd-font-mono">{{ receipt()?.receiptNumber || parcel()?.receiptNumber || 'RCP-PENDING' }}</span>
+            <span class="meta-val sd-font-mono">{{ receipt()?.receiptNumber || parcel()?.receiptNumber || 'Not available' }}</span>
           </div>
           <div class="meta-row">
             <span class="meta-label">Date Issued:</span>
@@ -98,76 +98,29 @@
             @if ((receipt()?.urgency || parcel()?.urgency) === 'URGENT') {
               <span class="sd-badge sd-badge--warning">Urgent - requested today</span>
             } @else {
-              <span class="sd-badge">Standard Service</span>
+              <span class="sd-badge">{{ receipt()?.urgency === 'NORMAL' ? 'Standard Service' : 'Not provided' }}</span>
             }
 
             @if ((receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD') {
               <span class="sd-badge">Cash on Delivery</span>
             } @else {
-              <span class="sd-badge sd-badge--info">Online Payment</span>
+              <span class="sd-badge sd-badge--info">{{ receipt()?.paymentMethod === 'ONLINE' ? 'Online Payment' : 'Not provided' }}</span>
             }
 
             <span class="sd-badge sd-badge--info">
-              {{ receipt()?.status || parcel()?.status || 'BOOKED' }}
+              {{ receipt()?.status || parcel()?.status || 'Not provided' }}
             </span>
           </div>
         </div>
       </section>
 
-      <!-- Payment Settlement Action Box -->
-      <section class="payment-action-box no-print">
-        @if ((receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD') {
-          <div class="cod-notice">
-            <div class="cod-notice__icon" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-                <circle cx="12" cy="12" r="2"></circle>
-                <path d="M6 12h.01M18 12h.01"></path>
-              </svg>
-            </div>
-            <div>
-              <div class="cod-notice__title">Settlement Method: Cash on Delivery (COD)</div>
-              <p class="cod-notice__desc">
-                Payment of <strong>Rs. {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }} LKR</strong> will be collected in cash by our courier upon parcel pickup or delivery handover.
-              </p>
-            </div>
-          </div>
-        } @else {
-          <div class="online-pay-box">
-            <div class="online-pay-box__info">
-              <div class="online-pay-box__title">Online Card Payment</div>
-              <p class="online-pay-box__desc">
-                Settle your delivery fee of <strong>Rs. {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }} LKR</strong> securely via SwiftDrop's Payment Gateway.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="sd-button sd-button--primary btn-pay-now"
-              (click)="payOnline()"
-              [disabled]="isInitiatingPayment()"
-            >
-              @if (isInitiatingPayment()) {
-                <span class="sd-spinner" aria-hidden="true"></span>
-                Connecting to Payment Gateway...
-              } @else {
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                  <line x1="1" y1="10" x2="23" y2="10"></line>
-                </svg>
-                Pay Delivery Fee Online
-              }
-            </button>
-          </div>
-          @if (paymentMessage(); as msg) {
-            <div
-              class="sd-alert"
-              [class.sd-alert--error]="msg.type === 'error'"
-              [class.sd-alert--info]="msg.type !== 'error'"
-              role="alert"
-            >
-              {{ msg.text }}
-            </div>
-          }
+      <section class="payment-action-box">
+        @if (receipt()?.paymentMethod === 'COD') {
+          <p><strong>Payment method: Cash on Delivery (COD)</strong></p>
+          <p>Payment pending. The delivery fee will be collected by the courier.</p>
+        } @else if (receipt()?.paymentMethod === 'ONLINE') {
+          <p><strong>Payment method: Online payment</strong></p>
+          <p>Payment verified successfully.</p>
         }
       </section>
 
@@ -220,7 +173,7 @@
       <section class="parcel-specs">
         <div class="spec-col">
           <span class="spec-label">Package Description</span>
-          <span class="spec-value">{{ receipt()?.description || parcel()?.description || 'General Parcel' }}</span>
+          <span class="spec-value">{{ receipt()?.description || parcel()?.description || 'Not provided' }}</span>
         </div>
         <div class="spec-col">
           <span class="spec-label">Estimated Weight</span>
@@ -229,13 +182,13 @@
         <div class="spec-col">
           <span class="spec-label">Handling Priority</span>
           <span class="spec-value">
-            {{ (receipt()?.urgency || parcel()?.urgency) === 'URGENT' ? 'Urgent Express' : 'Standard Routine' }}
+            {{ (receipt()?.urgency || parcel()?.urgency) === 'URGENT' ? 'Urgent Express' : receipt()?.urgency === 'NORMAL' ? 'Standard Routine' : 'Not provided' }}
           </span>
         </div>
         <div class="spec-col">
           <span class="spec-label">Payment Option</span>
           <span class="spec-value">
-            {{ (receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD' ? 'Cash on Delivery (COD)' : 'Online Card Payment' }}
+            {{ (receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD' ? 'Cash on Delivery (COD)' : receipt()?.paymentMethod === 'ONLINE' ? 'Online Card Payment' : 'Not provided' }}
           </span>
         </div>
       </section>
@@ -252,31 +205,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>Standard Base Courier Fee</td>
-              <td class="text-right sd-tabular">Flat</td>
-              <td class="text-right sd-tabular">Rs. {{ getBaseFee() | number:'1.2-2' }}</td>
-            </tr>
-            <tr>
-              <td>
-                Weight Handling Surcharge
-                <span class="item-sub">({{ receipt()?.weightKg || parcel()?.weightKg }} kg @ Rs. 150/kg)</span>
-              </td>
-              <td class="text-right sd-tabular">Rs. 150.00 / kg</td>
-              <td class="text-right sd-tabular">
-                Rs. {{ getWeightFee(receipt()?.weightKg || parcel()?.weightKg) | number:'1.2-2' }}
-              </td>
-            </tr>
-            @if ((receipt()?.urgency || parcel()?.urgency) === 'URGENT') {
-              <tr class="urgent-row">
-                <td>
-                  Urgent Priority Surcharge
-                  <span class="sd-badge sd-badge--warning pill-small">Urgent</span>
-                </td>
-                <td class="text-right sd-tabular">Express Priority</td>
-                <td class="text-right sd-tabular">+Rs. 300.00</td>
-              </tr>
-            }
+            <tr><td>Delivery charge</td><td class="text-right">Booking price</td><td class="text-right sd-tabular">LKR {{ receipt()?.totalAmount | number:'1.2-2' }}</td></tr>
           </tbody>
           <tfoot>
             <tr class="total-row">

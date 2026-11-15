@@ -3,6 +3,9 @@ import { Routes } from '@angular/router';
 import { authGuard, guestGuard, roleGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
+  // Gateway redirects are navigation only; the booking form verifies payment server-side.
+  { path: 'payments/return', redirectTo: 'customer/book', pathMatch: 'full' },
+  { path: 'payments/cancel', redirectTo: 'customer/book', pathMatch: 'full' },
   // Signed-out visitors see the landing page; signed-in users go to their own role's page.
   {
     path: '',

@@ -49,12 +49,12 @@ public class CustomerProfileService {
     private CustomerProfileDto createDefaultProfile(UUID customerId) {
         return new CustomerProfileDto(
                 customerId,
-                "SwiftDrop Customer",
-                "customer@swiftdrop.lk",
-                "+94 77 000 0000",
-                "123 Main Street",
-                "Colombo",
-                "00100",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null
         );

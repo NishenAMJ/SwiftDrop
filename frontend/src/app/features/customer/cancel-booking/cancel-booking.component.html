@@ -1,0 +1,65 @@
+<app-confirm-dialog [open]="true" [wide]="true" [title]="title()" [confirmLabel]="confirmLabel()"
+ [cancelLabel]="step() === 'confirmation' ? 'Back to details' : 'Keep booking'"
+ [tone]="step() === 'confirmation' ? 'danger' : 'primary'" [busy]="submitting()"
+ [confirmDisabled]="loading() || (step() === 'details' && !eligibility()) || (step() === 'confirmation' && !canConfirm())"
+ [error]="error()" (confirmed)="advance()" (cancelled)="back()" (dismissed)="closed.emit()">
+ <div class="cancellation-content" [attr.aria-busy]="loading()">
+  <ol class="steps" aria-label="Cancellation progress">
+   <li [attr.aria-current]="step() === 'details' ? 'step' : null">1. Booking details</li>
+   <li [attr.aria-current]="step() === 'confirmation' ? 'step' : null">2. Confirmation</li>
+   <li [attr.aria-current]="step() === 'payment' ? 'step' : null">3. Payment</li>
+  </ol>
+  @if (loading()) {
+   <div class="loading" role="status"><span class="sd-spinner" aria-hidden="true"></span>Checking cancellation eligibility...</div>
+  } @else if (step() === 'payment') {
+   <div class="sd-alert sd-alert--info" role="status">{{ paymentMessage() }}</div>
+  } @else {
+   @if (booking(); as parcel) {
+    <div class="booking-heading">
+     <div><span class="eyebrow">Booking reference</span><p class="reference">{{ parcel.trackingNumber }}</p></div>
+     <span class="sd-badge">{{ parcel.status }}</span>
+    </div>
+    @if (step() === 'details') {
+     <section class="summary" aria-label="Parcel details">
+      <h3>Parcel details</h3>
+      <dl class="details-grid">
+       <div><dt>Description</dt><dd>{{ parcel.description || 'Not provided' }}</dd></div>
+       <div><dt>Weight</dt><dd>{{ parcel.weightKg }} kg</dd></div>
+       <div><dt>Delivery service</dt><dd>{{ parcel.urgency === 'URGENT' ? 'Urgent' : 'Standard' }}</dd></div>
+       <div><dt>Payment method</dt><dd>{{ parcel.paymentMethod === 'COD' ? 'Cash on delivery' : 'Online payment' }}</dd></div>
+       <div><dt>Sender</dt><dd>{{ parcel.pickupAddress?.contactName || 'Not provided' }}</dd></div>
+       <div><dt>Receiver</dt><dd>{{ parcel.deliveryAddress?.contactName || 'Not provided' }}</dd></div>
+       <div><dt>Pickup city</dt><dd>{{ parcel.pickupAddress?.city || 'Not provided' }}</dd></div>
+       <div><dt>Destination city</dt><dd>{{ parcel.deliveryAddress?.city || 'Not provided' }}</dd></div>
+       <div><dt>Scheduled pickup (Asia/Colombo)</dt><dd>{{ eligibility()?.scheduledPickupTime ? (eligibility()?.scheduledPickupTime | date:'medium':'+0530') : 'Not verified' }}</dd></div>
+      </dl>
+     </section>
+    }
+    <section class="summary financial" aria-label="Cancellation financial summary">
+     <h3>{{ step() === 'confirmation' ? 'Review your cancellation' : 'Financial summary' }}</h3>
+     <dl>
+      <div><dt>Original booking charge</dt><dd>LKR {{ parcel.estimatedFee | number:'1.2-2' }}</dd></div>
+      @if (parcel.paymentMethod === 'ONLINE') {
+       <div><dt>Original paid amount</dt><dd>{{ eligibility()?.originalPaidAmount != null ? ('LKR ' + (eligibility()?.originalPaidAmount | number:'1.2-2')) : 'Not verified' }}</dd></div>
+      }
+      <div><dt>Cancellation fee</dt><dd>{{ eligibility()?.cancellationFee != null ? ('LKR ' + (eligibility()?.cancellationFee | number:'1.2-2')) : 'Not available' }}</dd></div>
+      <div class="financial-total"><dt>{{ parcel.paymentMethod === 'COD' ? 'Amount to pay' : 'Refund to original payment method' }}</dt><dd>{{ (parcel.paymentMethod === 'COD' ? eligibility()?.cancellationFee : eligibility()?.refundableAmount) != null ? ('LKR ' + ((parcel.paymentMethod === 'COD' ? eligibility()?.cancellationFee : eligibility()?.refundableAmount) | number:'1.2-2')) : 'Not available' }}</dd></div>
+     </dl>
+    </section>
+   }
+   @if (eligibility(); as result) {
+    <div class="sd-alert" [class.sd-alert--info]="result.eligible" [class.sd-alert--warning]="!result.eligible" role="status">
+     <strong>{{ result.eligible ? 'Eligible for cancellation' : 'Not eligible for cancellation' }}</strong>
+     <p>{{ result.reason || 'Review the cancellation details before confirming.' }}</p>
+    </div>
+   }
+   @if (step() === 'confirmation') {
+    <div class="irreversible"><h3>Cancellation is permanent</h3><p>Once completed, this booking cannot be restored. {{ booking()?.paymentMethod === 'COD' ? 'You will need to pay the cancellation fee before cancellation can be completed.' : 'The cancellation fee will be deducted from your verified payment before the refund is processed.' }}</p></div>
+    @if (!canConfirm()) { <p class="sd-help">Confirmation and payment are unavailable until eligibility and amounts are verified.</p> }
+   }
+   @if (step() === 'details') {
+    <button type="button" class="sd-button sd-button--secondary" (click)="load()" [disabled]="loading()">Check again</button>
+   }
+  }
+ </div>
+</app-confirm-dialog>
