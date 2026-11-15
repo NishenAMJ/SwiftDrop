@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -30,11 +31,22 @@ class BookingServiceTest {
     @Mock
     private ReferenceGenerator referenceGenerator;
 
+    @Mock
+    private CustomerProfileRepository profileRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private BookingService bookingService;
 
     @BeforeEach
     void setUp() {
-        bookingService = new BookingService(parcelRepository, receiptRepository, referenceGenerator);
+        bookingService = new BookingService(
+                parcelRepository,
+                receiptRepository,
+                referenceGenerator,
+                profileRepository,
+                eventPublisher);
     }
 
     @Test
@@ -68,6 +80,11 @@ class BookingServiceTest {
 
         verify(parcelRepository, times(1)).save(any(Parcel.class));
         verify(receiptRepository, times(1)).save(any(BookingReceipt.class));
+        var eventCaptor = org.mockito.ArgumentCaptor.forClass(
+                com.swiftdrop.parcel_pricing_service.event.ParcelBookedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertEquals("SWD-2026-000001", eventCaptor.getValue().trackingNumber());
+        assertEquals("Colombo", eventCaptor.getValue().publicLocation());
     }
 
     @Test
