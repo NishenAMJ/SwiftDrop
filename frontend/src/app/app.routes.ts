@@ -16,11 +16,21 @@ export const routes: Routes = [
       import('./features/landing/landing-page/landing-page').then((m) => m.LandingPage),
   },
   {
+    path: 'dispatcher',
+    loadChildren: () =>
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+  },
+  {
     // Login, register and the Google callback share the Arctic Frost auth layout.
     path: '',
     loadComponent: () => import('./core/layout/auth-layout/auth-layout').then((m) => m.AuthLayout),
     children: [
       {
+    path: 'dispatcher',
+    loadChildren: () =>
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+  },
+  {
         path: 'login',
         title: 'Log in | SwiftDrop',
         canActivate: [guestGuard],
@@ -28,6 +38,11 @@ export const routes: Routes = [
           import('./features/auth/login-page/login-page').then((m) => m.LoginPage),
       },
       {
+    path: 'dispatcher',
+    loadChildren: () =>
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+  },
+  {
         path: 'register',
         title: 'Create account | SwiftDrop',
         canActivate: [guestGuard],
@@ -35,6 +50,11 @@ export const routes: Routes = [
           import('./features/auth/register-page/register-page').then((m) => m.RegisterPage),
       },
       {
+    path: 'dispatcher',
+    loadChildren: () =>
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+  },
+  {
         path: 'auth/callback',
         title: 'Logging in | SwiftDrop',
         loadComponent: () =>
@@ -45,8 +65,11 @@ export const routes: Routes = [
     ],
   },
   {
-    // Customer portal (parcel-pricing team), with its own layout. Dispatcher accounts have no
-    // CUSTOMER role, so they are sent to their account page instead.
+    path: 'dispatcher',
+    loadChildren: () =>
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+  },
+  {
     path: 'customer',
     canActivate: [roleGuard('CUSTOMER')],
     loadComponent: () =>
@@ -55,13 +78,13 @@ export const routes: Routes = [
       import('./features/customer/customer.routes').then((m) => m.CUSTOMER_ROUTES),
   },
   {
-    path: 'tracking',
+    path: 'dispatcher',
     loadChildren: () =>
-      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   {
-    // Signed-in screens in the role-aware app layout. Every child also checks its own role.
-    path: '',
+    path: 'account',
+    title: 'Your account | SwiftDrop',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/app-layout/app-layout').then((m) => m.AppLayout),
     children: [
@@ -88,6 +111,11 @@ export const routes: Routes = [
           import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
       },
     ],
+  },
+  {
+    path: 'dispatcher',
+    loadChildren: () =>
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   { path: '**', redirectTo: 'account' },
 ];

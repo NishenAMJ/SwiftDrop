@@ -2,7 +2,7 @@ import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 
 import { roleGuard } from '../../core/auth/auth.guards';
-import { AuthService } from '../../core/auth/auth.service';
+
 
 /**
  * Merchant screens from identity-merchant-service. Other teams can add merchant pages here (for
@@ -13,8 +13,7 @@ export const MERCHANT_ROUTES: Routes = [
     path: '',
     pathMatch: 'full',
     // Approved merchants start at their keys; everyone else at the application.
-    redirectTo: () =>
-      inject(AuthService).hasRole('MERCHANT') ? '/merchant/api-keys' : '/merchant/application',
+    redirectTo: 'application',
   },
   {
     // Customers apply here; approved and suspended merchants follow their status here.

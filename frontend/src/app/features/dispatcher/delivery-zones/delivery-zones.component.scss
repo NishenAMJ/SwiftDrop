@@ -1,0 +1,36 @@
+.sd-table th, .sd-table td {
+  padding: var(--sd-space-3);
+  border-bottom: 1px solid var(--sd-border);
+}
+
+.sd-table th {
+  background: var(--sd-surface-subtle);
+  text-align: left;
+  font-weight: 600;
+}
+
+.sd-badge--success {
+  background: var(--sd-success-bg);
+  color: var(--sd-success);
+}
+.sd-badge--danger {
+  background: var(--sd-danger-bg);
+  color: var(--sd-danger);
+}
+
+.sd-button--primary {
+  background: var(--sd-brand);
+  color: #fff;
+}
+.sd-button--secondary {
+  background: var(--sd-accent-soft);
+  color: var(--sd-accent);
+}
+.sd-button--danger {
+  background: var(--sd-danger);
+  color: #fff;
+}
+.sd-button--success {
+  background: var(--sd-success);
+  color: #fff;
+}

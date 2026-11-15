@@ -1,0 +1,22 @@
+.sd-sidebar {
+  background: var(--sd-surface-subtle);
+  border-right: 1px solid var(--sd-border);
+}
+
+.sd-nav-link {
+  font-size: 0.875rem;
+  color: var(--sd-text);
+  text-decoration: none;
+  display: block;
+  padding: var(--sd-space-2) var(--sd-space-3);
+  border-radius: var(--sd-radius-control);
+}
+
+.sd-nav-link.sd-active {
+  background: var(--sd-brand-soft);
+  color: var(--sd-brand);
+}
+
+.sd-main {
+  background: var(--sd-page);
+}
