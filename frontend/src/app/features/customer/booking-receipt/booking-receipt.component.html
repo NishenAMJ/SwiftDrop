@@ -101,11 +101,74 @@
               <span class="sd-badge">Standard Service</span>
             }
 
+            @if ((receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD') {
+              <span class="sd-badge">Cash on Delivery</span>
+            } @else {
+              <span class="sd-badge sd-badge--info">Online Payment</span>
+            }
+
             <span class="sd-badge sd-badge--info">
               {{ receipt()?.status || parcel()?.status || 'BOOKED' }}
             </span>
           </div>
         </div>
+      </section>
+
+      <!-- Payment Settlement Action Box -->
+      <section class="payment-action-box no-print">
+        @if ((receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD') {
+          <div class="cod-notice">
+            <div class="cod-notice__icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                <circle cx="12" cy="12" r="2"></circle>
+                <path d="M6 12h.01M18 12h.01"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="cod-notice__title">Settlement Method: Cash on Delivery (COD)</div>
+              <p class="cod-notice__desc">
+                Payment of <strong>Rs. {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }} LKR</strong> will be collected in cash by our courier upon parcel pickup or delivery handover.
+              </p>
+            </div>
+          </div>
+        } @else {
+          <div class="online-pay-box">
+            <div class="online-pay-box__info">
+              <div class="online-pay-box__title">Online Card Payment</div>
+              <p class="online-pay-box__desc">
+                Settle your delivery fee of <strong>Rs. {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }} LKR</strong> securely via SwiftDrop's Payment Gateway.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="sd-button sd-button--primary btn-pay-now"
+              (click)="payOnline()"
+              [disabled]="isInitiatingPayment()"
+            >
+              @if (isInitiatingPayment()) {
+                <span class="sd-spinner" aria-hidden="true"></span>
+                Connecting to Payment Gateway...
+              } @else {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                  <line x1="1" y1="10" x2="23" y2="10"></line>
+                </svg>
+                Pay Delivery Fee Online
+              }
+            </button>
+          </div>
+          @if (paymentMessage(); as msg) {
+            <div
+              class="sd-alert"
+              [class.sd-alert--error]="msg.type === 'error'"
+              [class.sd-alert--info]="msg.type !== 'error'"
+              role="alert"
+            >
+              {{ msg.text }}
+            </div>
+          }
+        }
       </section>
 
       <!-- Addresses Grid (Sender vs Recipient) -->
@@ -167,6 +230,12 @@
           <span class="spec-label">Handling Priority</span>
           <span class="spec-value">
             {{ (receipt()?.urgency || parcel()?.urgency) === 'URGENT' ? 'Urgent Express' : 'Standard Routine' }}
+          </span>
+        </div>
+        <div class="spec-col">
+          <span class="spec-label">Payment Option</span>
+          <span class="spec-value">
+            {{ (receipt()?.paymentMethod || parcel()?.paymentMethod) === 'COD' ? 'Cash on Delivery (COD)' : 'Online Card Payment' }}
           </span>
         </div>
       </section>

@@ -43,6 +43,16 @@
   background: var(--sd-brand-soft);
 }
 
+// Destructive decisions only (reject, suspend, revoke), never for ordinary actions.
+.sd-button--danger {
+  background: var(--sd-danger);
+  color: white;
+}
+
+.sd-button--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sd-danger) 85%, black);
+}
+
 .sd-button--block {
   width: 100%;
 }
@@ -123,6 +133,11 @@
   border-radius: var(--sd-radius-control);
 }
 
+textarea.sd-input {
+  min-height: 6rem;
+  resize: vertical;
+}
+
 .sd-input[aria-invalid='true'] {
   border-color: var(--sd-danger);
   box-shadow: inset 0 0 0 1px var(--sd-danger);
@@ -171,6 +186,52 @@
 .sd-alert--warning {
   color: var(--sd-warning);
   background: var(--sd-warning-bg);
+}
+
+.sd-alert--success {
+  color: var(--sd-success);
+  background: var(--sd-success-bg);
+}
+
+// Tables (section 10). Wrap wide tables in .sd-table-wrap so only the table scrolls on mobile;
+// give the wrapper a label (aria-labelledby) and tabindex="0" so keyboard users can scroll it.
+.sd-table-wrap {
+  // Positioned, so absolutely positioned content (such as .sd-visually-hidden labels) stays
+  // inside the scroll area instead of widening the whole page.
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-card);
+  background: var(--sd-surface);
+}
+
+.sd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.sd-table th,
+.sd-table td {
+  padding: var(--sd-space-3) var(--sd-space-4);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--sd-border);
+}
+
+.sd-table th {
+  font-weight: 600;
+  color: var(--sd-text);
+  background: var(--sd-surface-subtle);
+  white-space: nowrap;
+}
+
+.sd-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.sd-table td {
+  height: 3.25rem;
 }
 
 // Badges: always text, colour only supports it (section 9).

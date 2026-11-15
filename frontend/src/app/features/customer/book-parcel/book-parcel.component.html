@@ -311,6 +311,63 @@
           </div>
         </div>
       </section>
+
+      <!-- Section 5: Payment Method Selection -->
+      <section class="sd-card form-section">
+        <div class="form-section__header">
+          <div class="section-badge section-badge--brand">5</div>
+          <div>
+            <h2 class="form-section__title">Payment Method</h2>
+            <p class="form-section__desc">Select how you prefer to settle the delivery fee</p>
+          </div>
+        </div>
+
+        <div class="urgency-cards">
+          <!-- Online Card Payment -->
+          <div
+            class="urgency-card"
+            [class.urgency-card--selected]="selectedPaymentMethod === 'ONLINE'"
+            (click)="setPaymentMethod('ONLINE')"
+            tabindex="0"
+            role="radio"
+            [attr.aria-checked]="selectedPaymentMethod === 'ONLINE'"
+          >
+            <div class="urgency-card__top">
+              <span class="sd-badge sd-badge--info">Instant Payment</span>
+              <span class="urgency-card__radio">
+                <span class="radio-inner" *ngIf="selectedPaymentMethod === 'ONLINE'"></span>
+              </span>
+            </div>
+            <h3 class="urgency-card__name">Online Card Payment</h3>
+            <p class="urgency-card__desc">
+              Pay securely online with Visa, Mastercard, or Internet Banking via the Payment Service.
+            </p>
+            <div class="urgency-card__tag">Automated digital payment receipt</div>
+          </div>
+
+          <!-- Cash on Delivery (COD) -->
+          <div
+            class="urgency-card"
+            [class.urgency-card--selected]="selectedPaymentMethod === 'COD'"
+            (click)="setPaymentMethod('COD')"
+            tabindex="0"
+            role="radio"
+            [attr.aria-checked]="selectedPaymentMethod === 'COD'"
+          >
+            <div class="urgency-card__top">
+              <span class="sd-badge">Pay on Collection</span>
+              <span class="urgency-card__radio">
+                <span class="radio-inner" *ngIf="selectedPaymentMethod === 'COD'"></span>
+              </span>
+            </div>
+            <h3 class="urgency-card__name">Cash on Delivery (COD)</h3>
+            <p class="urgency-card__desc">
+              Pay in cash to the SwiftDrop dispatch courier upon parcel pickup or delivery handover.
+            </p>
+            <div class="urgency-card__tag">No online card required</div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Right Column: Sticky Price Summary & Confirm Button -->
@@ -344,6 +401,13 @@
               <dd class="sd-tabular">+Rs. {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }}</dd>
             </div>
           }
+
+          <div class="breakdown-row">
+            <dt>Payment Method</dt>
+            <dd class="sd-tabular">
+              {{ selectedPaymentMethod === 'ONLINE' ? 'Online Card' : 'Cash on Delivery (COD)' }}
+            </dd>
+          </div>
 
           <div class="summary-total">
             <dt>Total Estimated Fee</dt>

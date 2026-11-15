@@ -9,6 +9,7 @@ services:
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
       PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
       COMMUNICATION_DB_PASSWORD: ${COMMUNICATION_DB_PASSWORD:?Set COMMUNICATION_DB_PASSWORD}
+      TRACKING_DB_PASSWORD: ${TRACKING_DB_PASSWORD:?Set TRACKING_DB_PASSWORD}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -20,30 +21,75 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   payment-settlement-service:
     build:
-      context: .
-      dockerfile: Dockerfile.payment
+      context: ./services/payment-settlement-service
+      dockerfile: Dockerfile
     ports:
       - "8085:8085"
     environment:
       PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
       PAYMENT_DB_USER: payment_settlement_user
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+      PAYMENT_PRICING_BASE_URL: ${PAYMENT_PRICING_BASE_URL:-http://host.docker.internal:8082}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      PAYMENT_PRICING_STUB_ENABLED: ${PAYMENT_PRICING_STUB_ENABLED:-false}
+      PAYMENT_PAYHERE_MERCHANT_ID: ${PAYMENT_PAYHERE_MERCHANT_ID:-}
+      PAYMENT_PAYHERE_MERCHANT_SECRET: ${PAYMENT_PAYHERE_MERCHANT_SECRET:-}
+      PAYMENT_PAYHERE_APP_ID: ${PAYMENT_PAYHERE_APP_ID:-}
+      PAYMENT_PAYHERE_APP_SECRET: ${PAYMENT_PAYHERE_APP_SECRET:-}
+      PAYMENT_PAYHERE_BASE_URL: ${PAYMENT_PAYHERE_BASE_URL:-https://sandbox.payhere.lk}
+      PAYMENT_PAYHERE_NOTIFY_URL: ${PAYMENT_PAYHERE_NOTIFY_URL:-}
+      PAYMENT_PAYHERE_RETURN_URL: ${PAYMENT_PAYHERE_RETURN_URL:-http://localhost:4200/payments/return}
+      PAYMENT_PAYHERE_CANCEL_URL: ${PAYMENT_PAYHERE_CANCEL_URL:-http://localhost:4200/payments/cancel}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
-  rabbitmq:
-    image: rabbitmq:4-management
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
     ports:
-      - "127.0.0.1:5672:5672"     # apps connect here
-      - "127.0.0.1:15672:15672"   # web UI: http://localhost:15672 (guest / guest)
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      - "127.0.0.1:8080:8080"
+    environment:
+      IDENTITY_ISSUER_URI: ${IDENTITY_ISSUER_URI:-swiftdrop-identity}
+      IDENTITY_AUDIENCE: ${IDENTITY_AUDIENCE:-swiftdrop-api}
+      IDENTITY_JWKS_URI: ${GATEWAY_IDENTITY_JWKS_URI:-http://host.docker.internal:8081/.well-known/jwks.json}
+      IDENTITY_SERVICE_URI: ${GATEWAY_IDENTITY_SERVICE_URI:-http://host.docker.internal:8081}
+      PARCEL_SERVICE_URI: ${GATEWAY_PARCEL_SERVICE_URI:-http://host.docker.internal:8082}
+      DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://host.docker.internal:8083}
+      TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://host.docker.internal:8084}
+      PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      payment-settlement-service:
+        condition: service_started
 
   mailpit:
     image: axllent/mailpit
@@ -53,3 +99,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:

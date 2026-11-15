@@ -1,0 +1,19 @@
+{
+  "bookingId": "SWD-LOCAL-000003",
+  "channel": "MERCHANT_API",
+  "customerId": "f2249d4c-a134-4bc0-b9ed-ffea97ad8791",
+  "merchantId": "846c790e-497a-4340-8039-79e25c95f40e",
+  "payable": true,
+  "pricingSnapshotId": "d0dafc29-38c0-4e45-bebd-594bca0f620c",
+  "amount": 1000.00,
+  "currency": "LKR",
+  "payer": {
+    "firstName": "Test",
+    "lastName": "Customer",
+    "email": "payer@example.com",
+    "phone": "+94770000000",
+    "address": "Test address",
+    "city": "Colombo",
+    "country": "Sri Lanka"
+  }
+}

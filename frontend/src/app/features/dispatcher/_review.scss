@@ -1,0 +1,77 @@
+// Shared by the dispatcher's list pages: filter bar, result heading and application cards.
+.filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+  align-items: end;
+}
+
+.filters__submit {
+  justify-self: start;
+}
+
+.results-title:focus {
+  outline: none;
+}
+
+.results-title:focus-visible {
+  outline: 3px solid var(--sd-focus);
+  outline-offset: 3px;
+}
+
+.results-count {
+  font-weight: 400;
+  color: var(--sd-text-secondary);
+}
+
+.retry {
+  margin-top: var(--sd-space-3);
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-item article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+}
+
+.review-item__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-3);
+}
+
+.review-item__reason {
+  white-space: pre-line;
+}
+
+.review-item__actions {
+  padding-top: var(--sd-space-4);
+  border-top: 1px solid var(--sd-border);
+}
+
+@media (min-width: 48rem) {
+  .filters {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+
+  .filters__submit {
+    justify-self: stretch;
+  }
+}
+
+@media (min-width: 64rem) {
+  .review-item__details {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

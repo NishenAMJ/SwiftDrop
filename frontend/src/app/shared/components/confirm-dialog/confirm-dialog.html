@@ -1,0 +1,71 @@
+<dialog
+  #dialog
+  class="sd-dialog"
+  [attr.aria-labelledby]="id + '-title'"
+  [attr.aria-describedby]="id + '-body'"
+  (cancel)="onNativeCancel($event)"
+>
+  <form class="sd-dialog__form" (submit)="submit($event)" novalidate>
+    <h2 [id]="id + '-title'" class="sd-dialog__title">{{ title() }}</h2>
+
+    <div [id]="id + '-body'" class="sd-dialog__body">
+      <ng-content />
+    </div>
+
+    @if (text(); as field) {
+      <div class="sd-field">
+        <label class="sd-label" [for]="id + '-text'">
+          {{ field.label }}
+          @if (!field.required) {
+            <span class="sd-label__optional">(optional)</span>
+          }
+        </label>
+        <textarea
+          [id]="id + '-text'"
+          class="sd-input"
+          [value]="value()"
+          (input)="onInput($event)"
+          [attr.maxlength]="field.maxLength"
+          [attr.aria-invalid]="showTextError()"
+          [attr.aria-describedby]="textDescribedBy()"
+        ></textarea>
+        @if (field.help) {
+          <p [id]="id + '-help'" class="sd-help">{{ field.help }}</p>
+        }
+        @if (showTextError()) {
+          <p [id]="id + '-error'" class="sd-error">{{ textError() }}</p>
+        }
+      </div>
+    }
+
+    @if (error(); as message) {
+      <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+    }
+
+    <div class="sd-dialog__actions">
+      <button
+        class="sd-button sd-button--secondary"
+        type="button"
+        (click)="cancel()"
+        [disabled]="busy()"
+      >
+        Cancel
+      </button>
+      <button
+        class="sd-button"
+        [class.sd-button--primary]="tone() === 'primary'"
+        [class.sd-button--danger]="tone() === 'danger'"
+        type="submit"
+        [disabled]="busy()"
+        [attr.aria-busy]="busy()"
+      >
+        @if (busy()) {
+          <span class="sd-spinner" aria-hidden="true"></span>
+          Working…
+        } @else {
+          {{ confirmLabel() }}
+        }
+      </button>
+    </div>
+  </form>
+</dialog>

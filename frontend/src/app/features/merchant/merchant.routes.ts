@@ -1,34 +1,34 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 
+import { roleGuard } from '../../core/auth/auth.guards';
+
+
+/**
+ * Merchant screens from identity-merchant-service. Other teams can add merchant pages here (for
+ * example orders); when they do, point the default route at the merchant's main page.
+ */
 export const MERCHANT_ROUTES: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    redirectTo: 'dashboard',
+    // Approved merchants start at their keys; everyone else at the application.
+    redirectTo: 'application',
   },
   {
-    path: 'dashboard',
-    title: 'Merchant Dashboard | SwiftDrop',
+    // Customers apply here; approved and suspended merchants follow their status here.
+    path: 'application',
+    title: 'Merchant application | SwiftDrop',
+    canActivate: [roleGuard('CUSTOMER')],
     loadComponent: () =>
-      import('./merchant-dashboard/merchant-dashboard.component').then(
-        (m) => m.MerchantDashboardComponent,
-      ),
-  },
-  // Placeholder for future order creation page
-  {
-    path: 'create-order',
-    title: 'Create New Order | SwiftDrop',
-    loadComponent: () =>
-      import('./create-order/create-order.component').then(
-        (m) => m.CreateOrderComponent,
+      import('./merchant-application-page/merchant-application-page').then(
+        (m) => m.MerchantApplicationPage,
       ),
   },
   {
-    path: 'orders',
-    title: 'Merchant Orders | SwiftDrop',
-    loadComponent: () =>
-      import('./orders/merchant-orders.component').then(
-        (m) => m.MerchantOrdersComponent,
-      ),
+    path: 'api-keys',
+    title: 'API keys | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () => import('./api-keys-page/api-keys-page').then((m) => m.ApiKeysPage),
   },
 ];

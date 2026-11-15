@@ -1,14 +1,17 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, guestGuard } from './core/auth/auth.guards';
+import { authGuard, guestGuard, roleGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
+  // Signed-out visitors see the landing page; signed-in users go to their own role's page.
   {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+    path: '',
+    pathMatch: 'full',
+    title: 'SwiftDrop | Parcel delivery',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/landing/landing-page/landing-page').then((m) => m.LandingPage),
   },
-  { path: '', pathMatch: 'full', redirectTo: 'customer' },
   {
     path: 'dispatcher',
     loadChildren: () =>
@@ -65,6 +68,7 @@ export const routes: Routes = [
   },
   {
     path: 'customer',
+    canActivate: [roleGuard('CUSTOMER')],
     loadComponent: () =>
       import('./core/layout/customer-layout/customer-layout').then((m) => m.CustomerLayout),
     loadChildren: () =>
@@ -79,8 +83,31 @@ export const routes: Routes = [
     path: 'account',
     title: 'Your account | SwiftDrop',
     canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/auth/account-page/account-page').then((m) => m.AccountPage),
+    loadComponent: () => import('./core/layout/app-layout/app-layout').then((m) => m.AppLayout),
+    children: [
+      {
+        path: 'account',
+        title: 'Your account | SwiftDrop',
+        loadComponent: () =>
+          import('./features/auth/account-page/account-page').then((m) => m.AccountPage),
+      },
+      {
+        path: 'merchant',
+        loadChildren: () =>
+          import('./features/merchant/merchant.routes').then((m) => m.MERCHANT_ROUTES),
+      },
+      {
+        path: 'courier',
+        loadChildren: () =>
+          import('./features/courier/courier.routes').then((m) => m.COURIER_ROUTES),
+      },
+      {
+        path: 'dispatcher',
+        canActivate: [roleGuard('DISPATCHER')],
+        loadChildren: () =>
+          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+      },
+    ],
   },
   {
     path: 'dispatcher',

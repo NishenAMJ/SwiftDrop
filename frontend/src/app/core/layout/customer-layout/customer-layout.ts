@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
 import { CustomerProfileService } from '../../../features/customer/services/customer-profile.service';
 
@@ -53,7 +54,9 @@ export class CustomerLayout {
     if (this.loggingOut()) return;
     this.loggingOut.set(true);
     try {
-      await this.auth.logout();
+      // logout() is an Observable: it only runs when subscribed. The local session is cleared
+      // even if the request fails, and the cookie expires on its own.
+      await firstValueFrom(this.auth.logout()).catch(() => undefined);
       await this.router.navigate(['/login']);
     } finally {
       this.loggingOut.set(false);

@@ -6,12 +6,12 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 | Folder | What is in it |
 |---|---|
-| `services/` | Backend services: `identity-merchant-service` (port 8081), `parcel-pricing-service` (port 8082) and `payment-settlement-service` (port 8085) |
+| `services/` | Backend services including `api-gateway` (port 8080), `identity-merchant-service` (port 8081), `parcel-pricing-service` (port 8082) and `payment-settlement-service` (port 8085) |
 | `frontend/` | Angular frontend (port 4200) |
 | `infrastructure/` | Docker/database setup, for example `postgres/init` (runs when the database is first created) |
 | `contracts/` | API contracts shared between services |
 | `docs/` | Documentation, including [prerequisites](docs/contributions/prerequisites.md) |
-| `compose.yaml` | Starts PostgreSQL in Docker |
+| `compose.yaml` | Starts PostgreSQL, RabbitMQ, payment service and API Gateway |
 
 ## 1. Install the tools
 
@@ -97,7 +97,24 @@ cd services\parcel-pricing-service
 
 The service runs on http://localhost:8082. It uses the `parcel_pricing` schema and applies migrations from `src/main/resources/db/migration`.
 
-## 7. Check that everything worked
+## 7. Run the API Gateway
+
+After starting the Identity, Parcel & Pricing, Delivery Operations, Tracking and
+Payment services, start the gateway from the repository root:
+
+```powershell
+docker compose up -d --build api-gateway
+Invoke-RestMethod http://localhost:8080/actuator/health/readiness
+```
+
+The gateway listens on port 8080 and routes service paths without removing their
+prefixes. Payment routes require a valid access token except for PayHere's
+`POST /api/v1/payments/callbacks/payhere`, whose signature is verified by the payment
+service. The payment service receives the original `Authorization` and
+`Idempotency-Key` headers. Configure `GATEWAY_IDENTITY_JWKS_URI` and upstream service
+URIs in `.env` when the defaults do not match your network.
+
+## 8. Check that everything worked
 
 After step 4 (database running), confirm the `identity_merchant` schema exists:
 
@@ -119,7 +136,7 @@ After step 6 (parcel service started once), confirm its schema:
 docker compose exec postgres psql -U postgres -d swiftdrop -c "\dt parcel_pricing.*"
 ```
 
-## 8. Run the frontend
+## 9. Run the frontend
 
 The web client lives in [`frontend/`](frontend) (Angular, standalone components, SCSS, Vitest). It does not need the database to start.
 

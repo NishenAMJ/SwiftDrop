@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/delivery-operations/delivery-status-events.schema.json",
+  "title": "Delivery status events",
+  "description": "Proposal for team review. Published to the swiftdrop.delivery-operations topic exchange for courier assignment and delivery progress. Tracking & Reporting binds delivery.*.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "enum": [
+            "delivery.assigned",
+            "delivery.picked-up",
+            "delivery.in-transit",
+            "delivery.out-for-delivery",
+            "delivery.delivered",
+            "delivery.failed"
+          ]
+        },
+        "version": { "const": 1 },
+        "producer": { "const": "delivery-operations-service" },
+        "data": {
+          "type": "object",
+          "required": [
+            "parcelId",
+            "trackingNumber",
+            "deliveryStatus",
+            "publicDescription"
+          ],
+          "properties": {
+            "parcelId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Parcel & Pricing parcel identifier carried through Delivery Operations"
+            },
+            "trackingNumber": {
+              "type": "string",
+              "pattern": "^SWD-[0-9]{4}-[0-9]{6,}$"
+            },
+            "deliveryStatus": {
+              "enum": [
+                "ASSIGNED",
+                "PICKED_UP",
+                "IN_TRANSIT",
+                "OUT_FOR_DELIVERY",
+                "DELIVERED",
+                "DELIVERY_FAILED"
+              ]
+            },
+            "publicDescription": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Customer-safe timeline text without internal issue details"
+            },
+            "publicLocation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "description": "Optional city, zone, facility or route label. Never a precise courier position or street address."
+            },
+            "assignmentId": { "type": "string", "format": "uuid" },
+            "courierId": { "type": "string", "format": "uuid" },
+            "attemptId": { "type": "string", "format": "uuid" },
+            "failureCode": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*$",
+              "maxLength": 50,
+              "description": "Customer-safe failure category; internal notes are excluded"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "eventType": { "const": "delivery.assigned" } }, "required": ["eventType"] },
+          "then": {
+            "properties": {
+              "data": {
+                "properties": { "deliveryStatus": { "const": "ASSIGNED" } },
+                "required": ["assignmentId", "courierId"]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "eventType": { "const": "delivery.picked-up" } }, "required": ["eventType"] },
+          "then": {
+            "properties": { "data": { "properties": { "deliveryStatus": { "const": "PICKED_UP" } } } }
+          }
+        },
+        {
+          "if": { "properties": { "eventType": { "const": "delivery.in-transit" } }, "required": ["eventType"] },
+          "then": {
+            "properties": { "data": { "properties": { "deliveryStatus": { "const": "IN_TRANSIT" } } } }
+          }
+        },
+        {
+          "if": { "properties": { "eventType": { "const": "delivery.out-for-delivery" } }, "required": ["eventType"] },
+          "then": {
+            "properties": { "data": { "properties": { "deliveryStatus": { "const": "OUT_FOR_DELIVERY" } } } }
+          }
+        },
+        {
+          "if": { "properties": { "eventType": { "const": "delivery.delivered" } }, "required": ["eventType"] },
+          "then": {
+            "properties": { "data": { "properties": { "deliveryStatus": { "const": "DELIVERED" } } } }
+          }
+        },
+        {
+          "if": { "properties": { "eventType": { "const": "delivery.failed" } }, "required": ["eventType"] },
+          "then": {
+            "properties": {
+              "data": {
+                "properties": { "deliveryStatus": { "const": "DELIVERY_FAILED" } },
+                "required": ["attemptId", "failureCode"]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

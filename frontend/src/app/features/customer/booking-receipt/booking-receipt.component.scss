@@ -185,6 +185,86 @@
   gap: var(--sd-space-2);
 }
 
+// Payment Settlement Action Box
+.payment-action-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+.cod-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sd-space-3);
+  padding: var(--sd-space-4);
+  background: var(--sd-surface-subtle);
+  border: 1px dashed var(--sd-border);
+  border-radius: var(--sd-radius-control);
+
+  &__icon {
+    color: var(--sd-brand);
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+  }
+
+  &__title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--sd-text);
+    margin-bottom: 0.25rem;
+  }
+
+  &__desc {
+    font-size: 0.8125rem;
+    color: var(--sd-text-secondary);
+    margin: 0;
+    line-height: 1.4;
+  }
+}
+
+.online-pay-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+  padding: var(--sd-space-5);
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.05) 0%, rgba(2, 132, 199, 0.08) 100%);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  border-radius: var(--sd-radius-control);
+
+  @media (min-width: 40rem) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__info {
+    flex: 1;
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--sd-brand-pressed);
+    margin-bottom: 0.25rem;
+  }
+
+  &__desc {
+    font-size: 0.8125rem;
+    color: var(--sd-text);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .btn-pay-now {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sd-space-2);
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(30, 58, 138, 0.2);
+  }
+}
+
 // Addresses Grid
 .addresses-section {
   display: grid;

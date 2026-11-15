@@ -1,0 +1,224 @@
+// Signed-in frame (frontend/style.md section 6): 64px header, 240px sidebar on desktop, a menu
+// below 1024px. Solid page background; no Arctic Frost here.
+:host {
+  display: block;
+}
+
+.app-skip {
+  position: absolute;
+  top: var(--sd-space-2);
+  left: var(--sd-space-2);
+  z-index: 100;
+  padding: var(--sd-space-2) var(--sd-space-4);
+  background: var(--sd-surface);
+  color: var(--sd-brand);
+  border-radius: var(--sd-radius-control);
+  transform: translateY(-200%);
+}
+
+.app-skip:focus {
+  transform: none;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'header'
+    'nav'
+    'main';
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.app-header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-4);
+  min-height: 4rem;
+  padding: var(--sd-space-2) var(--sd-space-4);
+  background: var(--sd-surface);
+  border-bottom: 1px solid var(--sd-border);
+}
+
+.app-header__start,
+.app-header__end {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  min-width: 0;
+}
+
+.app-header__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--sd-text);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-control-border);
+  border-radius: var(--sd-radius-control);
+  cursor: pointer;
+}
+
+.app-header__brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sd-brand-pressed);
+  text-decoration: none;
+}
+
+.app-header__who {
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.app-header__name {
+  max-width: 14rem;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header__role {
+  font-size: 0.8125rem;
+  color: var(--sd-text-secondary);
+}
+
+.app-sidebar {
+  grid-area: nav;
+  display: none;
+  background: var(--sd-surface);
+  border-bottom: 1px solid var(--sd-border);
+}
+
+.app-sidebar--open {
+  display: block;
+}
+
+.app-nav {
+  padding: var(--sd-space-4);
+}
+
+.app-nav__group + .app-nav__group {
+  margin-top: var(--sd-space-5);
+}
+
+.app-nav__heading {
+  margin: 0 0 var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--sd-text-secondary);
+}
+
+.app-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-nav__link {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: var(--sd-space-2) var(--sd-space-3);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--sd-text);
+  text-decoration: none;
+  border-radius: var(--sd-radius-control);
+  transition: background-color 150ms ease;
+}
+
+.app-nav__link:hover {
+  background: var(--sd-surface-subtle);
+}
+
+.app-nav__link--active {
+  font-weight: 600;
+  color: var(--sd-brand-pressed);
+  background: var(--sd-brand-soft);
+}
+
+.app-nav__link--active:hover {
+  background: var(--sd-brand-soft);
+}
+
+.app-main {
+  grid-area: main;
+  min-width: 0;
+  padding: var(--sd-space-6) var(--sd-space-4) var(--sd-space-12);
+}
+
+.app-main:focus {
+  outline: none;
+}
+
+@media (min-width: 40rem) {
+  .app-header__who {
+    display: flex;
+  }
+}
+
+@media (min-width: 48rem) {
+  .app-header {
+    padding-inline: var(--sd-space-6);
+  }
+
+  .app-main {
+    padding-inline: var(--sd-space-8);
+  }
+}
+
+@media (min-width: 64rem) {
+  .app-shell {
+    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'header header'
+      'nav main';
+  }
+
+  .app-header__menu {
+    display: none;
+  }
+
+  .app-sidebar {
+    display: block;
+    border-bottom: 0;
+    border-right: 1px solid var(--sd-border);
+  }
+
+  .app-nav {
+    position: sticky;
+    top: 4rem;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+  }
+
+  .app-main {
+    max-width: 90rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-nav__link {
+    transition: none;
+  }
+}

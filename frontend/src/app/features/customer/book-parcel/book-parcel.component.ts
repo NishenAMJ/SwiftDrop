@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
-import { CreateBookingRequest, FeeBreakdown, UrgencyType } from '../models/customer-booking.models';
+import { CreateBookingRequest, FeeBreakdown, PaymentMethod, UrgencyType } from '../models/customer-booking.models';
 import { CustomerBookingService } from '../services/customer-booking.service';
 import { CustomerProfileService } from '../services/customer-profile.service';
 
@@ -49,6 +49,7 @@ export class BookParcelComponent implements OnInit {
         [Validators.required, Validators.min(0.01), Validators.max(500)],
       ],
       urgency: [initialUrgency, [Validators.required]],
+      paymentMethod: ['ONLINE', [Validators.required]],
 
       pickupAddress: this.fb.group({
         contactName: [user?.fullName || profile.fullName || '', [Validators.required, Validators.maxLength(100)]],
@@ -85,6 +86,14 @@ export class BookParcelComponent implements OnInit {
     this.recalculateFee();
   }
 
+  get selectedPaymentMethod(): PaymentMethod {
+    return this.bookingForm.get('paymentMethod')?.value || 'ONLINE';
+  }
+
+  setPaymentMethod(method: PaymentMethod): void {
+    this.bookingForm.get('paymentMethod')?.setValue(method);
+  }
+
   recalculateFee(): void {
     const weight = Number(this.bookingForm.get('weightKg')?.value) || 0;
     const urgency = (this.bookingForm.get('urgency')?.value || 'NORMAL') as UrgencyType;
@@ -107,6 +116,7 @@ export class BookParcelComponent implements OnInit {
       description: formVal.description || 'General Parcel Delivery',
       weightKg: Number(formVal.weightKg),
       urgency: formVal.urgency as UrgencyType,
+      paymentMethod: (formVal.paymentMethod as PaymentMethod) || 'ONLINE',
       pickupAddress: {
         contactName: formVal.pickupAddress.contactName.trim(),
         contactPhone: formVal.pickupAddress.contactPhone.trim(),

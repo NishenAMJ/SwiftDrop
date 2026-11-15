@@ -1,6 +1,8 @@
 package com.swiftdrop.identity.apikey;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -134,6 +136,52 @@ class ApiKeyFlowTests extends ApiTestSupport {
         String customer = registerAndLogin().accessToken();
         getWithToken("/api/v1/merchants/me/api-keys", customer).andExpect(status().isForbidden());
         deleteWithToken("/api/v1/merchants/me/api-keys/" + keyId, customer).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void dispatcherCanListAndRevokeAMerchantsKeys() throws Exception {
+        String leakedBody = createKey("{\"name\": \"Leaked\"}").andReturn().getResponse().getContentAsString();
+        String leaked = JsonPath.read(leakedBody, "$.key");
+        String leakedId = JsonPath.read(leakedBody, "$.id");
+        String other = JsonPath.read(createKey("{\"name\": \"Other\"}").andReturn().getResponse().getContentAsString(), "$.key");
+        String keysPath = "/api/v1/merchants/" + merchantId + "/api-keys";
+
+        getWithToken(keysPath, dispatcher)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[*].name", containsInAnyOrder("Leaked", "Other")))
+            .andExpect(jsonPath("$[*].key", hasSize(0)));
+
+        deleteWithToken(keysPath + "/" + leakedId, dispatcher).andExpect(status().isNoContent());
+        deleteWithToken(keysPath + "/" + leakedId, dispatcher).andExpect(status().isNoContent());
+        exchange(leaked).andExpect(status().isUnauthorized());
+        exchange(other).andExpect(status().isOk());
+        getWithToken("/api/v1/merchants/me/api-keys", merchantToken)
+            .andExpect(jsonPath("$[?(@.name == 'Leaked')].revokedAt", hasSize(1)))
+            .andExpect(jsonPath("$[?(@.name == 'Other')].revokedAt", hasSize(0)));
+
+        String unknown = "/api/v1/merchants/00000000-0000-0000-0000-000000000000/api-keys";
+        getWithToken(unknown, dispatcher).andExpect(status().isNotFound());
+        deleteWithToken(unknown + "/" + leakedId, dispatcher).andExpect(status().isNotFound());
+        deleteWithToken(keysPath + "/00000000-0000-0000-0000-000000000000", dispatcher).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void onlyDispatchersManageOtherMerchantsKeys() throws Exception {
+        String keyId = JsonPath.read(createKey("{\"name\": \"Mine\"}").andReturn().getResponse().getContentAsString(), "$.id");
+        String keysPath = "/api/v1/merchants/" + merchantId + "/api-keys";
+
+        // The merchant itself uses /me, a customer nothing, and an API-key token nothing either.
+        getWithToken(keysPath, merchantToken).andExpect(status().isForbidden());
+        deleteWithToken(keysPath + "/" + keyId, merchantToken).andExpect(status().isForbidden());
+        String customer = registerAndLogin().accessToken();
+        getWithToken(keysPath, customer).andExpect(status().isForbidden());
+        deleteWithToken(keysPath + "/" + keyId, customer).andExpect(status().isForbidden());
+        String key = JsonPath.read(createKey("{\"name\": \"ERP\"}").andReturn().getResponse().getContentAsString(), "$.key");
+        String apiKeyToken = JsonPath.read(exchange(key).andReturn().getResponse().getContentAsString(), "$.accessToken");
+        getWithToken(keysPath, apiKeyToken).andExpect(status().isForbidden());
+
+        // "me" still means the signed-in merchant, not a merchant id.
+        getWithToken("/api/v1/merchants/me/api-keys", dispatcher).andExpect(status().isForbidden());
     }
 
     private ResultActions createKey(String json) throws Exception {

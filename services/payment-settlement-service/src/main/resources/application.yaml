@@ -2,10 +2,12 @@ server:
   port: 8085
 
 spring:
+  config:
+    import: optional:file:../../.env[.properties],optional:file:.env[.properties]
   application:
     name: payment-settlement-service
   datasource:
-    url: ${PAYMENT_DB_URL:jdbc:postgresql://postgres:5432/swiftdrop}
+    url: ${PAYMENT_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
     username: ${PAYMENT_DB_USER:payment_settlement_user}
     password: ${PAYMENT_DB_PASSWORD}
   jpa:
@@ -15,6 +17,8 @@ spring:
     properties:
       hibernate:
         default_schema: payment_settlement
+        jdbc:
+          time_zone: UTC
   flyway:
     enabled: true
     default-schema: payment_settlement
@@ -22,3 +26,55 @@ spring:
       - payment_settlement
     create-schemas: false
     locations: classpath:db/migration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: swiftdrop-identity
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          audiences: swiftdrop-api
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:swiftdrop}
+    password: ${RABBITMQ_PASSWORD}
+    connection-timeout: 3s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,rabbit
+
+payment:
+  pricing:
+    base-url: ${PAYMENT_PRICING_BASE_URL:http://localhost:8082}
+    stub-enabled: ${PAYMENT_PRICING_STUB_ENABLED:false}
+    stub-resource: ${PAYMENT_PRICING_STUB_RESOURCE:classpath:local/payment-context.json}
+  payhere:
+    base-url: ${PAYMENT_PAYHERE_BASE_URL:https://sandbox.payhere.lk}
+    merchant-id: ${PAYMENT_PAYHERE_MERCHANT_ID:}
+    merchant-secret: ${PAYMENT_PAYHERE_MERCHANT_SECRET:}
+    app-id: ${PAYMENT_PAYHERE_APP_ID:}
+    app-secret: ${PAYMENT_PAYHERE_APP_SECRET:}
+    notify-url: ${PAYMENT_PAYHERE_NOTIFY_URL:}
+    return-url: ${PAYMENT_PAYHERE_RETURN_URL:http://localhost:4200/payments/return}
+    cancel-url: ${PAYMENT_PAYHERE_CANCEL_URL:http://localhost:4200/payments/cancel}
+  workers:
+    enabled: ${PAYMENT_WORKERS_ENABLED:true}

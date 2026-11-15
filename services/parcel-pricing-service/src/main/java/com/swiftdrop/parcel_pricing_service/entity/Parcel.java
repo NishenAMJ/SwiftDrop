@@ -36,6 +36,21 @@ public class Parcel {
     @Column(name = "estimated_fee", precision = 10, scale = 2)
     private BigDecimal estimatedFee;
 
+    @Column(name = "channel", nullable = false, length = 30)
+    private String channel = "DIRECT_WEBSITE";
+
+    @Column(name = "merchant_id")
+    private UUID merchantId;
+
+    @Column(name = "payment_method", nullable = false, length = 20)
+    private String paymentMethod = "ONLINE";
+
+    @Column(name = "pricing_snapshot_id", length = 64)
+    private String pricingSnapshotId;
+
+    @Column(name = "pricing_expires_at")
+    private OffsetDateTime pricingExpiresAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -129,6 +144,46 @@ public class Parcel {
 
     public void setUpdatedAt(OffsetDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getChannel() {
+        return channel;
+    }
+
+    public void setChannel(String channel) {
+        this.channel = channel;
+    }
+
+    public UUID getMerchantId() {
+        return merchantId;
+    }
+
+    public void setMerchantId(UUID merchantId) {
+        this.merchantId = merchantId;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public String getPricingSnapshotId() {
+        return pricingSnapshotId;
+    }
+
+    public void setPricingSnapshotId(String pricingSnapshotId) {
+        this.pricingSnapshotId = pricingSnapshotId;
+    }
+
+    public OffsetDateTime getPricingExpiresAt() {
+        return pricingExpiresAt;
+    }
+
+    public void setPricingExpiresAt(OffsetDateTime pricingExpiresAt) {
+        this.pricingExpiresAt = pricingExpiresAt;
     }
 
     public List<ParcelAddress> getAddresses() {

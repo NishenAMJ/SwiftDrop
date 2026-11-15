@@ -22,6 +22,8 @@ export class BookingReceiptComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
   readonly isNewBooking = signal<boolean>(false);
   readonly copiedRef = signal<boolean>(false);
+  readonly isInitiatingPayment = signal<boolean>(false);
+  readonly paymentMessage = signal<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   ngOnInit(): void {
     const nav = this.router.getCurrentNavigation();
@@ -75,6 +77,45 @@ export class BookingReceiptComponent implements OnInit {
     navigator.clipboard?.writeText(ref);
     this.copiedRef.set(true);
     setTimeout(() => this.copiedRef.set(false), 2000);
+  }
+
+  payOnline(): void {
+    const bookingId = this.receipt()?.parcelId || this.parcel()?.id;
+    if (!bookingId) {
+      return;
+    }
+
+    this.isInitiatingPayment.set(true);
+    this.paymentMessage.set(null);
+
+    this.bookingService.initiatePayment(bookingId).subscribe({
+      next: (res) => {
+        this.isInitiatingPayment.set(false);
+        if (res.checkoutUrl) {
+          this.paymentMessage.set({
+            type: 'info',
+            text: 'Redirecting to secure Payment Gateway...',
+          });
+          window.location.href = res.checkoutUrl;
+        } else {
+          this.paymentMessage.set({
+            type: 'success',
+            text: `Payment initiated successfully (ID: ${res.id || 'N/A'}, Status: ${res.status || 'PENDING'}).`,
+          });
+        }
+      },
+      error: (err) => {
+        this.isInitiatingPayment.set(false);
+        const msg =
+          err.error?.message ||
+          err.error?.detail ||
+          'Payment Gateway is not reachable at the moment. Please verify Payment Service or try again later.';
+        this.paymentMessage.set({
+          type: 'error',
+          text: msg,
+        });
+      },
+    });
   }
 
   // Financial calculation helpers

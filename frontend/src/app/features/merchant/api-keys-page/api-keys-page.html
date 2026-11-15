@@ -1,0 +1,216 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">API keys</h1>
+    <p class="page__intro">
+      Let your own system, such as an online store, create SwiftDrop orders for you. Give each
+      system its own key so you can revoke one without affecting the others.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+
+  @if (newKey(); as created) {
+    <section class="sd-card new-key" aria-labelledby="new-key-title">
+      <h2 #newKeyHeading id="new-key-title" class="page__card-title new-key__title" tabindex="-1">
+        Copy your new key "{{ created.name }}"
+      </h2>
+      <div class="sd-alert sd-alert--warning">
+        This is the only time the full key is shown. SwiftDrop keeps only a fingerprint of it, so if
+        you lose it you'll need to create a new one. Store it somewhere safe, like your system's
+        secret settings, and never share it in email or chat.
+      </div>
+      <div class="sd-field">
+        <label class="sd-label" for="new-key-value">Your API key</label>
+        <div class="new-key__row">
+          <input
+            id="new-key-value"
+            class="sd-input new-key__value"
+            type="text"
+            [value]="created.key"
+            readonly
+            spellcheck="false"
+            autocomplete="off"
+            (focus)="selectAll($event)"
+          />
+          <button class="sd-button sd-button--secondary" type="button" (click)="copyKey()">
+            Copy key
+          </button>
+        </div>
+        <p class="sd-help" role="status">
+          @switch (copyStatus()) {
+            @case ('copied') {
+              Copied to the clipboard.
+            }
+            @case ('failed') {
+              Couldn't copy automatically. Select the key and copy it yourself.
+            }
+          }
+        </p>
+      </div>
+      <div class="page__actions">
+        <button class="sd-button sd-button--primary" type="button" (click)="dismissNewKey()">
+          I've saved the key
+        </button>
+      </div>
+    </section>
+  }
+
+  <section class="sd-card" aria-labelledby="create-key-title">
+    <form class="form" [formGroup]="form" (ngSubmit)="create()" novalidate>
+      <div class="page__header">
+        <h2 id="create-key-title" class="page__card-title">Create a key</h2>
+        <p class="form__note sd-tabular">
+          {{ activeCount() }} of {{ maxKeys }} active keys used.
+        </p>
+      </div>
+
+      @if (limitReached()) {
+        <div class="sd-alert sd-alert--info">
+          You have {{ maxKeys }} active keys, the most allowed. Revoke one you no longer use before
+          creating another.
+        </div>
+      }
+
+      @if (createError(); as message) {
+        <div #createAlert class="sd-alert sd-alert--error" role="alert" tabindex="-1">{{ message }}</div>
+      }
+
+      <div class="form__grid">
+        <div class="sd-field">
+          @let nameError = error('name');
+          <label class="sd-label" for="key-name">Name</label>
+          <input
+            id="key-name"
+            class="sd-input"
+            type="text"
+            formControlName="name"
+            maxlength="60"
+            autocomplete="off"
+            [attr.aria-invalid]="!!nameError"
+            [attr.aria-describedby]="'key-name-help' + (nameError ? ' key-name-error' : '')"
+          />
+          <p id="key-name-help" class="sd-help">For example "Shopify store". Only you see it.</p>
+          @if (nameError) {
+            <p id="key-name-error" class="sd-error">{{ nameError }}</p>
+          }
+        </div>
+
+        <div class="sd-field">
+          @let expiryError = error('expiresOn');
+          <label class="sd-label" for="key-expires">
+            Expires on <span class="sd-label__optional">(optional)</span>
+          </label>
+          <input
+            id="key-expires"
+            class="sd-input"
+            type="date"
+            formControlName="expiresOn"
+            [min]="today"
+            [attr.aria-invalid]="!!expiryError"
+            [attr.aria-describedby]="'key-expires-help' + (expiryError ? ' key-expires-error' : '')"
+          />
+          <p id="key-expires-help" class="sd-help">
+            Works until the end of that day, Sri Lanka time. Leave empty for a key that doesn't expire.
+          </p>
+          @if (expiryError) {
+            <p id="key-expires-error" class="sd-error">{{ expiryError }}</p>
+          }
+        </div>
+      </div>
+
+      <div class="page__actions">
+        <button
+          class="sd-button sd-button--primary"
+          type="submit"
+          [disabled]="creating() || limitReached()"
+          [attr.aria-busy]="creating()"
+        >
+          @if (creating()) {
+            <span class="sd-spinner" aria-hidden="true"></span>
+            Creating…
+          } @else {
+            Create key
+          }
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="page__section" aria-labelledby="keys-title">
+    <h2 id="keys-title" class="page__section-title">Your keys</h2>
+
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Loading keys…
+      </p>
+    } @else if (loadError(); as message) {
+      <div class="sd-alert sd-alert--error" role="alert">
+        {{ message }}
+        <button class="sd-button sd-button--secondary keys-retry" type="button" (click)="load()">
+          Try again
+        </button>
+      </div>
+    } @else if (keys().length === 0) {
+      <div class="sd-card">
+        <p class="page__muted">
+          You haven't created any keys yet. Create one above when you're ready to connect a system.
+        </p>
+      </div>
+    } @else {
+      <div class="sd-table-wrap" role="region" aria-labelledby="keys-title" tabindex="0">
+        <table class="sd-table">
+          <caption class="sd-visually-hidden">Your API keys, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Key starts with</th>
+              <th scope="col">Created</th>
+              <th scope="col">Last used</th>
+              <th scope="col">Expires</th>
+              <th scope="col">Status</th>
+              <th scope="col"><span class="sd-visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (key of keys(); track key.id) {
+              <tr>
+                <td>{{ key.name }}</td>
+                <td><code class="key-prefix">{{ key.prefix }}…</code></td>
+                <td class="sd-tabular">{{ key.createdAt | colomboDate: 'date' }}</td>
+                <td class="sd-tabular">{{ (key.lastUsedAt | colomboDate) || 'Never' }}</td>
+                <td class="sd-tabular">{{ (key.expiresAt | colomboDate: 'date') || 'Never' }}</td>
+                <td><span [class]="stateBadge(key)">{{ stateLabel(key) }}</span></td>
+                <td class="keys__actions">
+                  @if (stateOf(key) !== 'revoked') {
+                    <button class="sd-button sd-button--secondary" type="button" (click)="askRevoke(key)">
+                      Revoke<span class="sd-visually-hidden"> {{ key.name }}</span>
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
+
+<app-confirm-dialog
+  [open]="revoking() !== null"
+  [title]="'Revoke ' + (revoking()?.name ?? 'key') + '?'"
+  confirmLabel="Revoke key"
+  tone="danger"
+  [busy]="revokeBusy()"
+  [error]="revokeError()"
+  (confirmed)="confirmRevoke()"
+  (cancelled)="cancelRevoke()"
+>
+  <p>
+    Any system using this key stops working straight away and can't get new access. This can't be
+    undone; you'd need to create a new key and update that system.
+  </p>
+</app-confirm-dialog>

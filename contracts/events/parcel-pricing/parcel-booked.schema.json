@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/parcel-pricing/parcel-booked.schema.json",
+  "title": "Parcel booked",
+  "description": "Proposal for team review. Published to the swiftdrop.parcel-pricing topic exchange after a customer or merchant booking is committed. Tracking & Reporting uses it to create the initial tracking projection.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": { "const": "parcel.booked" },
+        "version": { "const": 1 },
+        "producer": { "const": "parcel-pricing-service" },
+        "data": {
+          "type": "object",
+          "required": [
+            "parcelId",
+            "trackingNumber",
+            "deliveryStatus",
+            "publicDescription"
+          ],
+          "properties": {
+            "parcelId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Stable parcel identifier assigned by Parcel & Pricing"
+            },
+            "trackingNumber": {
+              "type": "string",
+              "pattern": "^SWD-[0-9]{4}-[0-9]{6,}$",
+              "description": "Public tracking reference"
+            },
+            "deliveryStatus": { "const": "BOOKED" },
+            "publicDescription": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Customer-safe timeline text without personal data"
+            },
+            "publicLocation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "description": "Optional city, zone or facility label. Never a street address."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

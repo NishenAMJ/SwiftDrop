@@ -19,6 +19,7 @@ public record BookingResponseDto(
     BigDecimal estimatedFee,
     OffsetDateTime createdAt,
     String receiptNumber,
+    String paymentMethod,
     AddressDto pickupAddress,
     AddressDto deliveryAddress
 ) {
@@ -47,9 +48,9 @@ public record BookingResponseDto(
             parcel.getEstimatedFee(),
             parcel.getCreatedAt(),
             receipt != null ? receipt.getReceiptNumber() : null,
+            parcel.getPaymentMethod(),
             pickup,
             delivery
         );
     }
 }
-
