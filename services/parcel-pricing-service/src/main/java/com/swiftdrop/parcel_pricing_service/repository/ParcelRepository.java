@@ -11,6 +11,10 @@ import java.util.UUID;
 @Repository
 public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select p from Parcel p where p.id = :id")
+    Optional<Parcel> lockById(@org.springframework.data.repository.query.Param("id") UUID id);
+
     Optional<Parcel> findByTrackingNumber(String trackingNumber);
 
     List<Parcel> findByCustomerIdOrderByCreatedAtDesc(UUID customerId);

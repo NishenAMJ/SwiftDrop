@@ -52,3 +52,9 @@
     width: 100%;
   }
 }
+
+.sd-dialog--wide { width: min(44rem, calc(100vw - 2 * var(--sd-space-4))); }
+
+.sd-dialog__form { position: relative; }
+.sd-dialog__title { padding-right: var(--sd-space-12); }
+.sd-dialog__close { position: absolute; top: var(--sd-space-3); right: var(--sd-space-3); padding: var(--sd-space-2); min-width: 2.75rem; }
