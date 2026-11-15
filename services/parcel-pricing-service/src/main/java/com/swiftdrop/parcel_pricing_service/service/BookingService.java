@@ -2,10 +2,8 @@ package com.swiftdrop.parcel_pricing_service.service;
 
 import com.swiftdrop.parcel_pricing_service.dto.*;
 import com.swiftdrop.parcel_pricing_service.entity.*;
-import com.swiftdrop.parcel_pricing_service.event.ParcelBookedEvent;
 import com.swiftdrop.parcel_pricing_service.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -26,25 +24,22 @@ public class BookingService {
     private final BookingReceiptRepository receiptRepository;
     private final ReferenceGenerator referenceGenerator;
     private final CustomerProfileRepository profileRepository;
-    private final ApplicationEventPublisher eventPublisher;
 
     public BookingService(ParcelRepository parcelRepository,
                           BookingReceiptRepository receiptRepository,
                           ReferenceGenerator referenceGenerator) {
-        this(parcelRepository, receiptRepository, referenceGenerator, null, event -> { });
+        this(parcelRepository, receiptRepository, referenceGenerator, null);
     }
 
     @Autowired
     public BookingService(ParcelRepository parcelRepository,
                           BookingReceiptRepository receiptRepository,
                           ReferenceGenerator referenceGenerator,
-                          @Autowired(required = false) CustomerProfileRepository profileRepository,
-                          ApplicationEventPublisher eventPublisher) {
+                          @Autowired(required = false) CustomerProfileRepository profileRepository) {
         this.parcelRepository = parcelRepository;
         this.receiptRepository = receiptRepository;
         this.referenceGenerator = referenceGenerator;
         this.profileRepository = profileRepository;
-        this.eventPublisher = eventPublisher;
     }
 
     public BookingResponseDto createBooking(CreateBookingRequest request, UUID customerId) {
@@ -119,20 +114,6 @@ public class BookingService {
         String receiptNumber = referenceGenerator.generateReceiptNumber(trackingNumber);
         BookingReceipt receipt = new BookingReceipt(receiptNumber, savedParcel, totalFee, "LKR");
         BookingReceipt savedReceipt = receiptRepository.save(receipt);
-
-        String publicLocation = savedParcel.getAddresses().stream()
-                .filter(address -> "PICKUP".equals(address.getAddressType()))
-                .map(ParcelAddress::getCity)
-                .filter(city -> city != null && !city.isBlank())
-                .map(String::trim)
-                .findFirst()
-                .orElse(null);
-        eventPublisher.publishEvent(new ParcelBookedEvent(
-                UUID.randomUUID(),
-                savedParcel.getCreatedAt().toInstant(),
-                savedParcel.getId(),
-                savedParcel.getTrackingNumber(),
-                publicLocation));
 
         return BookingResponseDto.from(savedParcel, savedReceipt);
     }
