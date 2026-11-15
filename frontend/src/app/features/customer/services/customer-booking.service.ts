@@ -2,6 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  CancellationEligibility,
+  CancellationInitiation,
+  BookingCheckout,
   BookingReceiptDto,
   BookingResponseDto,
   BookingSummaryDto,
@@ -17,6 +20,16 @@ export const PAYMENTS_API = '/api/v1/payments';
 @Injectable({ providedIn: 'root' })
 export class CustomerBookingService {
   private readonly http = inject(HttpClient);
+
+  getCancellationEligibility(id: string): Observable<CancellationEligibility> {
+    return this.http.get<CancellationEligibility>(BOOKING_API + '/' + encodeURIComponent(id) + '/cancellation-eligibility');
+  }
+
+  initiateCancellation(id: string, key: string): Observable<CancellationInitiation> {
+    return this.http.post<CancellationInitiation>(BOOKING_API + '/' + encodeURIComponent(id) + '/cancel', {}, {
+      headers: { 'Idempotency-Key': key },
+    });
+  }
 
   createBooking(request: CreateBookingRequest): Observable<BookingResponseDto> {
     return this.http.post<BookingResponseDto>(BOOKING_API, request);
@@ -46,16 +59,16 @@ export class CustomerBookingService {
    * Calls Payment & Settlement Service (Member 8) to initiate online checkout.
    * Sends authoritative bookingId and client idempotency key.
    */
-  initiatePayment(bookingId: string): Observable<{ id: string; checkoutUrl?: string; status: string }> {
-    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `pay-${Date.now()}`;
+  initiatePayment(bookingId: string, key: string = crypto.randomUUID()): Observable<BookingCheckout> {
+    return this.http.post<BookingCheckout>(PAYMENTS_API, { bookingId }, { headers: { 'Idempotency-Key': key } });
+  }
 
-    return this.http.post<{ id: string; checkoutUrl?: string; status: string }>(
-      PAYMENTS_API,
-      { bookingId },
-      { headers: { 'Idempotency-Key': idempotencyKey } },
-    );
+  getCheckout(paymentId: string): Observable<NonNullable<BookingCheckout['checkout']>> {
+    return this.http.get<NonNullable<BookingCheckout['checkout']>>(PAYMENTS_API + '/' + encodeURIComponent(paymentId) + '/checkout');
+  }
+
+  confirmBookingPayment(bookingId: string, paymentId: string): Observable<BookingResponseDto> {
+    return this.http.post<BookingResponseDto>(BOOKING_API + '/' + encodeURIComponent(bookingId) + '/confirm-payment', { paymentId });
   }
 
   /**

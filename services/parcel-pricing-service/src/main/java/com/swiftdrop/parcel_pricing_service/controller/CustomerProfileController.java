@@ -7,7 +7,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -16,7 +18,8 @@ import java.util.UUID;
 @CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200"})
 public class CustomerProfileController {
 
-    private static final UUID DEMO_CUSTOMER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+
 
     private final CustomerProfileService profileService;
 
@@ -27,6 +30,9 @@ public class CustomerProfileController {
     @GetMapping
     public ResponseEntity<CustomerProfileDto> getProfile(@AuthenticationPrincipal Jwt jwt) {
         UUID customerId = resolveCustomerId(jwt);
+        if (customerId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
         return ResponseEntity.ok(profileService.getProfile(customerId));
     }
 
@@ -35,6 +41,9 @@ public class CustomerProfileController {
             @Valid @RequestBody UpdateProfileRequest request,
             @AuthenticationPrincipal Jwt jwt) {
         UUID customerId = resolveCustomerId(jwt);
+        if (customerId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
         return ResponseEntity.ok(profileService.updateProfile(customerId, request));
     }
 
@@ -43,10 +52,10 @@ public class CustomerProfileController {
             try {
                 return UUID.fromString(jwt.getSubject());
             } catch (IllegalArgumentException ignored) {
-                // Not standard UUID, fall back to default
+                // not a UUID, fall through
             }
         }
-        return DEMO_CUSTOMER_ID;
+        return null; // no fallback demo ID
     }
 }
 

@@ -1,11 +1,15 @@
 <dialog
   #dialog
   class="sd-dialog"
+  [class.sd-dialog--wide]="wide()"
   [attr.aria-labelledby]="id + '-title'"
   [attr.aria-describedby]="id + '-body'"
   (cancel)="onNativeCancel($event)"
 >
   <form class="sd-dialog__form" (submit)="submit($event)" novalidate>
+    <button type="button" class="sd-button sd-button--secondary sd-dialog__close" aria-label="Close dialog" (click)="dismiss()" [disabled]="busy()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+    </button>
     <h2 [id]="id + '-title'" class="sd-dialog__title">{{ title() }}</h2>
 
     <div [id]="id + '-body'" class="sd-dialog__body">
@@ -49,14 +53,15 @@
         (click)="cancel()"
         [disabled]="busy()"
       >
-        Cancel
+        {{ cancelLabel() }}
       </button>
       <button
         class="sd-button"
         [class.sd-button--primary]="tone() === 'primary'"
         [class.sd-button--danger]="tone() === 'danger'"
         type="submit"
-        [disabled]="busy()"
+        [disabled]="busy() || confirmDisabled()"
+        [attr.aria-disabled]="confirmDisabled()"
         [attr.aria-busy]="busy()"
       >
         @if (busy()) {

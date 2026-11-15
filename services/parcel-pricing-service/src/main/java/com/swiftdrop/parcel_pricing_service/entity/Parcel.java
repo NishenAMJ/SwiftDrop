@@ -51,6 +51,24 @@ public class Parcel {
     @Column(name = "pricing_expires_at")
     private OffsetDateTime pricingExpiresAt;
 
+    @Column(name = "cancellation_fee")
+    private BigDecimal cancellationFee;
+
+    @Column(name = "refund_amount")
+    private BigDecimal refundAmount;
+
+    @Column(name = "cancellation_status")
+    private String cancellationStatus;
+
+    @Column(name = "cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @Column(name = "cancellation_transaction_ref")
+    private String cancellationTransactionRef;
+
+    @Column(name = "payment_status")
+    private String paymentStatus;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -119,6 +137,7 @@ public class Parcel {
     }
 
     public void setStatus(String status) {
+        if ("CANCELLED".equals(this.status) && !"CANCELLED".equals(status)) throw new IllegalStateException("Cancelled bookings cannot be reactivated");
         this.status = status;
     }
 
@@ -203,5 +222,19 @@ public class Parcel {
         addresses.remove(address);
         address.setParcel(null);
     }
+
+    // Cancellation related getters and setters
+    public BigDecimal getCancellationFee() { return cancellationFee; }
+    public void setCancellationFee(BigDecimal cancellationFee) { this.cancellationFee = cancellationFee; }
+    public BigDecimal getRefundAmount() { return refundAmount; }
+    public void setRefundAmount(BigDecimal refundAmount) { this.refundAmount = refundAmount; }
+    public String getCancellationStatus() { return cancellationStatus; }
+    public void setCancellationStatus(String cancellationStatus) { this.cancellationStatus = cancellationStatus; }
+    public OffsetDateTime getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(OffsetDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
+    public String getCancellationTransactionRef() { return cancellationTransactionRef; }
+    public void setCancellationTransactionRef(String cancellationTransactionRef) { this.cancellationTransactionRef = cancellationTransactionRef; }
+    public String getPaymentStatus() { return paymentStatus; }
+    public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
 }
 
