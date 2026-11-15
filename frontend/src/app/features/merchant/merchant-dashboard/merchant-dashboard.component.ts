@@ -19,6 +19,7 @@ export class MerchantDashboardComponent {
   recentOrders = signal<Order[]>([]);
 
   constructor(private service: MerchantOrderService) {
+    // Load dashboard data from backend: GET /api/merchant/orders/dashboard
     this.loadData();
   }
 
