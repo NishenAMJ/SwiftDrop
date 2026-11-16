@@ -42,8 +42,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/zones", "/api/zones/**").hasAnyRole("DISPATCHER", "ADMIN")
                 // Payment context requires authenticated JWT from caller (Payment Service / Customer)
                 .requestMatchers("/api/v1/bookings/*/payment-context").authenticated()
+                .requestMatchers("/api/v1/bookings/*/cancel", "/api/v1/bookings/*/cancellation-eligibility", "/api/v1/bookings/*/cancellation-status", "/api/v1/bookings/*/cancellation-receipt").authenticated()
                 // Customer Bookings
-                .requestMatchers("/api/v1/bookings/**").permitAll()
+                .requestMatchers("/api/v1/bookings/**").authenticated()
                 .requestMatchers("/api/v1/customer/**").permitAll()
                 .anyRequest().authenticated()
             )

@@ -42,9 +42,30 @@ public class BookingService {
         this.profileRepository = profileRepository;
     }
 
+    public BookingResponseDto confirmPaid(UUID id, UUID customerId,
+            com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment payment) {
+        Parcel parcel = parcelRepository.lockById(id).orElseThrow(() -> new NoSuchElementException("Booking not found"));
+        if (!customerId.equals(parcel.getCustomerId()))
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.forbidden("You do not own this booking.");
+        if (!"ONLINE".equals(parcel.getPaymentMethod()) || !id.toString().equals(payment.bookingId()) ||
+            !"SUCCESS".equals(payment.status()) || !"LKR".equals(payment.currency()) || payment.amount() == null ||
+            payment.amount().compareTo(parcel.getEstimatedFee()) != 0 || payment.providerReference() == null || payment.providerReference().isBlank())
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.conflict("PAYMENT_NOT_VERIFIED", "A matching successful payment is required.");
+        if ("PAID".equals(parcel.getPaymentStatus()))
+            return BookingResponseDto.from(parcel, receiptRepository.findByParcelId(id).orElseThrow());
+        if (!"CHECKOUT_DRAFT".equals(parcel.getStatus()) && !"BOOKED".equals(parcel.getStatus()))
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.conflict("INVALID_BOOKING_STATE", "This booking cannot be confirmed.");
+        parcel.setPaymentStatus("PAID");
+        parcel.setStatus("BOOKED");
+        parcel.setUpdatedAt(OffsetDateTime.now());
+        BookingReceipt receipt = receiptRepository.findByParcelId(id).orElseGet(() -> receiptRepository.save(new BookingReceipt(
+            referenceGenerator.generateReceiptNumber(parcel.getTrackingNumber()), parcel, parcel.getEstimatedFee(), "LKR")));
+        return BookingResponseDto.from(parcel, receipt);
+    }
+
     public BookingResponseDto createBooking(CreateBookingRequest request, UUID customerId) {
         if (customerId == null) {
-            customerId = UUID.randomUUID();
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.unauthorized("A customer login is required.");
         }
 
         String urgency = (request.urgency() != null && !request.urgency().isBlank())
@@ -55,6 +76,7 @@ public class BookingService {
                 ? request.paymentMethod().trim().toUpperCase()
                 : "ONLINE";
 
+        if (!java.util.Set.of("ONLINE", "COD").contains(paymentMethod)) throw new com.swiftdrop.parcel_pricing_service.common.ApiException(HttpStatus.BAD_REQUEST,"INVALID_PAYMENT_METHOD","Choose ONLINE or COD.");
         Parcel parcel = new Parcel();
         parcel.setId(UUID.randomUUID());
         String trackingNumber = referenceGenerator.generateTrackingNumber();
@@ -63,7 +85,8 @@ public class BookingService {
         parcel.setDescription(request.description());
         parcel.setWeightKg(request.weightKg());
         parcel.setUrgency(urgency);
-        parcel.setStatus("BOOKED");
+        parcel.setStatus("COD".equals(paymentMethod) ? "BOOKED" : "CHECKOUT_DRAFT");
+        parcel.setPaymentStatus("COD".equals(paymentMethod) ? "PENDING" : "UNPAID");
         parcel.setPaymentMethod(paymentMethod);
         parcel.setChannel("DIRECT_WEBSITE");
         parcel.setCreatedAt(OffsetDateTime.now());
@@ -78,7 +101,7 @@ public class BookingService {
         BigDecimal baseFee = BigDecimal.valueOf(350);
         BigDecimal weightCharge = request.weightKg().multiply(BigDecimal.valueOf(150));
         BigDecimal urgentCharge = "URGENT".equals(urgency) ? BigDecimal.valueOf(300) : BigDecimal.ZERO;
-        BigDecimal totalFee = baseFee.add(weightCharge).add(urgentCharge);
+        BigDecimal totalFee = baseFee.add(weightCharge).add(urgentCharge).setScale(2, java.math.RoundingMode.HALF_UP);
         parcel.setEstimatedFee(totalFee);
 
         // Add Pickup and Delivery addresses
@@ -110,6 +133,7 @@ public class BookingService {
 
         Parcel savedParcel = parcelRepository.save(parcel);
 
+        if (!"COD".equals(paymentMethod)) return BookingResponseDto.from(savedParcel, null);
         // Generate and save receipt
         String receiptNumber = referenceGenerator.generateReceiptNumber(trackingNumber);
         BookingReceipt receipt = new BookingReceipt(receiptNumber, savedParcel, totalFee, "LKR");
@@ -122,6 +146,7 @@ public class BookingService {
     public List<BookingSummaryDto> getCustomerBookings(UUID customerId) {
         return parcelRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
+                .filter(p -> !"CHECKOUT_DRAFT".equals(p.getStatus()) && ("COD".equals(p.getPaymentMethod()) || "PAID".equals(p.getPaymentStatus())))
                 .map(BookingSummaryDto::from)
                 .toList();
     }
@@ -144,6 +169,9 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public BookingReceiptDto getReceiptByParcelId(UUID parcelId) {
+        Parcel parcel = parcelRepository.findById(parcelId).orElseThrow(() -> new NoSuchElementException("Booking not found"));
+        if (!"COD".equals(parcel.getPaymentMethod()) && !"PAID".equals(parcel.getPaymentStatus()))
+            throw new com.swiftdrop.parcel_pricing_service.common.ApiException(HttpStatus.CONFLICT,"PAYMENT_REQUIRED","Online payment must be verified before a receipt is available.");
         BookingReceipt receipt = receiptRepository.findByParcelId(parcelId)
                 .orElseThrow(() -> new NoSuchElementException("Receipt not found for parcel: " + parcelId));
         return BookingReceiptDto.from(receipt);
@@ -186,10 +214,10 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Booking is cancelled and cannot be paid");
         }
 
-        boolean isEligibleStatus = "BOOKED".equalsIgnoreCase(parcel.getStatus()) || "PENDING_PAYMENT".equalsIgnoreCase(parcel.getStatus());
+        boolean isEligibleStatus = "BOOKED".equalsIgnoreCase(parcel.getStatus()) || "CHECKOUT_DRAFT".equalsIgnoreCase(parcel.getStatus());
         boolean isOnlinePayment = !"COD".equalsIgnoreCase(parcel.getPaymentMethod());
         boolean isNotExpired = parcel.getPricingExpiresAt() == null || parcel.getPricingExpiresAt().isAfter(OffsetDateTime.now());
-        boolean payable = isEligibleStatus && isOnlinePayment && isNotExpired;
+        boolean payable = isEligibleStatus && isOnlinePayment && isNotExpired && !"PAID".equals(parcel.getPaymentStatus());
 
         // 3. Payer billing details from CustomerProfile
         CustomerProfile profile = profileRepository != null

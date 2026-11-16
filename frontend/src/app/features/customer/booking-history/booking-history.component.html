@@ -74,6 +74,7 @@
           <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
           <option value="DELIVERED">Delivered</option>
           <option value="FAILED">Failed</option>
+          <option value="CANCELLED">Cancelled</option>
         </select>
       </div>
     </div>
@@ -154,17 +155,17 @@
                 </td>
                 <td class="sd-tabular">{{ booking.createdAt | date:'mediumDate' }}</td>
                 <td>
-                  <span class="recipient-name">{{ booking.recipientName || 'Recipient' }}</span>
+                  <span class="recipient-name">{{ booking.recipientName || 'Not provided' }}</span>
                 </td>
                 <td>
-                  <span class="destination-city">{{ booking.destinationCity || 'Colombo' }}</span>
+                  <span class="destination-city">{{ booking.destinationCity || 'Not provided' }}</span>
                 </td>
                 <td class="sd-tabular">{{ booking.weightKg }} kg</td>
                 <td>
                   @if (booking.urgency === 'URGENT') {
                     <span class="sd-badge sd-badge--warning">Urgent - requested today</span>
                   } @else {
-                    <span class="sd-badge">Standard</span>
+                    <span class="sd-badge">{{ booking.urgency === 'NORMAL' ? 'Standard' : 'Not provided' }}</span>
                   }
                 </td>
                 <td>
@@ -190,6 +191,10 @@
                   Rs. {{ booking.estimatedFee | number:'1.2-2' }}
                 </td>
                 <td class="text-right">
+                 <div class="booking-actions">
+                  @if (booking.status !== 'CANCELLED') {
+                    <button type="button" class="sd-button sd-button--danger-outline" (click)="openCancelModal(booking.id)" [attr.aria-label]="'Cancel booking ' + booking.trackingNumber">Cancel</button>
+                  }
                   <a
                     [routerLink]="['/customer/receipt', booking.id]"
                     class="sd-button sd-button--secondary btn-receipt"
@@ -197,6 +202,7 @@
                   >
                     View Receipt
                   </a>
+                 </div>
                 </td>
               </tr>
             }
@@ -211,3 +217,7 @@
   }
 </div>
 
+
+@if (isCancelModalOpen()) {
+  <app-cancel-booking [bookingId]="cancelTargetId()" (closed)="isCancelModalOpen.set(false)" (cancelled)="onCancelled($event)" />
+}

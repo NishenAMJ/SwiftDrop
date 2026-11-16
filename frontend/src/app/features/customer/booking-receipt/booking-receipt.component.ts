@@ -20,6 +20,7 @@ export class BookingReceiptComponent implements OnInit {
   readonly parcel = signal<BookingResponseDto | null>(null);
   readonly loading = signal<boolean>(true);
   readonly errorMessage = signal<string | null>(null);
+  readonly paymentCompleted = signal<boolean>(false);
   readonly isNewBooking = signal<boolean>(false);
   readonly copiedRef = signal<boolean>(false);
   readonly isInitiatingPayment = signal<boolean>(false);
@@ -53,18 +54,8 @@ export class BookingReceiptComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        // Fallback to parcel details if receipt record wasn't ready yet
-        this.bookingService.getBookingById(parcelId).subscribe({
-          next: (parcelData) => {
-            this.parcel.set(parcelData);
-            this.loading.set(false);
-          },
-          error: (err) => {
-            console.error('Failed to load receipt:', err);
-            this.errorMessage.set('Receipt could not be found for the specified parcel.');
-            this.loading.set(false);
-          },
-        });
+        this.errorMessage.set('A confirmed booking receipt is not available. Complete online payment from the booking form first.');
+        this.loading.set(false);
       },
     });
   }
@@ -79,57 +70,4 @@ export class BookingReceiptComponent implements OnInit {
     setTimeout(() => this.copiedRef.set(false), 2000);
   }
 
-  payOnline(): void {
-    const bookingId = this.receipt()?.parcelId || this.parcel()?.id;
-    if (!bookingId) {
-      return;
-    }
-
-    this.isInitiatingPayment.set(true);
-    this.paymentMessage.set(null);
-
-    this.bookingService.initiatePayment(bookingId).subscribe({
-      next: (res) => {
-        this.isInitiatingPayment.set(false);
-        if (res.checkoutUrl) {
-          this.paymentMessage.set({
-            type: 'info',
-            text: 'Redirecting to secure Payment Gateway...',
-          });
-          window.location.href = res.checkoutUrl;
-        } else {
-          this.paymentMessage.set({
-            type: 'success',
-            text: `Payment initiated successfully (ID: ${res.id || 'N/A'}, Status: ${res.status || 'PENDING'}).`,
-          });
-        }
-      },
-      error: (err) => {
-        this.isInitiatingPayment.set(false);
-        const msg =
-          err.error?.message ||
-          err.error?.detail ||
-          'Payment Gateway is not reachable at the moment. Please verify Payment Service or try again later.';
-        this.paymentMessage.set({
-          type: 'error',
-          text: msg,
-        });
-      },
-    });
-  }
-
-  // Financial calculation helpers
-  getBaseFee(): number {
-    return 350;
-  }
-
-  getWeightFee(weightKg: number | undefined): number {
-    const w = weightKg || 0;
-    return Math.round(w * 150 * 100) / 100;
-  }
-
-  getUrgencyFee(urgency: string | undefined): number {
-    return urgency === 'URGENT' ? 300 : 0;
-  }
 }
-

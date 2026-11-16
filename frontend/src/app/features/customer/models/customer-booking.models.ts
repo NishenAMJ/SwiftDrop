@@ -100,3 +100,25 @@ export interface PaymentContextResponse {
     country: string;
   };
 }
+
+export interface CancellationEligibility {
+ eligible: boolean;
+ reason: string | null;
+ booking: BookingResponseDto | null;
+ scheduledPickupTime: string | null;
+ cancellationFee: number | null;
+ originalPaidAmount: number | null;
+ refundableAmount: number | null;
+ paymentStatus: string | null;
+}
+export interface CancellationInitiation {
+ cancellationStatus?: string;
+ bookingStatus?: string;
+ completed?: boolean;
+}
+
+export interface BookingCheckout {
+ id: string;
+ status: string;
+ checkout?: { provider: string; checkoutUrl: string; method: string; fields: Record<string,string> };
+}

@@ -270,3 +270,6 @@
   cursor: pointer;
 }
 
+
+.booking-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: var(--sd-space-2); white-space: nowrap; }
+.booking-actions .sd-button { min-height: 2.75rem; }

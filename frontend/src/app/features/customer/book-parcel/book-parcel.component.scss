@@ -356,3 +356,6 @@
   text-align: center;
 }
 
+
+.checkout-summary { margin-block: var(--sd-space-4); padding: var(--sd-space-4); border: 1px solid var(--sd-border); border-radius: var(--sd-radius-card); background: var(--sd-surface-subtle); }
+.checkout-amount { color: var(--sd-brand); font-variant-numeric: tabular-nums; }

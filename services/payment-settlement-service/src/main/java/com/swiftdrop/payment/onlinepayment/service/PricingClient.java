@@ -48,7 +48,6 @@ public class PricingClient {
         catch(Exception e) { throw PaymentProblem.unavailable(); }
         validate(c,bookingId);
         actor.requireOwner(c.customerId(),c.merchantId());
-        if("DIRECT_WEBSITE".equals(c.channel()) && !actor.admin()) throw PaymentProblem.forbidden();
         if(!c.payable()) throw PaymentProblem.conflict("Booking is not payable.");
         return c;
     }
