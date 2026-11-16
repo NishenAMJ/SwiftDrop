@@ -111,6 +111,14 @@
                   }
                 </dl>
 
+                @if (merchant.status === 'APPROVED' || merchant.status === 'SUSPENDED') {
+                  <app-merchant-api-keys
+                    [merchantId]="merchant.id"
+                    [businessName]="merchant.businessName"
+                    [status]="merchant.status"
+                  />
+                }
+
                 @if (decisionsFor(merchant.status).length) {
                   <div class="page__actions review-item__actions">
                     @for (action of decisionsFor(merchant.status); track action) {

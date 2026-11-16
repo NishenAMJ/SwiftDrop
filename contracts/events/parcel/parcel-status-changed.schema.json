@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/parcel/parcel-status-changed.schema.json",
+  "title": "Parcel status changed",
+  "description": "Status: proposal by notification-webhook-service. Needs review by parcel-pricing-service and delivery-operations-service owners. Published by whichever service changes the parcel status, to its own exchange (swiftdrop.parcel or swiftdrop.delivery) with routing key parcel.status-changed.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": { "const": "parcel.status-changed" },
+        "version": { "const": 1 },
+        "data": {
+          "type": "object",
+          "required": ["parcelId", "trackingNumber", "status"],
+          "properties": {
+            "parcelId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Unique parcel identifier"
+            },
+            "trackingNumber": {
+              "type": "string",
+              "description": "Customer-facing tracking reference"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "CREATED",
+                "PICKED_UP",
+                "IN_TRANSIT",
+                "OUT_FOR_DELIVERY",
+                "DELIVERED",
+                "FAILED"
+              ],
+              "description": "New lifecycle status of the parcel"
+            },
+            "previousStatus": {
+              "type": "string",
+              "enum": [
+                "CREATED",
+                "PICKED_UP",
+                "IN_TRANSIT",
+                "OUT_FOR_DELIVERY",
+                "DELIVERED",
+                "FAILED"
+              ],
+              "description": "Previous lifecycle status. Absent for CREATED."
+            },
+            "customerUserId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "User ID of the customer who booked the parcel. Absent for anonymous or merchant-only orders."
+            },
+            "merchantId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Merchant ID if booked by or on behalf of a merchant"
+            },
+            "failureReason": {
+              "type": "string",
+              "description": "Customer-safe explanation when status is FAILED"
+            },
+            "changedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Timestamp when the status changed"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

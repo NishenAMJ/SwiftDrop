@@ -18,12 +18,28 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitConfig {
 
     public static final String IDENTITY_EXCHANGE = "swiftdrop.identity";
+    public static final String PARCEL_EXCHANGE = "swiftdrop.parcel";
+    public static final String DELIVERY_EXCHANGE = "swiftdrop.delivery";
+
     public static final String IDENTITY_QUEUE = "notification-webhook-service.identity-events";
+    public static final String PARCEL_QUEUE = "notification-webhook-service.parcel-notifications";
     public static final String DEAD_LETTER_QUEUE = "notification-webhook-service.dead-letter";
+
+    public static final String ROUTING_KEY_PARCEL_STATUS_CHANGED = "parcel.status-changed";
 
     @Bean
     public TopicExchange identityExchange() {
         return new TopicExchange(IDENTITY_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public TopicExchange parcelExchange() {
+        return new TopicExchange(PARCEL_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public TopicExchange deliveryExchange() {
+        return new TopicExchange(DELIVERY_EXCHANGE, true, false);
     }
 
     @Bean
@@ -40,6 +56,14 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue parcelNotificationsQueue() {
+        return QueueBuilder.durable(PARCEL_QUEUE)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(DEAD_LETTER_QUEUE)
+                .build();
+    }
+
+    @Bean
     public Binding userEventsBinding(Queue identityEventsQueue, TopicExchange identityExchange) {
         return BindingBuilder.bind(identityEventsQueue).to(identityExchange).with("user.*");
     }
@@ -47,6 +71,16 @@ public class RabbitConfig {
     @Bean
     public Binding merchantEventsBinding(Queue identityEventsQueue, TopicExchange identityExchange) {
         return BindingBuilder.bind(identityEventsQueue).to(identityExchange).with("merchant.*");
+    }
+
+    @Bean
+    public Binding parcelStatusFromParcelExchangeBinding(Queue parcelNotificationsQueue, TopicExchange parcelExchange) {
+        return BindingBuilder.bind(parcelNotificationsQueue).to(parcelExchange).with(ROUTING_KEY_PARCEL_STATUS_CHANGED);
+    }
+
+    @Bean
+    public Binding parcelStatusFromDeliveryExchangeBinding(Queue parcelNotificationsQueue, TopicExchange deliveryExchange) {
+        return BindingBuilder.bind(parcelNotificationsQueue).to(deliveryExchange).with(ROUTING_KEY_PARCEL_STATUS_CHANGED);
     }
 
     @Bean

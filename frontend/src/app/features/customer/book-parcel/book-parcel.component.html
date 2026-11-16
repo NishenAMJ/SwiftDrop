@@ -89,7 +89,7 @@
               type="text"
               class="sd-input"
               formControlName="city"
-              placeholder="e.g. Colombo 03"
+              placeholder="City"
               [attr.aria-invalid]="isFieldInvalid('pickupAddress.city')"
             />
             @if (isFieldInvalid('pickupAddress.city')) {
@@ -106,7 +106,7 @@
               type="text"
               class="sd-input"
               formControlName="postalCode"
-              placeholder="00300"
+              placeholder="Postal code"
             />
           </div>
         </div>
@@ -183,7 +183,7 @@
               type="text"
               class="sd-input"
               formControlName="city"
-              placeholder="e.g. Kandy, Galle, Gampaha"
+              placeholder="Destination city"
               [attr.aria-invalid]="isFieldInvalid('deliveryAddress.city')"
             />
             @if (isFieldInvalid('deliveryAddress.city')) {
@@ -200,7 +200,7 @@
               type="text"
               class="sd-input"
               formControlName="postalCode"
-              placeholder="20000"
+              placeholder="Postal code"
             />
           </div>
         </div>
@@ -376,6 +376,7 @@
         <h2 class="summary-card__title">Delivery Fee Summary</h2>
         <div class="summary-card__divider"></div>
 
+        @if (bookingForm.get('weightKg')?.value > 0) {
         <dl class="summary-breakdown">
           <div class="breakdown-row">
             <dt>Base Handling Fee</dt>
@@ -416,13 +417,14 @@
             </dd>
           </div>
         </dl>
+        } @else { <p class="sd-help">Enter your parcel weight to view an estimate.</p> }
 
         <div class="summary-perks">
           <div class="perk-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            <span>Unique SwiftDrop reference (SWD-2026-XXXXXX)</span>
+            <span>Unique SwiftDrop tracking reference</span>
           </div>
           <div class="perk-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -441,22 +443,42 @@
         <button
           type="submit"
           class="sd-button sd-button--primary sd-button--block btn-confirm"
-          [disabled]="submitting() || bookingForm.invalid"
+          [disabled]="submitting() || (!draft() && bookingForm.invalid)"
           [attr.aria-busy]="submitting()"
         >
           @if (submitting()) {
             <span class="sd-spinner" aria-hidden="true"></span>
             Generating Booking Reference...
           } @else {
-            Confirm &amp; Book Delivery
+            {{ draft() ? 'Resume payment' : 'Book a delivery' }}
           }
         </button>
 
         <p class="summary-footer-note">
-          By confirming, you agree to SwiftDrop courier terms of carriage. Fee will be collected at pickup or via online payment.
+          By confirming, you agree to SwiftDrop courier terms of carriage. Online bookings require verified payment. COD bookings are payable to the courier.
         </p>
       </div>
     </aside>
   </form>
 </div>
 
+
+<app-confirm-dialog [open]="paymentOpen()" title="Complete your booking" [wide]="true"
+ [confirmLabel]="checkout() ? 'Check payment status' : 'Continue to secure payment'" cancelLabel="Close and resume later"
+ [busy]="submitting()" (confirmed)="paymentAction()" (cancelled)="paymentOpen.set(false)">
+ <p>Your online booking will be confirmed only after successful payment is verified.</p>
+ @if (draft(); as booking) {
+  <div class="checkout-summary">
+   <p><strong>{{ booking.urgency === 'URGENT' ? 'Urgent delivery' : 'Standard delivery' }}</strong> &middot; {{ booking.weightKg }} kg</p>
+   <p>Payment method: <strong>Online payment</strong></p>
+   <p class="checkout-amount">Amount to pay: <strong>LKR {{ booking.estimatedFee | number:'1.2-2' }}</strong></p>
+  </div>
+ }
+ @if (paymentMessage()) { <div class="sd-alert sd-alert--info" role="status">{{ paymentMessage() }}</div> }
+ @if (checkout()?.checkout) {
+  <button type="button" class="sd-button sd-button--primary" (click)="openGateway()">Open secure checkout</button>
+  <p class="sd-help">Payment opens in a separate tab. Return here after paying to verify your booking.</p>
+ } @else if (checkout()) {
+  <p class="sd-help">Checking a saved payment. Use the original payment tab to finish payment; do not start another charge.</p>
+ }
+</app-confirm-dialog>

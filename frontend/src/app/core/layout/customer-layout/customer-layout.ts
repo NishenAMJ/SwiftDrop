@@ -21,26 +21,11 @@ export class CustomerLayout {
   readonly mobileMenuOpen = signal(false);
   readonly loggingOut = signal(false);
 
-  readonly displayName = computed(() => {
-    return this.user()?.fullName || this.profile().fullName || 'SwiftDrop Customer';
-  });
-
-  readonly displayEmail = computed(() => {
-    return this.user()?.email || this.profile().email || 'customer@swiftdrop.lk';
-  });
-
-  readonly displayAvatar = computed(() => {
-    return this.profile().avatarBase64 || null;
-  });
-
-  readonly displayInitials = computed(() => {
-    const name = this.displayName().trim();
-    const parts = name.split(/\s+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  });
+  readonly displayName = this.profileService.customerName;
+  readonly displayEmail = this.profileService.customerEmail;
+  readonly displayAvatar = this.profileService.customerAvatar;
+  readonly displayInitials = this.profileService.customerInitials;
+  readonly currentYear = new Date().getFullYear();
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update((open) => !open);

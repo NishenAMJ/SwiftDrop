@@ -37,6 +37,9 @@ export class ConfirmDialog {
   readonly open = input(false);
   readonly title = input.required<string>();
   readonly confirmLabel = input.required<string>();
+  readonly cancelLabel = input('Cancel');
+  readonly confirmDisabled = input(false);
+  readonly wide = input(false);
   readonly tone = input<'primary' | 'danger'>('primary');
   readonly busy = input(false);
   /** A message that the request failed; shown inside the dialog, next to the action. */
@@ -46,6 +49,7 @@ export class ConfirmDialog {
   /** Emits the trimmed text (empty when there is no text box). */
   readonly confirmed = output<string>();
   readonly cancelled = output<void>();
+  readonly dismissed = output<void>();
 
   protected readonly id = `sd-confirm-${nextId++}`;
   protected readonly value = signal('');
@@ -110,10 +114,14 @@ export class ConfirmDialog {
   protected submit(event: Event): void {
     event.preventDefault();
     this.submitted.set(true);
-    if (this.busy() || this.textError()) {
+    if (this.busy() || this.confirmDisabled() || this.textError()) {
       return;
     }
     this.confirmed.emit(this.value().trim());
+  }
+
+  protected dismiss(): void {
+    if (!this.busy()) { this.cancelled.emit(); this.dismissed.emit(); }
   }
 
   protected cancel(): void {

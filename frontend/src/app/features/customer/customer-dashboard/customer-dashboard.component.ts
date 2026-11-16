@@ -39,13 +39,13 @@ export class CustomerDashboardComponent implements OnInit {
   readonly trackError = signal<string | null>(null);
 
   // Quick Estimator state
-  readonly estimateWeight = signal<number>(1.5);
+  readonly estimateWeight = signal<number | null>(null);
   readonly estimateUrgency = signal<UrgencyType>('NORMAL');
   readonly feeBreakdown = signal<FeeBreakdown>({
-    baseFee: 350,
-    weightFee: 225,
+    baseFee: 0,
+    weightFee: 0,
     urgencySurcharge: 0,
-    totalFee: 575,
+    totalFee: 0,
   });
 
   // Copy state helper
@@ -120,7 +120,7 @@ export class CustomerDashboardComponent implements OnInit {
 
   updateEstimate(): void {
     const fee = this.bookingService.calculateFee(
-      this.estimateWeight(),
+      this.estimateWeight() ?? 0,
       this.estimateUrgency(),
     );
     this.feeBreakdown.set(fee);

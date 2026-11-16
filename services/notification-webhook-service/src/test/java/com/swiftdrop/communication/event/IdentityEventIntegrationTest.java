@@ -76,7 +76,7 @@ class IdentityEventIntegrationTest {
         assertEquals("Integration Tester", contact.getFullName());
         assertEquals("ACTIVE", contact.getStatus());
 
-        assertTrue(processedEventRepository.findById(eventId).isPresent());
+        assertTrue(processedEventRepository.existsByEventIdAndConsumer(eventId, IdentityEventHandler.CONSUMER));
 
         List<Notification> notifications = notificationRepository.findAll().stream()
                 .filter(n -> n.getRecipientUserId().equals(userId))
@@ -299,7 +299,7 @@ class IdentityEventIntegrationTest {
                 """.formatted(eventId, UUID.randomUUID(), randomUserId);
 
         listener.onMessage(createJsonMessage(approved));
-        assertTrue(processedEventRepository.findById(eventId).isPresent());
+        assertTrue(processedEventRepository.existsByEventIdAndConsumer(eventId, IdentityEventHandler.CONSUMER));
         assertTrue(contactRepository.findById(randomUserId).isEmpty());
     }
 

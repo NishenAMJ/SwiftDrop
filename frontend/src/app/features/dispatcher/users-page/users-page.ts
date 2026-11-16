@@ -24,6 +24,7 @@ import {
 import { PHONE_E164 } from '../../../shared/models/application';
 import { ColomboDatePipe } from '../../../shared/pipes/colombo-date.pipe';
 import { DispatcherService } from '../dispatcher.service';
+import { PasswordField } from '../../../shared/components/password-field/password-field';
 
 const PAGE_SIZE = 20;
 
@@ -44,7 +45,7 @@ const PROVIDER_LABELS: Record<string, string> = { PASSWORD: 'Password', GOOGLE: 
  */
 @Component({
   selector: 'app-users-page',
-  imports: [ReactiveFormsModule, Pagination, ColomboDatePipe],
+  imports: [ReactiveFormsModule, Pagination, ColomboDatePipe, PasswordField],
   templateUrl: './users-page.html',
   styleUrl: './users-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

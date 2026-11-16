@@ -5,7 +5,7 @@ import { Observable } from 'rxjs';
 import { AuthUser, Page, Role } from '../../core/auth/auth.models';
 import { ApplicationDecision, ApplicationStatus } from '../../shared/models/application';
 import { Courier, VehicleType } from '../courier/courier.models';
-import { Merchant } from '../merchant/merchant.models';
+import { ApiKey, Merchant } from '../merchant/merchant.models';
 
 export interface PageQuery {
   page?: number;
@@ -55,6 +55,17 @@ export class DispatcherService {
     return this.http.post<Merchant>(
       `/api/v1/merchants/${encodeURIComponent(merchantId)}/${decision}`,
       body,
+    );
+  }
+
+  /** A merchant's API keys (prefixes only), newest first. */
+  listMerchantApiKeys(merchantId: string): Observable<ApiKey[]> {
+    return this.http.get<ApiKey[]>(`/api/v1/merchants/${encodeURIComponent(merchantId)}/api-keys`);
+  }
+
+  revokeMerchantApiKey(merchantId: string, keyId: string): Observable<void> {
+    return this.http.delete<void>(
+      `/api/v1/merchants/${encodeURIComponent(merchantId)}/api-keys/${encodeURIComponent(keyId)}`,
     );
   }
 
