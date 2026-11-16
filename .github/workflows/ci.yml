@@ -52,9 +52,11 @@ jobs:
         working-directory: services/api-gateway
         run: ./mvnw -B verify
 
-      - name: Show database logs on failure
+      - name: Show Compose status and Parcel logs on failure
         if: failure()
-        run: docker compose logs postgres
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail=300 parcel-pricing-service
 
   frontend:
     name: frontend
