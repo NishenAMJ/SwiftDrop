@@ -36,16 +36,10 @@ describe('AppLayout', () => {
     expect(page.querySelector('.app-header__role')?.textContent).toContain('Customer');
   });
 
-  it('shows a merchant their keys instead of the merchant application', async () => {
+  it('shows a merchant only Dashboard and My Bookings', async () => {
     const page = (await signedInAs({ ...exampleUser, roles: ['CUSTOMER', 'MERCHANT'] }))
       .nativeElement as HTMLElement;
-    expect(links(page)).toEqual([
-      'API keys',
-      'Merchant account',
-      'Customer portal',
-      'Become a courier',
-      'Your account',
-    ]);
+    expect(links(page)).toEqual(['Dashboard', 'My Bookings']);
     expect(page.querySelector('.app-header__role')?.textContent).toContain('Merchant');
   });
 

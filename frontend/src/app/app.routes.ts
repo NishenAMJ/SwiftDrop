@@ -26,11 +26,11 @@ export const routes: Routes = [
     loadComponent: () => import('./core/layout/auth-layout/auth-layout').then((m) => m.AuthLayout),
     children: [
       {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
-  },
-  {
+        path: 'dispatcher',
+        loadChildren: () =>
+          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+      },
+      {
         path: 'login',
         title: 'Log in | SwiftDrop',
         canActivate: [guestGuard],
@@ -38,11 +38,11 @@ export const routes: Routes = [
           import('./features/auth/login-page/login-page').then((m) => m.LoginPage),
       },
       {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
-  },
-  {
+        path: 'dispatcher',
+        loadChildren: () =>
+          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+      },
+      {
         path: 'register',
         title: 'Create account | SwiftDrop',
         canActivate: [guestGuard],
@@ -50,11 +50,11 @@ export const routes: Routes = [
           import('./features/auth/register-page/register-page').then((m) => m.RegisterPage),
       },
       {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
-  },
-  {
+        path: 'dispatcher',
+        loadChildren: () =>
+          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+      },
+      {
         path: 'auth/callback',
         title: 'Logging in | SwiftDrop',
         loadComponent: () =>
@@ -117,5 +117,10 @@ export const routes: Routes = [
     loadChildren: () =>
       import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
+  // Redirect old merchant dashboard URL to new location
+  { path: 'account/merchant/dashboard', redirectTo: '/merchant/dashboard', pathMatch: 'full' },
+  // Top‑level merchant routes (new URLs)
+  { path: 'merchant', loadChildren: () => import('./features/merchant/merchant.routes').then(m => m.MERCHANT_ROUTES) },
+  // Existing routes continue below
   { path: '**', redirectTo: 'account' },
 ];

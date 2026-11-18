@@ -70,13 +70,15 @@ export class AppLayout {
       });
     }
     if (has('MERCHANT')) {
-      groups.push({
-        heading: 'Merchant',
-        items: [
-          { label: 'API keys', path: '/merchant/api-keys' },
-          { label: 'Merchant account', path: '/merchant/application' },
-        ],
-      });
+      return [
+        {
+          heading: 'Merchant',
+          items: [
+            { label: 'Dashboard', path: '/merchant/dashboard' },
+            { label: 'My Bookings', path: '/merchant/bookings' },
+          ],
+        },
+      ];
     }
     if (has('COURIER')) {
       groups.push({
