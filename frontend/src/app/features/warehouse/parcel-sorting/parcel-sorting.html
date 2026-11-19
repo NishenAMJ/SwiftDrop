@@ -1,0 +1,192 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">Sort parcel</h1>
+    <p class="page__intro">
+      Verify the parcel’s current warehouse, then record its destination and next movement.
+    </p>
+  </header>
+  @if (record(); as sorting) {
+    <div class="sd-alert sd-alert--success" role="status">
+      Sorting recorded for {{ sorting.parcelReference }}.
+    </div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="parcel-lookup-title">
+    <div>
+      <h2 id="parcel-lookup-title" class="page__section-title">Find parcel</h2>
+      <p class="page__muted">Look up the parcel before changing its warehouse state.</p>
+    </div>
+    <div class="sorting-lookup">
+      <div class="sd-field sorting-lookup__field">
+        @let referenceError = fieldError('parcelReference');
+        <label class="sd-label" for="sorting-reference">Parcel reference *</label>
+        <input
+          id="sorting-reference"
+          class="sd-input sorting-reference"
+          [formControl]="form.controls.parcelReference"
+          maxlength="50"
+          autocomplete="off"
+          [attr.aria-invalid]="!!referenceError"
+          [attr.aria-describedby]="referenceError ? 'sorting-reference-error' : null"
+        />
+        @if (referenceError) {
+          <p id="sorting-reference-error" class="sd-error">{{ referenceError }}</p>
+        }
+      </div>
+      <button
+        class="sd-button sd-button--secondary"
+        type="button"
+        (click)="lookupParcel()"
+        [disabled]="lookingUp()"
+        [attr.aria-busy]="lookingUp()"
+      >
+        @if (lookingUp()) {
+          <span class="sd-spinner" aria-hidden="true"></span> Looking up…
+        } @else {
+          Find parcel
+        }
+      </button>
+    </div>
+    @if (parcel(); as current) {
+      <dl class="details sorting-parcel">
+        <div>
+          <dt>Parcel reference</dt>
+          <dd class="sorting-reference">{{ current.parcelReference }}</dd>
+        </div>
+        <div>
+          <dt>Current warehouse</dt>
+          <dd>{{ current.warehouseCode }}</dd>
+        </div>
+        <div>
+          <dt>Warehouse state</dt>
+          <dd>
+            <span class="sd-badge sd-badge--info">{{
+              current.state === 'IN_TRANSFER'
+                ? 'In transfer'
+                : current.state === 'SORTED'
+                  ? 'Sorted'
+                  : current.state === 'RECEIVED'
+                    ? 'Received'
+                    : 'Arrived'
+            }}</span>
+          </dd>
+        </div>
+      </dl>
+    }
+  </section>
+
+  <section class="sd-card page__section" aria-labelledby="sorting-form-title">
+    <div>
+      <h2 id="sorting-form-title" class="page__section-title">Sorting decision</h2>
+      <p class="page__muted">Required fields are marked with an asterisk.</p>
+    </div>
+    @if (loadingWarehouses()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading warehouses…
+      </p>
+    } @else {
+      <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="form__grid">
+          <div class="sd-field">
+            @let warehouseError = fieldError('warehouseId');
+            <label class="sd-label" for="sorting-warehouse">Current warehouse *</label>
+            <select
+              id="sorting-warehouse"
+              class="sd-input"
+              formControlName="warehouseId"
+              [attr.aria-invalid]="!!warehouseError"
+              [attr.aria-describedby]="warehouseError ? 'sorting-warehouse-error' : null"
+            >
+              <option value="">Select a warehouse</option>
+              @for (warehouse of warehouses(); track warehouse.id) {
+                <option [value]="warehouse.id">{{ warehouse.name }} ({{ warehouse.code }})</option>
+              }
+            </select>
+            @if (warehouseError) {
+              <p id="sorting-warehouse-error" class="sd-error">{{ warehouseError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let destinationError = fieldError('destination');
+            <label class="sd-label" for="sorting-destination">Destination *</label>
+            <input
+              id="sorting-destination"
+              class="sd-input"
+              formControlName="destination"
+              maxlength="160"
+              [attr.aria-invalid]="!!destinationError"
+              [attr.aria-describedby]="
+                destinationError ? 'sorting-destination-error' : 'sorting-destination-help'
+              "
+            />
+            <p id="sorting-destination-help" class="sd-help">
+              The city, zone, or final operational destination.
+            </p>
+            @if (destinationError) {
+              <p id="sorting-destination-error" class="sd-error">{{ destinationError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="sorting-next"
+              >Next warehouse <span class="sd-label__optional">Optional</span></label
+            >
+            <select id="sorting-next" class="sd-input" formControlName="nextWarehouseId">
+              <option value="">No next warehouse</option>
+              @for (warehouse of warehouses(); track warehouse.id) {
+                <option [value]="warehouse.id">{{ warehouse.name }} ({{ warehouse.code }})</option>
+              }
+            </select>
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="sorting-time"
+              >Sorted date and time <span class="sd-label__optional">Optional</span></label
+            ><input
+              id="sorting-time"
+              class="sd-input"
+              type="datetime-local"
+              formControlName="sortedAt"
+            />
+            <p class="sd-help">Leave blank to use the current server time.</p>
+          </div>
+          <div class="sd-field form__full">
+            @let notesError = fieldError('notes');
+            <label class="sd-label" for="sorting-notes"
+              >Internal notes <span class="sd-label__optional">Optional</span></label
+            >
+            <textarea
+              id="sorting-notes"
+              class="sd-input"
+              formControlName="notes"
+              maxlength="500"
+              [attr.aria-invalid]="!!notesError"
+              [attr.aria-describedby]="notesError ? 'sorting-notes-error' : 'sorting-notes-help'"
+            ></textarea>
+            <p id="sorting-notes-help" class="sd-help">
+              Do not include unnecessary personal information.
+            </p>
+            @if (notesError) {
+              <p id="sorting-notes-error" class="sd-error">{{ notesError }}</p>
+            }
+          </div>
+        </div>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--primary"
+            type="submit"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving()"
+          >
+            @if (saving()) {
+              <span class="sd-spinner" aria-hidden="true"></span> Saving…
+            } @else {
+              Record sorting
+            }
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+</div>

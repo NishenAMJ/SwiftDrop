@@ -24,25 +24,27 @@
     </div>
   }
 
+  @if (profileLoading()) { <p role="status">Loading profile details...</p> }
+  @if (profileError()) { <div class="sd-alert sd-alert--error" role="alert">{{ profileError() }} <button type="button" class="sd-button sd-button--secondary" (click)="refreshProfile()">Retry</button></div> }
   <!-- Profile Hero Overview Card -->
   <section class="sd-card profile-hero">
     <div class="profile-hero__left">
       <div class="profile-avatar-wrap">
         @if (profile().avatarBase64) {
-          <img [src]="profile().avatarBase64" alt="{{ profile().fullName }}" class="profile-avatar-img" />
+          <img [src]="profile().avatarBase64" alt="{{ profile().fullName || 'Not provided' }}" class="profile-avatar-img" />
         } @else {
           <div class="profile-avatar-placeholder">
-            {{ profile().fullName.slice(0, 2).toUpperCase() }}
+            {{ initials() }}
           </div>
         }
       </div>
 
       <div class="profile-hero__info">
         <h2 class="profile-hero__name">{{ profile().fullName }}</h2>
-        <div class="profile-hero__email">{{ profile().email }}</div>
+        <div class="profile-hero__email">{{ profile().email || 'Not provided' }}</div>
         <div class="profile-hero__badges">
           <span class="sd-badge sd-badge--info">Customer Account</span>
-          <span class="sd-badge sd-badge--success">Active &bull; Verified</span>
+          @if (user()?.status; as status) { <span class="sd-badge">{{ status }}</span> }
         </div>
       </div>
     </div>
@@ -50,11 +52,11 @@
     <div class="profile-hero__stats">
       <div class="stat-box">
         <span class="stat-label">Total Shipments</span>
-        <span class="stat-value sd-tabular">{{ totalBookings() }}</span>
+        <span class="stat-value sd-tabular">{{ totalBookings() ?? 'Not available' }}</span>
       </div>
       <div class="stat-box">
-        <span class="stat-label">Country</span>
-        <span class="stat-value">Sri Lanka</span>
+        <span class="stat-label">Member since</span>
+        <span class="stat-value">{{ user()?.createdAt ? (user()?.createdAt | date:'mediumDate') : 'Not provided' }}</span>
       </div>
     </div>
   </section>
@@ -73,7 +75,7 @@
       </div>
 
       <div class="info-item">
-        <dt class="info-label">Email Address (Gmail)</dt>
+        <dt class="info-label">Email Address</dt>
         <dd class="info-value">{{ profile().email }}</dd>
       </div>
 
@@ -84,17 +86,17 @@
 
       <div class="info-item">
         <dt class="info-label">Default Street Address</dt>
-        <dd class="info-value">{{ profile().streetAddress || 'Not set' }}</dd>
+        <dd class="info-value">{{ profile().streetAddress || 'Not provided' }}</dd>
       </div>
 
       <div class="info-item">
         <dt class="info-label">City</dt>
-        <dd class="info-value">{{ profile().city || 'Colombo' }}</dd>
+        <dd class="info-value">{{ profile().city || 'Not provided' }}</dd>
       </div>
 
       <div class="info-item">
         <dt class="info-label">Postal Code</dt>
-        <dd class="info-value sd-tabular">{{ profile().postalCode || '00100' }}</dd>
+        <dd class="info-value sd-tabular">{{ profile().postalCode || 'Not provided' }}</dd>
       </div>
     </dl>
   </section>
@@ -127,7 +129,7 @@
                 <img [src]="avatarPreview()" alt="Preview" class="avatar-preview-img" />
               } @else {
                 <div class="avatar-preview-empty">
-                  {{ editForm.get('fullName')?.value?.slice(0, 2)?.toUpperCase() || 'CP' }}
+                  {{ initialsFor(editForm.get('fullName')?.value) }}
                 </div>
               }
             </div>
@@ -185,14 +187,14 @@
 
             <div class="sd-field">
               <label class="sd-label" for="edit-email">
-                Email Address (Gmail) <span class="required-star">*</span>
+                Email Address <span class="required-star">*</span>
               </label>
               <input
                 id="edit-email"
                 type="email"
                 class="sd-input"
                 formControlName="email"
-                placeholder="example@gmail.com"
+                placeholder="Email address"
                 [attr.aria-invalid]="isFieldInvalid('email')"
               />
               @if (isFieldInvalid('email')) {
@@ -209,7 +211,7 @@
                 type="tel"
                 class="sd-input"
                 formControlName="phoneNumber"
-                placeholder="+94 77 123 4567 or 0771234567"
+                placeholder="Phone number"
                 [attr.aria-invalid]="isFieldInvalid('phoneNumber')"
               />
               <p class="sd-help">Format: +94 7X XXX XXXX or 07X XXX XXXX</p>
@@ -225,7 +227,7 @@
                 type="text"
                 class="sd-input"
                 formControlName="city"
-                placeholder="Colombo 03"
+                placeholder="City"
               />
             </div>
 
@@ -236,7 +238,7 @@
                 type="text"
                 class="sd-input"
                 formControlName="streetAddress"
-                placeholder="45/2 Temple Road"
+                placeholder="Street address"
               />
             </div>
 
@@ -247,7 +249,7 @@
                 type="text"
                 class="sd-input"
                 formControlName="postalCode"
-                placeholder="00300"
+                placeholder="Postal code"
               />
             </div>
           </div>

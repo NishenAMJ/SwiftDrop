@@ -31,17 +31,22 @@ jobs:
             echo "IDENTITY_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "PARCEL_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "PAYMENT_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "DELIVERY_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "COMMUNICATION_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "TRACKING_DB_PASSWORD=$(openssl rand -hex 32)"
             echo "RABBITMQ_USER=swiftdrop"
             echo "RABBITMQ_PASSWORD=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
 
-      - name: Start PostgreSQL (same setup as local)
-        run: docker compose up -d --wait
+      - name: Start PostgreSQL and RabbitMQ (same setup as local)
+        run: docker compose up -d --wait postgres rabbitmq
 
       - name: Build and test Identity service
         working-directory: services/identity-merchant-service
+        run: ./mvnw -B verify
+
+      - name: Build and test Delivery Operations service
+        working-directory: services/delivery-operations-service
         run: ./mvnw -B verify
 
       - name: Build and test Tracking service
@@ -52,9 +57,11 @@ jobs:
         working-directory: services/api-gateway
         run: ./mvnw -B verify
 
-      - name: Show database logs on failure
+      - name: Show Compose status and Parcel logs on failure
         if: failure()
-        run: docker compose logs postgres
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail=300 parcel-pricing-service
 
   frontend:
     name: frontend

@@ -14,6 +14,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { homeFor, safeReturnUrl } from '../../../core/auth/auth.guards';
 import { AuthService, GOOGLE_LOGIN_URL } from '../../../core/auth/auth.service';
 import { errorMessage } from '../../../core/auth/problem-messages';
+import { PasswordField } from '../../../shared/components/password-field/password-field';
 
 const MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email or password is incorrect.',
@@ -22,7 +23,7 @@ const MESSAGES: Record<string, string> = {
 
 @Component({
   selector: 'app-login-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PasswordField],
   templateUrl: './login-page.html',
   styleUrl: './login-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

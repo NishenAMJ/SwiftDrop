@@ -92,15 +92,17 @@
 
     <div class="sd-field">
       <label class="sd-label" for="register-password">Password</label>
-      <input
-        id="register-password"
-        class="sd-input"
-        type="password"
-        formControlName="password"
-        autocomplete="new-password"
-        [attr.aria-invalid]="showError('password')"
-        [attr.aria-describedby]="describedBy('password', 'register-password-help')"
-      />
+      <app-password-field>
+        <input
+          id="register-password"
+          class="sd-input"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+          [attr.aria-invalid]="showError('password')"
+          [attr.aria-describedby]="describedBy('password', 'register-password-help')"
+        />
+      </app-password-field>
       <p id="register-password-help" class="sd-help">
         8 to 64 characters, with at least one letter and one number.
       </p>

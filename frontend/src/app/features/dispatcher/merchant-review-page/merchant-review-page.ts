@@ -27,6 +27,7 @@ import { Page } from '../../../core/auth/auth.models';
 import { BUSINESS_TYPE_LABELS, Merchant, formatAddress } from '../../merchant/merchant.models';
 import { DECISION_COPY, DecisionFlow } from '../decision-flow';
 import { DispatcherService } from '../dispatcher.service';
+import { MerchantApiKeys } from '../merchant-api-keys/merchant-api-keys';
 
 const PAGE_SIZE = 20;
 
@@ -36,7 +37,7 @@ const PAGE_SIZE = 20;
  */
 @Component({
   selector: 'app-merchant-review-page',
-  imports: [ReactiveFormsModule, ApplicationStatusBadge, ConfirmDialog, Pagination, ColomboDatePipe],
+  imports: [ReactiveFormsModule, ApplicationStatusBadge, ConfirmDialog, Pagination, ColomboDatePipe, MerchantApiKeys],
   templateUrl: './merchant-review-page.html',
   styleUrl: './merchant-review-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

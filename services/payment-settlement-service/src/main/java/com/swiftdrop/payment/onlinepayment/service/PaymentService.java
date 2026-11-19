@@ -92,7 +92,6 @@ public class PaymentService {
     }
     private Map<String,Object> replay(Payment p, Create request, Actor actor) {
         if(!p.getBookingId().equals(request.bookingId())) throw PaymentProblem.conflict("Idempotency key belongs to another booking.");
-        if("DIRECT_WEBSITE".equals(p.getBookingChannel()) && !actor.admin()) throw PaymentProblem.forbidden();
         actor.requireOwner(p.getCustomerId(),p.getMerchantId());
         Map<String,Object> body=new LinkedHashMap<>(json.convertValue(view(p),new tools.jackson.core.type.TypeReference<Map<String,Object>>() {}));
         if(p.getStatus()==PaymentStatus.PENDING) body.put("checkout",checkout(p.getId(),actor));

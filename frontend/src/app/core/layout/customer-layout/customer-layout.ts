@@ -3,10 +3,11 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
 import { CustomerProfileService } from '../../../features/customer/services/customer-profile.service';
+import { AiChatbotServiceComponent } from '../../../features/customer/ai-chatbot-service/ai-chatbot-service.component';
 
 @Component({
   selector: 'app-customer-layout',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, AiChatbotServiceComponent],
   templateUrl: './customer-layout.html',
   styleUrl: './customer-layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -21,26 +22,11 @@ export class CustomerLayout {
   readonly mobileMenuOpen = signal(false);
   readonly loggingOut = signal(false);
 
-  readonly displayName = computed(() => {
-    return this.user()?.fullName || this.profile().fullName || 'SwiftDrop Customer';
-  });
-
-  readonly displayEmail = computed(() => {
-    return this.user()?.email || this.profile().email || 'customer@swiftdrop.lk';
-  });
-
-  readonly displayAvatar = computed(() => {
-    return this.profile().avatarBase64 || null;
-  });
-
-  readonly displayInitials = computed(() => {
-    const name = this.displayName().trim();
-    const parts = name.split(/\s+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  });
+  readonly displayName = this.profileService.customerName;
+  readonly displayEmail = this.profileService.customerEmail;
+  readonly displayAvatar = this.profileService.customerAvatar;
+  readonly displayInitials = this.profileService.customerInitials;
+  readonly currentYear = new Date().getFullYear();
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update((open) => !open);

@@ -1,10 +1,25 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, guestGuard, redirectHome, roleGuard } from './core/auth/auth.guards';
+import { authGuard, guestGuard, roleGuard } from './core/auth/auth.guards';
 
 export const routes: Routes = [
-  // Each user starts on their own role's page; signed-out visitors go to login.
-  { path: '', pathMatch: 'full', redirectTo: redirectHome },
+  // Gateway redirects are navigation only; the booking form verifies payment server-side.
+  { path: 'payments/return', redirectTo: 'customer/book', pathMatch: 'full' },
+  { path: 'payments/cancel', redirectTo: 'customer/book', pathMatch: 'full' },
+  // Signed-out visitors see the landing page; signed-in users go to their own role's page.
+  {
+    path: '',
+    pathMatch: 'full',
+    title: 'SwiftDrop | Parcel delivery',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/landing/landing-page/landing-page').then((m) => m.LandingPage),
+  },
+  {
+    path: 'tracking',
+    loadChildren: () =>
+      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
+  },
   {
     // Login, register and the Google callback share the Arctic Frost auth layout.
     path: '',
@@ -35,8 +50,6 @@ export const routes: Routes = [
     ],
   },
   {
-    // Customer portal (parcel-pricing team), with its own layout. Dispatcher accounts have no
-    // CUSTOMER role, so they are sent to their account page instead.
     path: 'customer',
     canActivate: [roleGuard('CUSTOMER')],
     loadComponent: () =>
@@ -45,12 +58,12 @@ export const routes: Routes = [
       import('./features/customer/customer.routes').then((m) => m.CUSTOMER_ROUTES),
   },
   {
-    path: 'tracking',
+    path: 'dispatcher',
+    canActivate: [roleGuard('DISPATCHER')],
     loadChildren: () =>
-      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   {
-    // Signed-in screens in the role-aware app layout. Every child also checks its own role.
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/app-layout/app-layout').then((m) => m.AppLayout),
@@ -72,10 +85,10 @@ export const routes: Routes = [
           import('./features/courier/courier.routes').then((m) => m.COURIER_ROUTES),
       },
       {
-        path: 'dispatcher',
+        path: 'warehouse',
         canActivate: [roleGuard('DISPATCHER')],
         loadChildren: () =>
-          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+          import('./features/warehouse/warehouse.routes').then((m) => m.WAREHOUSE_ROUTES),
       },
     ],
   },

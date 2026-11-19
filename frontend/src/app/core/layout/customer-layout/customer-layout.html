@@ -74,7 +74,7 @@
             }
           </div>
           <div class="user-pill__meta">
-            <span class="user-pill__name">{{ displayName() }}</span>
+            <span class="user-pill__name">{{ displayName() || 'Not provided' }}</span>
             <span class="user-pill__role">Customer</span>
           </div>
         </a>
@@ -135,7 +135,7 @@
           </div>
           <div>
             <div class="user-pill__name">{{ displayName() }}</div>
-            <div class="user-pill__role">{{ displayEmail() }}</div>
+            <div class="user-pill__role">{{ displayEmail() || 'Not provided' }}</div>
           </div>
         </a>
         <nav class="mobile-drawer__links">
@@ -202,14 +202,15 @@
   <footer class="customer-footer">
     <div class="customer-footer__container">
       <p class="customer-footer__text">
-        SwiftDrop Courier Management &copy; {{ 2026 }} &bull; Parcel &amp; Pricing Service (Member 3)
+        SwiftDrop Courier Management &copy; {{ currentYear }}
       </p>
       <div class="customer-footer__links">
         <span class="customer-footer__status">
-          <span class="status-dot"></span> System Live &bull; Port 8082
+          Customer portal
         </span>
       </div>
     </div>
   </footer>
-</div>
 
+  <app-ai-chatbot-service />
+</div>

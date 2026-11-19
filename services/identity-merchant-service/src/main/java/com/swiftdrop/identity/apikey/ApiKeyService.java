@@ -11,6 +11,8 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ public class ApiKeyService {
     static final String KEY_PREFIX = "sd_live_";
     private static final int DISPLAY_PREFIX_LENGTH = KEY_PREFIX.length() + 4;
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyService.class);
 
     private final ApiKeyRepository keys;
     private final MerchantRepository merchants;
@@ -85,6 +88,29 @@ public class ApiKeyService {
         keys.save(key);
     }
 
+    /** Dispatcher view of one merchant's keys (prefixes only, never the secret part). */
+    @Transactional(readOnly = true)
+    public List<ApiKeyResponse> listForMerchant(UUID merchantId) {
+        requireMerchantExists(merchantId);
+        return keys.findByMerchantIdOrderByCreatedAtDesc(merchantId).stream().map(ApiKeyResponse::from).toList();
+    }
+
+    /**
+     * A dispatcher revokes one key of a merchant, for example a key the merchant reports as
+     * leaked. Unlike suspending, the merchant and its other keys keep working.
+     */
+    @Transactional
+    public void revokeForMerchant(UUID merchantId, UUID keyId, UUID dispatcherId) {
+        requireMerchantExists(merchantId);
+        ApiKey key = keys.findByIdAndMerchantId(keyId, merchantId)
+            .orElseThrow(() -> ApiException.notFound("API key not found."));
+        if (key.getRevokedAt() == null) {
+            log.info("Dispatcher {} revoked API key {} of merchant {}", dispatcherId, keyId, merchantId);
+        }
+        key.revoke(clock.instant());
+        keys.save(key);
+    }
+
     /**
      * {@code POST /api/v1/auth/token}: a valid key of an approved merchant becomes a short-lived
      * access token. The key must still be checked on every exchange, because it can be revoked or
@@ -115,6 +141,12 @@ public class ApiKeyService {
 
     private Merchant merchantOf(UUID ownerUserId) {
         return merchants.findByUserId(ownerUserId).orElseThrow(ApiKeyService::noMerchant);
+    }
+
+    private void requireMerchantExists(UUID merchantId) {
+        if (!merchants.existsById(merchantId)) {
+            throw ApiException.notFound("Merchant not found.");
+        }
     }
 
     /** The token says MERCHANT, but it can be up to 15 minutes old. */

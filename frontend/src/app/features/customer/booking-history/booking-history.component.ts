@@ -4,16 +4,20 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { BookingSummaryDto } from '../models/customer-booking.models';
 import { CustomerBookingService } from '../services/customer-booking.service';
+import { CancelBookingComponent } from '../cancel-booking/cancel-booking.component';
 
 @Component({
   selector: 'app-booking-history',
-  imports: [CommonModule, RouterLink, FormsModule, DecimalPipe],
+  imports: [CommonModule, RouterLink, FormsModule, DecimalPipe, CancelBookingComponent],
   templateUrl: './booking-history.component.html',
   styleUrl: './booking-history.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BookingHistoryComponent implements OnInit {
   private readonly bookingService = inject(CustomerBookingService);
+  // State for cancel modal
+  readonly isCancelModalOpen = signal<boolean>(false);
+  readonly cancelTargetId = signal<string>('');
 
   readonly bookings = signal<BookingSummaryDto[]>([]);
   readonly loading = signal<boolean>(true);
@@ -92,5 +96,23 @@ export class BookingHistoryComponent implements OnInit {
       }
     }, 2000);
   }
-}
 
+  // Open cancel modal for a specific booking ID
+  openCancelModal(bookingId: string): void {
+    this.cancelTargetId.set(bookingId);
+    this.isCancelModalOpen.set(true);
+  }
+
+  // Handle successful cancellation
+  onCancelled(bookingId: string): void {
+    this.isCancelModalOpen.set(false);
+    this.loadHistory();
+  }
+
+  // Handle cancellation errors (optional UI feedback)
+  onCancelError(error: any): void {
+    console.error('Cancellation error:', error);
+    this.isCancelModalOpen.set(false);
+    // Could display a toast or alert here – omitted for brevity
+  }
+}

@@ -6,7 +6,7 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 | Folder | What is in it |
 |---|---|
-| `services/` | Backend services including `api-gateway` (port 8080), `identity-merchant-service` (port 8081), `parcel-pricing-service` (port 8082) and `payment-settlement-service` (port 8085) |
+| `services/` | Backend services including API Gateway (8080), Identity (8081), Parcel & Pricing (8082), Delivery Operations (8083), Tracking (8084), Payment (8085), and Notification & Webhook (8086) |
 | `frontend/` | Angular frontend (port 4200) |
 | `infrastructure/` | Docker/database setup, for example `postgres/init` (runs when the database is first created) |
 | `contracts/` | API contracts shared between services |
@@ -41,14 +41,17 @@ The `.env` file holds the database passwords. It is **never committed** to Git, 
 Copy-Item .env.example .env        # macOS/Linux: cp .env.example .env
 ```
 
-Open `.env` and set a value for all lines:
+Open `.env` and set a private value for every password placeholder:
 
 ```
 POSTGRES_ADMIN_PASSWORD=choose-a-password
 IDENTITY_DB_PASSWORD=choose-another-password
+DELIVERY_DB_PASSWORD=choose-a-delivery-password
 PAYMENT_DB_PASSWORD=choose-another-password
 PARCEL_DB_PASSWORD=choose-another-password
 COMMUNICATION_DB_PASSWORD=choose-another-password
+TRACKING_DB_PASSWORD=choose-another-password
+RABBITMQ_PASSWORD=choose-another-password
 ```
 
 Each person can pick their own passwords, because the database runs only on their own computer.
@@ -60,7 +63,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Wait until the `postgres` status says `healthy`. The first start creates the `swiftdrop` database, the `identity_merchant_user` login and the `identity_merchant` schema.
+Wait until the `postgres` status says `healthy`. The first start creates the `swiftdrop` database and the service-specific database users and schemas.
 
 ## 5. Run the identity-merchant service
 
@@ -205,3 +208,18 @@ Another PostgreSQL is running on your machine. Stop it, or change the left-hand 
 - Database changes go in a new Flyway file such as `V2__create_users.sql`. Never edit a migration that has already been merged.
 - Frontend work must follow [frontend/style.md](frontend/style.md).
 - Don't commit build output (`dist/`, `.angular/`, `node_modules/`).
+
+## Delivery Operations Service
+
+Member 5's warehouse, sorting, and parcel-transfer work lives in `services/delivery-operations-service`, which is shared with Member 6's courier-delivery work.
+
+Run it locally after configuring `DELIVERY_DB_PASSWORD` in the root `.env` file:
+
+```bash
+docker compose up -d postgres
+cd services/delivery-operations-service
+./mvnw spring-boot:run
+```
+
+The service listens on `http://localhost:8083`. Its health endpoint is `GET /actuator/health`.
+See [`services/delivery-operations-service/README.md`](services/delivery-operations-service/README.md) for its API and development commands.

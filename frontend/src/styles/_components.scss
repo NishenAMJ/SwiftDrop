@@ -287,3 +287,11 @@ textarea.sd-input {
     animation-duration: 2s;
   }
 }
+
+// Outlined destructive action, shared by booking and other confirmation flows.
+.sd-button--danger-outline {
+  color: var(--sd-danger);
+  border-color: var(--sd-danger);
+  background: var(--sd-surface);
+}
+.sd-button--danger-outline:hover:not(:disabled) { background: var(--sd-danger-bg); }

@@ -26,8 +26,9 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { PASSWORD_HELP, passwordRuleMessage, passwordRules } from '../../../core/auth/password-rules';
 import { errorMessage, readProblem } from '../../../core/auth/problem-messages';
 import { applyServerErrors, focusFirstInvalid, shouldShowError } from '../../../shared/forms/form-errors';
+import { PasswordField } from '../../../shared/components/password-field/password-field';
 
-type PasswordField = 'currentPassword' | 'newPassword' | 'confirmPassword';
+type PasswordControl = 'currentPassword' | 'newPassword' | 'confirmPassword';
 
 function matchesNewPassword(control: AbstractControl<string>): ValidationErrors | null {
   const newPassword = control.parent?.get('newPassword')?.value;
@@ -40,7 +41,7 @@ function matchesNewPassword(control: AbstractControl<string>): ValidationErrors 
  */
 @Component({
   selector: 'app-account-page',
-  imports: [RouterLink, ReactiveFormsModule],
+  imports: [RouterLink, ReactiveFormsModule, PasswordField],
   templateUrl: './account-page.html',
   styleUrl: './account-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,6 +58,9 @@ export class AccountPage {
   protected readonly isCustomer = computed(() => this.auth.roles().includes('CUSTOMER'));
   protected readonly isMerchant = computed(() => this.auth.roles().includes('MERCHANT'));
   protected readonly isCourier = computed(() => this.auth.roles().includes('COURIER'));
+  protected readonly canManageWarehouses = computed(() =>
+    this.auth.roles().includes('DISPATCHER'),
+  );
 
   /** Google-only accounts have no password yet, so there is no current one to ask for. */
   protected readonly hasPassword = computed(() => this.user()?.authProviders.includes('PASSWORD') ?? false);
@@ -89,7 +93,7 @@ export class AccountPage {
       .subscribe(() => this.form.controls.confirmPassword.updateValueAndValidity({ emitEvent: false }));
   }
 
-  protected error(field: PasswordField): string | null {
+  protected error(field: PasswordControl): string | null {
     const control = this.form.controls[field];
     if (!shouldShowError(control, this.submitted())) {
       return null;

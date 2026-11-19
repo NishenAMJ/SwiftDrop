@@ -625,6 +625,48 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/v1/merchants/{merchantId}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+    get:
+      tags: [API keys]
+      operationId: listMerchantApiKeys
+      summary: List one merchant's API keys (dispatcher only)
+      description: Same shape as the merchant's own list. Never returns the secret part of a key.
+      responses:
+        '200':
+          description: All keys, including revoked ones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApiKey' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/merchants/{merchantId}/api-keys/{keyId}:
+    parameters:
+      - $ref: '#/components/parameters/MerchantId'
+      - name: keyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [API keys]
+      operationId: revokeMerchantApiKey
+      summary: Revoke one of a merchant's API keys (dispatcher only)
+      description: |
+        For a single leaked or misused key. The key stops working immediately; the merchant and
+        its other keys are not affected (use `/suspend` to stop the whole merchant). Revoking an
+        already revoked key also returns `204`.
+      responses:
+        '204':
+          description: Revoked
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # ---------------------------------------------------------------- Couriers
   /api/v1/couriers:
     post:

@@ -1,0 +1,86 @@
+@use '../../../shared/styles/page';
+
+.transfer-create-grid,
+.transfer-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+}
+
+.transfer-filters__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sd-space-2);
+}
+
+.transfer-reference {
+  font-family: var(--sd-font-mono);
+}
+
+.transfer-route {
+  font-weight: 600;
+}
+
+.transfer-actions,
+.transfer-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
+.transfer-panel-row td {
+  padding: 0;
+}
+
+.transfer-confirm,
+.transfer-receive {
+  padding: var(--sd-space-5);
+  background: var(--sd-surface-subtle);
+}
+
+.transfer-confirm h3,
+.transfer-confirm p,
+.transfer-receive h3,
+.transfer-receive p,
+.transfer-empty h3,
+.transfer-empty p,
+.transfer-pagination p {
+  margin: 0;
+}
+
+.transfer-confirm,
+.transfer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sd-space-3);
+}
+
+.transfer-confirm p,
+.transfer-receive p,
+.transfer-empty p,
+.transfer-pagination p {
+  color: var(--sd-text-secondary);
+}
+
+.transfer-pagination {
+  justify-content: space-between;
+}
+
+@media (min-width: 48rem) {
+  .transfer-create-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .transfer-filters {
+    grid-template-columns: minmax(12rem, 2fr) minmax(10rem, 1fr) auto;
+  }
+
+  .transfer-confirm {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}

@@ -2,7 +2,8 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { CustomerProfileService } from '../services/customer-profile.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CustomerProfileService, profileInitials } from '../services/customer-profile.service';
 import { CustomerBookingService } from '../services/customer-booking.service';
 import { UpdateProfileRequest } from '../models/customer-profile.models';
 
@@ -19,6 +20,12 @@ export class CustomerAccountComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
 
   readonly profile = this.profileService.profile;
+  readonly initials = this.profileService.customerInitials;
+  readonly profileLoading = this.profileService.loading;
+  readonly profileError = this.profileService.error;
+  readonly user = inject(AuthService).user;
+  readonly initialsFor = profileInitials;
+  refreshProfile(): void { this.profileService.refreshProfile(); }
   readonly isEditModalOpen = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
   readonly successMessage = signal<string | null>(null);
@@ -29,7 +36,7 @@ export class CustomerAccountComponent implements OnInit {
   readonly imageError = signal<string | null>(null);
 
   // Total bookings count for stats
-  readonly totalBookings = signal<number>(0);
+  readonly totalBookings = signal<number | null>(null);
 
   editForm!: FormGroup;
 
@@ -133,17 +140,17 @@ export class CustomerAccountComponent implements OnInit {
       fullName: fv.fullName.trim(),
       email: fv.email.trim(),
       phoneNumber: fv.phoneNumber.trim(),
-      streetAddress: fv.streetAddress?.trim() || undefined,
-      city: fv.city?.trim() || undefined,
-      postalCode: fv.postalCode?.trim() || undefined,
-      avatarBase64: this.avatarPreview() || undefined,
+      streetAddress: fv.streetAddress?.trim() || '',
+      city: fv.city?.trim() || '',
+      postalCode: fv.postalCode?.trim() || '',
+      avatarBase64: this.avatarPreview() || '',
     };
 
     this.profileService.updateProfile(request).subscribe({
       next: () => {
         this.saving.set(false);
         this.isEditModalOpen.set(false);
-        this.successMessage.set('Customer profile and picture saved to database successfully!');
+        this.successMessage.set('Profile saved successfully.');
         setTimeout(() => this.successMessage.set(null), 4000);
       },
       error: (err) => {

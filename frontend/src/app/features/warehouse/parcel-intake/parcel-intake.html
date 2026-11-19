@@ -1,0 +1,124 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">Record parcel arrival</h1>
+    <p class="page__intro">
+      Confirm that a parcel has physically arrived before it enters the sorting workflow.
+    </p>
+  </header>
+
+  @if (recordedParcel(); as parcel) {
+    <div class="sd-alert sd-alert--success" role="status">
+      Arrival recorded for {{ parcel.parcelReference }} at {{ parcel.warehouseCode }}.
+    </div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="arrival-form-title">
+    <div>
+      <h2 id="arrival-form-title" class="page__section-title">Arrival details</h2>
+      <p class="page__muted">Required fields are marked with an asterisk.</p>
+    </div>
+    @if (loadingWarehouses()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading warehouses…
+      </p>
+    } @else if (warehouses().length === 0) {
+      <div class="sd-alert sd-alert--warning" role="status">
+        No active warehouse is available. Activate a warehouse before recording arrivals.
+      </div>
+    } @else {
+      <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="form__grid">
+          <div class="sd-field">
+            @let referenceError = fieldError('parcelReference');
+            <label class="sd-label" for="arrival-reference">Parcel reference *</label>
+            <input
+              id="arrival-reference"
+              class="sd-input intake-reference"
+              formControlName="parcelReference"
+              autocomplete="off"
+              maxlength="50"
+              [attr.aria-invalid]="!!referenceError"
+              [attr.aria-describedby]="
+                referenceError ? 'arrival-reference-error' : 'arrival-reference-help'
+              "
+            />
+            <p id="arrival-reference-help" class="sd-help">
+              Enter the SwiftDrop booking or parcel reference.
+            </p>
+            @if (referenceError) {
+              <p id="arrival-reference-error" class="sd-error">{{ referenceError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let warehouseError = fieldError('warehouseId');
+            <label class="sd-label" for="arrival-warehouse">Arriving warehouse *</label>
+            <select
+              id="arrival-warehouse"
+              class="sd-input"
+              formControlName="warehouseId"
+              [attr.aria-invalid]="!!warehouseError"
+              [attr.aria-describedby]="warehouseError ? 'arrival-warehouse-error' : null"
+            >
+              <option value="">Select a warehouse</option>
+              @for (warehouse of warehouses(); track warehouse.id) {
+                <option [value]="warehouse.id">{{ warehouse.name }} ({{ warehouse.code }})</option>
+              }
+            </select>
+            @if (warehouseError) {
+              <p id="arrival-warehouse-error" class="sd-error">{{ warehouseError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="arrival-time"
+              >Arrival date and time <span class="sd-label__optional">Optional</span></label
+            >
+            <input
+              id="arrival-time"
+              class="sd-input"
+              type="datetime-local"
+              formControlName="arrivedAt"
+            />
+            <p class="sd-help">Leave blank to use the current server time.</p>
+          </div>
+          <div class="sd-field form__full">
+            @let notesError = fieldError('notes');
+            <label class="sd-label" for="arrival-notes"
+              >Internal notes <span class="sd-label__optional">Optional</span></label
+            >
+            <textarea
+              id="arrival-notes"
+              class="sd-input"
+              formControlName="notes"
+              maxlength="500"
+              [attr.aria-invalid]="!!notesError"
+              [attr.aria-describedby]="notesError ? 'arrival-notes-error' : 'arrival-notes-help'"
+            ></textarea>
+            <p id="arrival-notes-help" class="sd-help">
+              Do not include unnecessary personal information.
+            </p>
+            @if (notesError) {
+              <p id="arrival-notes-error" class="sd-error">{{ notesError }}</p>
+            }
+          </div>
+        </div>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--primary"
+            type="submit"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving()"
+          >
+            @if (saving()) {
+              <span class="sd-spinner" aria-hidden="true"></span> Recording…
+            } @else {
+              Record arrival
+            }
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+</div>

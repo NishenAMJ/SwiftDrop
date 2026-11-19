@@ -71,5 +71,24 @@ export interface CreateApiKeyRequest {
   expiresAt?: string;
 }
 
+export type ApiKeyState = 'active' | 'expired' | 'revoked';
+
+/** Text and badge for each key state. The text is always shown; colour only supports it. */
+export const API_KEY_STATE: Record<ApiKeyState, { label: string; badge: string }> = {
+  active: { label: 'Active', badge: 'sd-badge sd-badge--success' },
+  expired: { label: 'Expired', badge: 'sd-badge' },
+  revoked: { label: 'Revoked', badge: 'sd-badge sd-badge--danger' },
+};
+
+export function apiKeyState(key: ApiKey, now: number = Date.now()): ApiKeyState {
+  if (key.revokedAt) {
+    return 'revoked';
+  }
+  if (key.expiresAt && new Date(key.expiresAt).getTime() <= now) {
+    return 'expired';
+  }
+  return 'active';
+}
+
 /** Most active keys a merchant can have at once (enforced by identity). */
 export const MAX_ACTIVE_API_KEYS = 5;

@@ -1,0 +1,356 @@
+<div class="page page--wide">
+  <header class="page__header">
+    <h1 class="page__title">Parcel transfers</h1>
+    <p class="page__intro">
+      Create and track parcel movements between warehouses from dispatch through receipt.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="create-transfer-title">
+    <div>
+      <h2 id="create-transfer-title" class="page__section-title">Create transfer</h2>
+      <p class="page__muted">The parcel must be ready to move from its current warehouse.</p>
+    </div>
+
+    @if (loadingWarehouses()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading warehouses…
+      </p>
+    } @else {
+      <form class="form" [formGroup]="createForm" (ngSubmit)="createTransfer()" novalidate>
+        <div class="form__grid transfer-create-grid">
+          <div class="sd-field">
+            @let referenceError = createError('parcelReference');
+            <label class="sd-label" for="transfer-parcel-reference">Parcel reference *</label>
+            <input
+              id="transfer-parcel-reference"
+              class="sd-input transfer-reference"
+              formControlName="parcelReference"
+              maxlength="50"
+              autocomplete="off"
+              [attr.aria-invalid]="!!referenceError"
+              [attr.aria-describedby]="referenceError ? 'transfer-reference-error' : null"
+            />
+            @if (referenceError) {
+              <p id="transfer-reference-error" class="sd-error">{{ referenceError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let sourceError = createError('sourceWarehouseId');
+            <label class="sd-label" for="transfer-source">Source warehouse *</label>
+            <select
+              id="transfer-source"
+              class="sd-input"
+              formControlName="sourceWarehouseId"
+              [attr.aria-invalid]="!!sourceError"
+              [attr.aria-describedby]="sourceError ? 'transfer-source-error' : null"
+            >
+              <option value="">Select source</option>
+              @for (warehouse of warehouses(); track warehouse.id) {
+                <option [value]="warehouse.id">{{ warehouse.name }} ({{ warehouse.code }})</option>
+              }
+            </select>
+            @if (sourceError) {
+              <p id="transfer-source-error" class="sd-error">{{ sourceError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let destinationError = createError('destinationWarehouseId');
+            <label class="sd-label" for="transfer-destination">Destination warehouse *</label>
+            <select
+              id="transfer-destination"
+              class="sd-input"
+              formControlName="destinationWarehouseId"
+              [attr.aria-invalid]="!!destinationError"
+              [attr.aria-describedby]="destinationError ? 'transfer-destination-error' : null"
+            >
+              <option value="">Select destination</option>
+              @for (warehouse of warehouses(); track warehouse.id) {
+                <option [value]="warehouse.id">{{ warehouse.name }} ({{ warehouse.code }})</option>
+              }
+            </select>
+            @if (destinationError) {
+              <p id="transfer-destination-error" class="sd-error">{{ destinationError }}</p>
+            }
+          </div>
+        </div>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--primary"
+            type="submit"
+            [disabled]="creating()"
+            [attr.aria-busy]="creating()"
+          >
+            @if (creating()) {
+              <span class="sd-spinner" aria-hidden="true"></span> Creating…
+            } @else {
+              Create transfer
+            }
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+
+  <section class="sd-card page__section" aria-labelledby="transfer-list-title">
+    <div>
+      <h2 id="transfer-list-title" class="page__section-title">Transfer activity</h2>
+      <p class="page__muted">Filter by parcel reference or lifecycle status.</p>
+    </div>
+
+    <form class="transfer-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+      <div class="sd-field">
+        <label class="sd-label" for="transfer-filter-reference">Parcel reference</label>
+        <input
+          id="transfer-filter-reference"
+          class="sd-input transfer-reference"
+          formControlName="parcelReference"
+          maxlength="50"
+        />
+      </div>
+      <div class="sd-field">
+        <label class="sd-label" for="transfer-filter-status">Status</label>
+        <select id="transfer-filter-status" class="sd-input" formControlName="status">
+          <option value="">All statuses</option>
+          <option value="CREATED">Created</option>
+          <option value="IN_TRANSIT">In transit</option>
+          <option value="RECEIVED">Received</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+      </div>
+      <div class="transfer-filters__actions">
+        <button class="sd-button sd-button--primary" type="submit">Apply filters</button>
+        <button class="sd-button sd-button--ghost" type="button" (click)="clearFilters()">
+          Clear
+        </button>
+      </div>
+    </form>
+
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading transfers…
+      </p>
+    } @else if (transfers().empty) {
+      <div class="transfer-empty">
+        <h3>No transfers found</h3>
+        <p>Create a transfer or adjust the filters.</p>
+      </div>
+    } @else {
+      <div class="sd-table-wrap" role="region" aria-labelledby="transfer-list-title" tabindex="0">
+        <table class="sd-table">
+          <thead>
+            <tr>
+              <th scope="col">Parcel</th>
+              <th scope="col">Route</th>
+              <th scope="col">Status</th>
+              <th scope="col">Created</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (transfer of transfers().content; track transfer.id) {
+              <tr>
+                <td class="transfer-reference">{{ transfer.parcelReference }}</td>
+                <td>
+                  <span class="transfer-route">{{ transfer.sourceWarehouseCode }}</span>
+                  <span aria-hidden="true"> → </span>
+                  <span class="transfer-route">{{ transfer.destinationWarehouseCode }}</span>
+                </td>
+                <td>
+                  <span class="sd-badge" [class]="statusClass(transfer.status)">
+                    {{ statusLabel(transfer.status) }}
+                  </span>
+                </td>
+                <td>{{ transfer.createdAt | date: 'medium' }}</td>
+                <td>
+                  <div class="transfer-actions">
+                    @if (transfer.status === 'CREATED') {
+                      <button
+                        class="sd-button sd-button--secondary sd-button--sm"
+                        type="button"
+                        (click)="dispatch(transfer)"
+                        [disabled]="actionId() === transfer.id"
+                      >
+                        Dispatch
+                      </button>
+                      <button
+                        class="sd-button sd-button--ghost sd-button--sm"
+                        type="button"
+                        (click)="requestCancel(transfer)"
+                        [disabled]="actionId() === transfer.id"
+                        [attr.aria-expanded]="confirmingCancelId() === transfer.id"
+                      >
+                        Cancel transfer
+                      </button>
+                    } @else if (transfer.status === 'IN_TRANSIT') {
+                      <button
+                        class="sd-button sd-button--primary sd-button--sm"
+                        type="button"
+                        (click)="beginReceive(transfer)"
+                        [disabled]="actionId() === transfer.id"
+                        [attr.aria-expanded]="receivingId() === transfer.id"
+                      >
+                        Record receipt
+                      </button>
+                    } @else {
+                      <span class="page__muted">No action required</span>
+                    }
+                  </div>
+                </td>
+              </tr>
+              @if (confirmingCancelId() === transfer.id) {
+                <tr class="transfer-panel-row">
+                  <td colspan="5">
+                    <div class="transfer-confirm" role="alertdialog" aria-modal="false">
+                      <div>
+                        <h3>Cancel this transfer?</h3>
+                        <p>This records the transfer as cancelled and cannot be undone here.</p>
+                      </div>
+                      <div class="page__actions">
+                        <button
+                          class="sd-button sd-button--danger"
+                          type="button"
+                          (click)="cancel(transfer)"
+                        >
+                          Confirm cancellation
+                        </button>
+                        <button
+                          class="sd-button sd-button--ghost"
+                          type="button"
+                          (click)="dismissCancel()"
+                        >
+                          Keep transfer
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              }
+              @if (receivingId() === transfer.id) {
+                <tr class="transfer-panel-row">
+                  <td colspan="5">
+                    <form
+                      class="form transfer-receive"
+                      [formGroup]="receiveForm"
+                      (ngSubmit)="receive(transfer)"
+                      novalidate
+                    >
+                      <div>
+                        <h3>Receive at {{ transfer.destinationWarehouseCode }}</h3>
+                        <p>Record who verified the parcel at the destination warehouse.</p>
+                      </div>
+                      <div class="form__grid">
+                        <div class="sd-field">
+                          @let receivedByError = receiveError('receivedBy');
+                          <label class="sd-label" [for]="'received-by-' + transfer.id"
+                            >Received by *</label
+                          >
+                          <input
+                            [id]="'received-by-' + transfer.id"
+                            class="sd-input"
+                            formControlName="receivedBy"
+                            maxlength="120"
+                            [attr.aria-invalid]="!!receivedByError"
+                            [attr.aria-describedby]="
+                              receivedByError ? 'received-by-error-' + transfer.id : null
+                            "
+                          />
+                          @if (receivedByError) {
+                            <p [id]="'received-by-error-' + transfer.id" class="sd-error">
+                              {{ receivedByError }}
+                            </p>
+                          }
+                        </div>
+                        <div class="sd-field">
+                          <label class="sd-label" [for]="'received-at-' + transfer.id">
+                            Received date and time <span class="sd-label__optional">Optional</span>
+                          </label>
+                          <input
+                            [id]="'received-at-' + transfer.id"
+                            class="sd-input"
+                            type="datetime-local"
+                            formControlName="receivedAt"
+                          />
+                          <p class="sd-help">Leave blank to use the current server time.</p>
+                        </div>
+                        <div class="sd-field form__full">
+                          @let notesError = receiveError('notes');
+                          <label class="sd-label" [for]="'receiving-notes-' + transfer.id">
+                            Internal notes <span class="sd-label__optional">Optional</span>
+                          </label>
+                          <textarea
+                            [id]="'receiving-notes-' + transfer.id"
+                            class="sd-input"
+                            formControlName="notes"
+                            maxlength="500"
+                            [attr.aria-invalid]="!!notesError"
+                            [attr.aria-describedby]="
+                              notesError ? 'receiving-notes-error-' + transfer.id : null
+                            "
+                          ></textarea>
+                          @if (notesError) {
+                            <p [id]="'receiving-notes-error-' + transfer.id" class="sd-error">
+                              {{ notesError }}
+                            </p>
+                          }
+                        </div>
+                      </div>
+                      <div class="page__actions">
+                        <button
+                          class="sd-button sd-button--primary"
+                          type="submit"
+                          [disabled]="actionId() === transfer.id"
+                        >
+                          Confirm receipt
+                        </button>
+                        <button
+                          class="sd-button sd-button--ghost"
+                          type="button"
+                          (click)="dismissReceive()"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="transfer-pagination" aria-label="Transfer pages">
+        <p>
+          Page {{ transfers().number + 1 }} of {{ transfers().totalPages }} ·
+          {{ transfers().totalElements }} transfers
+        </p>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--ghost"
+            type="button"
+            (click)="previousPage()"
+            [disabled]="transfers().first"
+          >
+            Previous
+          </button>
+          <button
+            class="sd-button sd-button--ghost"
+            type="button"
+            (click)="nextPage()"
+            [disabled]="transfers().last"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+</div>
