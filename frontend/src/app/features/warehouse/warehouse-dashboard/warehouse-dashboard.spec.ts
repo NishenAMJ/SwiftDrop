@@ -11,9 +11,17 @@ const dashboard: WarehouseDashboardData = {
     id: 'warehouse-1',
     code: 'CMB-01',
     name: 'Colombo Central',
+    addressLine1: 'Operations Road',
+    addressLine2: null,
     city: 'Colombo',
     district: 'Colombo',
+    postalCode: null,
+    contactName: 'Operations lead',
+    contactPhone: '0110000000',
+    contactEmail: null,
     status: 'ACTIVE',
+    createdAt: '2026-11-01T08:00:00Z',
+    updatedAt: '2026-11-01T08:00:00Z',
   },
   arrivedParcels: 4,
   sortedParcels: 7,
@@ -57,6 +65,15 @@ describe('WarehouseDashboard', () => {
     expect(page.textContent).toContain('Colombo Central');
     expect(page.textContent).toContain('Awaiting sorting');
     expect(page.textContent).toContain('No parcel activity has been recorded');
+    expect(page.querySelector('a[href="/warehouse/intake"]')?.textContent).toContain(
+      'Record arrival',
+    );
+    expect(page.querySelector('a[href="/warehouse/sorting"]')?.textContent).toContain(
+      'Sort parcel',
+    );
+    expect(page.querySelector('a[href="/warehouse/transfers"]')?.textContent).toContain(
+      'Manage transfers',
+    );
     expect(warehouseService.dashboard).toHaveBeenCalledWith('warehouse-1');
   });
 

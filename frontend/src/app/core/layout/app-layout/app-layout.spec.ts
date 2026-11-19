@@ -32,7 +32,12 @@ describe('AppLayout', () => {
 
   it('shows a customer how to become a merchant or courier', async () => {
     const page = (await signedInAs(exampleUser)).nativeElement as HTMLElement;
-    expect(links(page)).toEqual(['Customer portal', 'Become a merchant', 'Become a courier', 'Your account']);
+    expect(links(page)).toEqual([
+      'Customer portal',
+      'Become a merchant',
+      'Become a courier',
+      'Your account',
+    ]);
     expect(page.querySelector('.app-header__role')?.textContent).toContain('Customer');
   });
 
@@ -50,8 +55,14 @@ describe('AppLayout', () => {
   });
 
   it('shows dispatchers their tools and nothing for customers', async () => {
-    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'] })).nativeElement as HTMLElement;
+    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'] }))
+      .nativeElement as HTMLElement;
     expect(links(page)).toEqual([
+      'Warehouse overview',
+      'Warehouses',
+      'Parcel intake',
+      'Parcel sorting',
+      'Parcel transfers',
       'Merchant applications',
       'Courier applications',
       'Users',
@@ -61,8 +72,9 @@ describe('AppLayout', () => {
   });
 
   it('hides dispatcher tools until the initial password is replaced', async () => {
-    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'], mustChangePassword: true }))
-      .nativeElement as HTMLElement;
+    const page = (
+      await signedInAs({ ...exampleUser, roles: ['DISPATCHER'], mustChangePassword: true })
+    ).nativeElement as HTMLElement;
     expect(links(page)).toEqual(['Your account']);
   });
 
@@ -83,8 +95,8 @@ describe('AppLayout', () => {
     const fixture = await signedInAs(exampleUser);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
 
-    const logout = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Log out'),
+    const logout = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+      (b) => b.textContent?.includes('Log out'),
     )!;
     logout.click();
     http.expectOne('/api/v1/auth/logout').flush(null, { status: 204, statusText: 'No Content' });
