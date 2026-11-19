@@ -76,6 +76,8 @@ routes are denied. Authentication is not implemented by this service.
 | PAYMENT_PAYHERE_NOTIFY_URL | Public callback URL ending /api/v1/payments/callbacks/payhere |
 | PAYMENT_PAYHERE_RETURN_URL / PAYMENT_PAYHERE_CANCEL_URL | localhost:4200/payments/return and /payments/cancel (frontend routes must be implemented) |
 | PAYMENT_WORKERS_ENABLED | true; disables outbox and recovery workers when false |
+| PAYMENT_COD_CONSUMER_ENABLED | false; enable only after COD producer and pricing verification contracts are approved |
+| PAYMENT_COD_VERIFICATION_MODE | pending; fail-closed placeholder that prevents enabling the consumer until an approved verifier is implemented |
 
 JWT issuer is `swiftdrop-identity`, audience `swiftdrop-api`. Role checks use `roles`,
 ownership uses `sub` and `merchant_id`. No locally fabricated JWT bypass exists.

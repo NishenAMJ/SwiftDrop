@@ -78,3 +78,7 @@ payment:
     cancel-url: ${PAYMENT_PAYHERE_CANCEL_URL:http://localhost:4200/payments/cancel}
   workers:
     enabled: ${PAYMENT_WORKERS_ENABLED:true}
+  cod:
+    consumer:
+      enabled: ${PAYMENT_COD_CONSUMER_ENABLED:false}
+    verification-mode: ${PAYMENT_COD_VERIFICATION_MODE:pending}
