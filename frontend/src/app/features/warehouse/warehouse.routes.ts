@@ -7,4 +7,20 @@ export const WAREHOUSE_ROUTES: Routes = [
     loadComponent: () =>
       import('./warehouse-dashboard/warehouse-dashboard').then((m) => m.WarehouseDashboard),
   },
+  {
+    path: 'warehouses',
+    title: 'Manage warehouses | SwiftDrop',
+    loadComponent: () =>
+      import('./warehouse-management/warehouse-management').then((m) => m.WarehouseManagement),
+  },
+  {
+    path: 'intake',
+    title: 'Parcel intake | SwiftDrop',
+    loadComponent: () => import('./parcel-intake/parcel-intake').then((m) => m.ParcelIntake),
+  },
+  {
+    path: 'sorting',
+    title: 'Parcel sorting | SwiftDrop',
+    loadComponent: () => import('./parcel-sorting/parcel-sorting').then((m) => m.ParcelSorting),
+  },
 ];
