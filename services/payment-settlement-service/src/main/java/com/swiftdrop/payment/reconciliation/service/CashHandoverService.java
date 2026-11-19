@@ -210,10 +210,10 @@ public class CashHandoverService {
                 reconciliation.getReceivedAmount(), reconciliation.getDifferenceAmount(),
                 reconciliation.getCurrency(), reconciliation.getStatus().name(),
                 reconciliation.getInvestigationNote(), reconciliation.getConfirmedBy(),
-                reconciliation.getConfirmedAt());
+                utc(reconciliation.getConfirmedAt()));
         return new CashHandoverDtos.Handover(handover.getId(), handover.getCourierId(),
             List.copyOf(collectionIds), handover.getExpectedAmount(), handover.getSubmittedAmount(),
-            handover.getCurrency(), handover.getStatus().name(), handover.getSubmittedAt(), response);
+            handover.getCurrency(), handover.getStatus().name(), utc(handover.getSubmittedAt()), response);
     }
 
     private List<UUID> collectionIds(UUID handoverId) {
@@ -248,6 +248,10 @@ public class CashHandoverService {
     private static boolean validMoney(BigDecimal value, boolean zeroAllowed) {
         return value != null && (zeroAllowed ? value.signum() >= 0 : value.signum() > 0)
             && value.scale() <= 2 && value.precision() - value.scale() <= 10;
+    }
+
+    private static OffsetDateTime utc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private static PaymentProblem validation(String message) {

@@ -2,7 +2,7 @@ package com.swiftdrop.payment.ledger.dto;
 
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 public final class MerchantLedgerDtos {
@@ -27,7 +27,7 @@ public final class MerchantLedgerDtos {
         String reason,
         UUID settlementId,
         boolean settlementEligible,
-        LocalDateTime createdAt
+        OffsetDateTime createdAt
     ) { }
 
     public record Page(

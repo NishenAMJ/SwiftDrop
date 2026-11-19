@@ -32,7 +32,7 @@ class MerchantSettlementServiceTest {
         when(ledger.findUnsettledThrough(merchantId, "LKR", cutoff)).thenReturn(List.of(credit, charge));
 
         MerchantSettlementDtos.View result = service.calculate(
-            new MerchantSettlementDtos.Calculate(merchantId, "LKR", cutoff),
+            new MerchantSettlementDtos.Calculate(merchantId, "LKR", cutoff.atOffset(ZoneOffset.UTC)),
             "settlement-key-01", dispatcher);
 
         assertEquals(new BigDecimal("900.00"), result.amount());
@@ -60,7 +60,7 @@ class MerchantSettlementServiceTest {
         LocalDateTime paidAt = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1).withNano(0);
 
         MerchantSettlementDtos.View result = service.recordPayment(settlement.getId(),
-            new MerchantSettlementDtos.RecordPayment("bank-transfer-123", paidAt, true),
+            new MerchantSettlementDtos.RecordPayment("bank-transfer-123", paidAt.atOffset(ZoneOffset.UTC), true),
             "payment-key-0001", dispatcher);
 
         assertEquals("PAID", result.status());

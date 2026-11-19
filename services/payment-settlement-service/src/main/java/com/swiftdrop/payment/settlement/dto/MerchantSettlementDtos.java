@@ -11,7 +11,7 @@ public final class MerchantSettlementDtos {
     public record Calculate(
         @NotNull UUID merchantId,
         @NotBlank @Pattern(regexp = "^[A-Z]{3}$") String currency,
-        @NotNull LocalDateTime cutoffAt
+        @NotNull OffsetDateTime cutoffAt
     ) { }
 
     public record Approve(
@@ -21,7 +21,7 @@ public final class MerchantSettlementDtos {
 
     public record RecordPayment(
         @NotBlank @Size(max = 200) String externalReference,
-        @NotNull LocalDateTime paidAt,
+        @NotNull OffsetDateTime paidAt,
         @AssertTrue boolean confirmExternalPayment
     ) { }
 
@@ -31,15 +31,15 @@ public final class MerchantSettlementDtos {
         List<UUID> ledgerEntryIds,
         BigDecimal amount,
         String currency,
-        LocalDateTime cutoffAt,
+        OffsetDateTime cutoffAt,
         String status,
         UUID calculatedBy,
-        LocalDateTime calculatedAt,
+        OffsetDateTime calculatedAt,
         UUID approvedBy,
-        LocalDateTime approvedAt,
+        OffsetDateTime approvedAt,
         String approvalNote,
         UUID paidBy,
-        LocalDateTime paidAt,
+        OffsetDateTime paidAt,
         String externalPaymentReference
     ) { }
 }

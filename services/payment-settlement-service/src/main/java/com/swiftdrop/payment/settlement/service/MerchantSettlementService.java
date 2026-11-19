@@ -31,7 +31,7 @@ public class MerchantSettlementService {
         actor.requireAdmin();
         validateKey(key);
         validate(request);
-        LocalDateTime cutoff = micros(request.cutoffAt());
+        LocalDateTime cutoff = micros(request.cutoffAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime());
         Optional<MerchantSettlement> replay = settlements.findByCalculatedByAndIdempotencyKey(actor.id(), key);
         if (replay.isPresent()) {
             MerchantSettlement existing = replay.get();
@@ -118,7 +118,7 @@ public class MerchantSettlementService {
         validateKey(key);
         validate(request);
         String reference = request.externalReference().trim();
-        LocalDateTime paidAt = micros(request.paidAt());
+        LocalDateTime paidAt = micros(request.paidAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime());
         Optional<MerchantSettlement> replay = settlements.findByPaidByAndPaymentIdempotencyKey(actor.id(), key);
         if (replay.isPresent()) {
             MerchantSettlement existing = replay.get();
@@ -165,16 +165,16 @@ public class MerchantSettlementService {
 
     private static MerchantSettlementDtos.View view(MerchantSettlement settlement, List<UUID> ids) {
         return new MerchantSettlementDtos.View(settlement.getId(), settlement.getMerchantId(),
-            List.copyOf(ids), settlement.getAmount(), settlement.getCurrency(), settlement.getCutoffAt(),
-            settlement.getStatus().name(), settlement.getCalculatedBy(), settlement.getCalculatedAt(),
-            settlement.getApprovedBy(), settlement.getApprovedAt(), settlement.getApprovalNote(),
-            settlement.getPaidBy(), settlement.getPaidAt(), settlement.getExternalPaymentReference());
+            List.copyOf(ids), settlement.getAmount(), settlement.getCurrency(), utc(settlement.getCutoffAt()),
+            settlement.getStatus().name(), settlement.getCalculatedBy(), utc(settlement.getCalculatedAt()),
+            settlement.getApprovedBy(), utc(settlement.getApprovedAt()), settlement.getApprovalNote(),
+            settlement.getPaidBy(), utc(settlement.getPaidAt()), settlement.getExternalPaymentReference());
     }
 
     private static void validate(MerchantSettlementDtos.Calculate request) {
         if (request == null || request.merchantId() == null || request.cutoffAt() == null
             || request.currency() == null || !request.currency().matches("^[A-Z]{3}$")
-            || request.cutoffAt().isAfter(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5)))
+            || request.cutoffAt().toInstant().isAfter(Instant.now().plus(Duration.ofMinutes(5))))
             throw validation("Settlement calculation is incomplete or invalid.");
     }
 
@@ -192,6 +192,10 @@ public class MerchantSettlementService {
 
     private static LocalDateTime micros(LocalDateTime value) {
         return value.withNano((value.getNano() / 1_000) * 1_000);
+    }
+
+    private static OffsetDateTime utc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private static String normalized(String value) {

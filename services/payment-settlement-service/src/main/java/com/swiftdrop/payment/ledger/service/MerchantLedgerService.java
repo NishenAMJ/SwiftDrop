@@ -111,7 +111,7 @@ public class MerchantLedgerService {
         return new MerchantLedgerDtos.Entry(entry.getId(), entry.getMerchantId(), entry.getAmount(),
             entry.getCurrency(), entry.getEntryType().name(), entry.getSourceReference(),
             entry.getIdempotencyKey(), entry.getReason(), entry.getSettlementId(),
-            entry.isSettlementEligible(), entry.getCreatedAt());
+            entry.isSettlementEligible(), entry.getCreatedAt().atOffset(ZoneOffset.UTC));
     }
 
     private static PaymentProblem validation(String message) {

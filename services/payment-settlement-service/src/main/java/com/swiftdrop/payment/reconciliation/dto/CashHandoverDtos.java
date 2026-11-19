@@ -2,7 +2,7 @@ package com.swiftdrop.payment.reconciliation.dto;
 
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 public final class CashHandoverDtos {
@@ -29,7 +29,7 @@ public final class CashHandoverDtos {
         String status,
         String investigationNote,
         UUID confirmedBy,
-        LocalDateTime confirmedAt
+        OffsetDateTime confirmedAt
     ) { }
 
     public record Handover(
@@ -40,7 +40,7 @@ public final class CashHandoverDtos {
         BigDecimal submittedAmount,
         String currency,
         String status,
-        LocalDateTime submittedAt,
+        OffsetDateTime submittedAt,
         Reconciliation reconciliation
     ) { }
 
