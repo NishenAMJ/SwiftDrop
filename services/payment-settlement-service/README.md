@@ -45,7 +45,7 @@ The service imports the root `.env` when launched from either directory. Environ
 variables override file values. The PostgreSQL initialization scripts create the
 service role/schema only on an empty database volume; existing installations must
 already have `payment_settlement_user` and `payment_settlement`. Do not erase a
-development database to fix a missing schema. Flyway applies V1/V2; Hibernate validates.
+development database to fix a missing schema. Flyway applies V1 through V5; Hibernate validates.
 
 In another terminal:
 
