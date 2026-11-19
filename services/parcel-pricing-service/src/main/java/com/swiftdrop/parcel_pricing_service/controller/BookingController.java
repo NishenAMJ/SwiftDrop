@@ -14,15 +14,30 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/bookings")
-@CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200"})
 public class BookingController {
 
-    private static final UUID DEMO_CUSTOMER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-
     private final BookingService bookingService;
+    private final com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier paymentVerifier;
 
-    public BookingController(BookingService bookingService) {
+    public BookingController(BookingService bookingService, com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier paymentVerifier) {
         this.bookingService = bookingService;
+        this.paymentVerifier = paymentVerifier;
+    }
+
+    public record ConfirmPaymentRequest(UUID paymentId) {}
+
+    @PostMapping("/{id}/confirm-payment")
+    public BookingResponseDto confirmPayment(@PathVariable UUID id, @RequestBody ConfirmPaymentRequest request,
+                                             @AuthenticationPrincipal Jwt jwt) {
+        UUID customerId = resolveCustomerId(jwt);
+        requireOwner(id, jwt);
+        if (request.paymentId() == null) throw com.swiftdrop.parcel_pricing_service.common.ApiException.badRequest("PAYMENT_REQUIRED", "A payment reference is required.");
+        return bookingService.confirmPaid(id, customerId, paymentVerifier.verify(request.paymentId(), jwt));
+    }
+
+    private void requireOwner(UUID id, Jwt jwt) {
+        if (!resolveCustomerId(jwt).equals(bookingService.getBookingById(id).customerId()))
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.forbidden("You do not own this booking.");
     }
 
     @PostMapping
@@ -42,7 +57,8 @@ public class BookingController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<BookingResponseDto> getBookingById(@PathVariable UUID id) {
+    public ResponseEntity<BookingResponseDto> getBookingById(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        requireOwner(id, jwt);
         return ResponseEntity.ok(bookingService.getBookingById(id));
     }
 
@@ -52,8 +68,17 @@ public class BookingController {
     }
 
     @GetMapping("/{id}/receipt")
-    public ResponseEntity<BookingReceiptDto> getReceipt(@PathVariable UUID id) {
+    public ResponseEntity<BookingReceiptDto> getReceipt(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        requireOwner(id, jwt);
         return ResponseEntity.ok(bookingService.getReceiptByParcelId(id));
+    }
+
+    @GetMapping("/{id}/payment-context")
+    public ResponseEntity<PaymentContextResponse> getPaymentContext(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        PaymentContextResponse response = bookingService.getPaymentContext(id, jwt);
+        return ResponseEntity.ok(response);
     }
 
     private UUID resolveCustomerId(Jwt jwt) {
@@ -64,7 +89,7 @@ public class BookingController {
                 // If subject is not standard UUID, fall back
             }
         }
-        return DEMO_CUSTOMER_ID;
+        throw com.swiftdrop.parcel_pricing_service.common.ApiException.unauthorized("A valid customer login is required.");
     }
 }
 

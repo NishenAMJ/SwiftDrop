@@ -19,6 +19,7 @@ public record BookingReceiptDto(
     BigDecimal weightKg,
     String urgency,
     String status,
+    String paymentMethod,
     AddressDto pickupAddress,
     AddressDto deliveryAddress
 ) {
@@ -49,9 +50,9 @@ public record BookingReceiptDto(
             parcel != null ? parcel.getWeightKg() : null,
             parcel != null ? parcel.getUrgency() : null,
             parcel != null ? parcel.getStatus() : null,
+            parcel != null ? parcel.getPaymentMethod() : "ONLINE",
             pickup,
             delivery
         );
     }
 }
-

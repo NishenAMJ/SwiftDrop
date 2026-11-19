@@ -1,0 +1,93 @@
+<div class="sd-page sd-aura">
+  <div class="sd-aura__content" style="padding: var(--sd-space-6); max-width: 1200px; margin: auto;">
+    <h1 class="sd-page-title" style="font-size: clamp(1.5rem,3vw,2rem); margin-bottom: var(--sd-space-5);">Delivery Zone Management</h1>
+
+    <div class="sd-toolbar" style="display:flex; gap: var(--sd-space-4); margin-bottom: var(--sd-space-5); align-items:center; flex-wrap:wrap;">
+      <button class="sd-button sd-button--primary" (click)="openAddModal()">Add New Zone</button>
+      <input type="text" placeholder="Search zones..." [formControl]="searchCtrl" class="sd-input" style="flex:1; max-width:300px;" />
+      <select [formControl]="statusCtrl" class="sd-select" style="max-width:150px;">
+        <option value="ALL">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+      </select>
+    </div>
+
+    <ng-container *ngIf="loading()">
+      <div class="sd-spinner" style="margin:auto;"></div>
+    </ng-container>
+
+    <ng-container *ngIf="error() as errMsg">
+      <div class="sd-alert sd-alert--error" role="alert">{{ errMsg }}</div>
+    </ng-container>
+
+    <ng-container *ngIf="!loading() && !error()">
+      <ng-container *ngIf="filteredZones().length > 0; else emptyState">
+        <table class="sd-table" style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th>Zone Code</th>
+              <th>Zone Name</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let zone of filteredZones()">
+              <td>{{ zone.code }}</td>
+              <td>{{ zone.name }}</td>
+              <td>{{ zone.description }}</td>
+              <td>
+                <span class="sd-badge" [ngClass]="{'sd-badge--success': zone.status === 'ACTIVE', 'sd-badge--danger': zone.status === 'INACTIVE'}">
+                  {{ zone.status }}
+                </span>
+              </td>
+              <td>
+                <button class="sd-button sd-button--secondary" (click)="openEditModal(zone)" style="margin-right: var(--sd-space-2);">Edit</button>
+                <button class="sd-button" [ngClass]="{'sd-button--danger': zone.status === 'ACTIVE', 'sd-button--success': zone.status === 'INACTIVE'}"
+                  (click)="toggleStatus(zone)">
+                  {{ zone.status === 'ACTIVE' ? 'Deactivate' : 'Activate' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </ng-container>
+      <ng-template #emptyState>
+        <div class="sd-card" style="text-align:center; padding: var(--sd-space-6);">
+          <p>No delivery zones found.</p>
+        </div>
+      </ng-template>
+    </ng-container>
+  </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<dialog id="zone-dialog" #zoneDialog class="sd-dialog">
+  <form (ngSubmit)="submitZone()" [formGroup]="zoneForm" class="sd-dialog-content" style="padding: var(--sd-space-6); max-width:400px;">
+    <h2 class="sd-dialog-title">{{ isEditMode ? 'Edit Zone' : 'Add New Zone' }}</h2>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label for="code" class="sd-label">Zone Code *</label>
+      <input id="code" formControlName="code" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label for="name" class="sd-label">Zone Name *</label>
+      <input id="name" formControlName="name" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label for="description" class="sd-label">Description</label>
+      <textarea id="description" formControlName="description" class="sd-input" rows="3"></textarea>
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label for="status" class="sd-label">Status</label>
+      <select id="status" formControlName="status" class="sd-select">
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+      </select>
+    </div>
+    <div class="sd-dialog-actions" style="display:flex; justify-content:flex-end; gap: var(--sd-space-3);">
+      <button type="button" class="sd-button" (click)="closeDialog()">Cancel</button>
+      <button type="submit" class="sd-button sd-button--primary" [disabled]="zoneForm.invalid">Save</button>
+    </div>
+  </form>
+</dialog>

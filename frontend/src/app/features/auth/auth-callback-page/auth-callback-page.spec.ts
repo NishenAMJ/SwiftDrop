@@ -25,14 +25,14 @@ describe('AuthCallbackPage', () => {
 
   afterEach(() => http.verify());
 
-  it('finishes Google login with one refresh and goes to the account page', async () => {
+  it('finishes Google login with one refresh and goes to the start page of the role', async () => {
     const fixture = create({});
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Finishing Google login');
 
     http.expectOne('/api/v1/auth/refresh').flush(tokenResponse());
-    expect(navigate).toHaveBeenCalledWith('/account', { replaceUrl: true });
+    expect(navigate).toHaveBeenCalledWith('/customer', { replaceUrl: true });
   });
 
   it('explains errors sent back by identity without calling it', async () => {

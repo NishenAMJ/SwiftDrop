@@ -1,0 +1,53 @@
+@use '../../../shared/styles/page';
+
+.new-key {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+  border-color: var(--sd-warning);
+}
+
+// The heading receives focus from code when the key appears; no ring unless by keyboard.
+.new-key__title:focus {
+  outline: none;
+}
+
+.new-key__title:focus-visible {
+  outline: 3px solid var(--sd-focus);
+  outline-offset: 3px;
+}
+
+.new-key__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+.new-key__value {
+  font-family: var(--sd-font-mono);
+  font-size: 0.9375rem;
+}
+
+.key-prefix {
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+}
+
+.keys__actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.keys-retry {
+  margin-top: var(--sd-space-3);
+}
+
+@media (min-width: 40rem) {
+  .new-key__row {
+    flex-direction: row;
+  }
+
+  .new-key__value {
+    flex: 1;
+  }
+}

@@ -1,0 +1,34 @@
+@use '../../../shared/styles/page';
+@use '../review';
+
+.users-header {
+  gap: var(--sd-space-4);
+}
+
+.users__email {
+  overflow-wrap: anywhere;
+}
+
+.users__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-1);
+}
+
+// The heading receives focus from code when the form opens; no ring unless by keyboard.
+.users-form-heading:focus {
+  outline: none;
+}
+
+.users-form-heading:focus-visible {
+  outline: 3px solid var(--sd-focus);
+  outline-offset: 3px;
+}
+
+@media (min-width: 48rem) {
+  .users-header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}

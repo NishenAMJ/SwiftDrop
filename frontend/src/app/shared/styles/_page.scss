@@ -1,0 +1,142 @@
+// Page structure shared by signed-in screens inside the app layout: title, intro, sections and
+// form grids. Include with `@use '<relative path>/shared/styles/page';` in a component's SCSS.
+// Colours, controls and type come from the global SwiftDrop classes and tokens.
+:host {
+  display: block;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-6);
+  max-width: 60rem;
+}
+
+.page--wide {
+  max-width: none;
+}
+
+.page__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+}
+
+.page__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.page__intro {
+  margin: 0;
+  max-width: 65ch;
+  color: var(--sd-text-secondary);
+}
+
+.page__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+}
+
+.page__section-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.page__card-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.page__muted {
+  margin: 0;
+  color: var(--sd-text-secondary);
+}
+
+.page__loading {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  color: var(--sd-text-secondary);
+}
+
+.page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-3);
+}
+
+// Forms
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-5);
+}
+
+.form__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+}
+
+.form__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.form__legend {
+  margin-bottom: var(--sd-space-3);
+  padding: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.form__note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--sd-text-secondary);
+}
+
+// Definition lists of record details
+.details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+  margin: 0;
+}
+
+.details dt {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sd-text-secondary);
+}
+
+.details dd {
+  margin: var(--sd-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 40rem) {
+  .form__grid,
+  .details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form__grid > .form__full,
+  .details > .details__full {
+    grid-column: 1 / -1;
+  }
+}

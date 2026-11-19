@@ -3,8 +3,12 @@ package com.swiftdrop.parcel_pricing_service.service;
 import com.swiftdrop.parcel_pricing_service.dto.*;
 import com.swiftdrop.parcel_pricing_service.entity.*;
 import com.swiftdrop.parcel_pricing_service.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -19,24 +23,60 @@ public class BookingService {
     private final ParcelRepository parcelRepository;
     private final BookingReceiptRepository receiptRepository;
     private final ReferenceGenerator referenceGenerator;
+    private final CustomerProfileRepository profileRepository;
 
     public BookingService(ParcelRepository parcelRepository,
                           BookingReceiptRepository receiptRepository,
                           ReferenceGenerator referenceGenerator) {
+        this(parcelRepository, receiptRepository, referenceGenerator, null);
+    }
+
+    @Autowired
+    public BookingService(ParcelRepository parcelRepository,
+                          BookingReceiptRepository receiptRepository,
+                          ReferenceGenerator referenceGenerator,
+                          @Autowired(required = false) CustomerProfileRepository profileRepository) {
         this.parcelRepository = parcelRepository;
         this.receiptRepository = receiptRepository;
         this.referenceGenerator = referenceGenerator;
+        this.profileRepository = profileRepository;
+    }
+
+    public BookingResponseDto confirmPaid(UUID id, UUID customerId,
+            com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment payment) {
+        Parcel parcel = parcelRepository.lockById(id).orElseThrow(() -> new NoSuchElementException("Booking not found"));
+        if (!customerId.equals(parcel.getCustomerId()))
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.forbidden("You do not own this booking.");
+        if (!"ONLINE".equals(parcel.getPaymentMethod()) || !id.toString().equals(payment.bookingId()) ||
+            !"SUCCESS".equals(payment.status()) || !"LKR".equals(payment.currency()) || payment.amount() == null ||
+            payment.amount().compareTo(parcel.getEstimatedFee()) != 0 || payment.providerReference() == null || payment.providerReference().isBlank())
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.conflict("PAYMENT_NOT_VERIFIED", "A matching successful payment is required.");
+        if ("PAID".equals(parcel.getPaymentStatus()))
+            return BookingResponseDto.from(parcel, receiptRepository.findByParcelId(id).orElseThrow());
+        if (!"CHECKOUT_DRAFT".equals(parcel.getStatus()) && !"BOOKED".equals(parcel.getStatus()))
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.conflict("INVALID_BOOKING_STATE", "This booking cannot be confirmed.");
+        parcel.setPaymentStatus("PAID");
+        parcel.setStatus("BOOKED");
+        parcel.setUpdatedAt(OffsetDateTime.now());
+        BookingReceipt receipt = receiptRepository.findByParcelId(id).orElseGet(() -> receiptRepository.save(new BookingReceipt(
+            referenceGenerator.generateReceiptNumber(parcel.getTrackingNumber()), parcel, parcel.getEstimatedFee(), "LKR")));
+        return BookingResponseDto.from(parcel, receipt);
     }
 
     public BookingResponseDto createBooking(CreateBookingRequest request, UUID customerId) {
         if (customerId == null) {
-            customerId = UUID.randomUUID();
+            throw com.swiftdrop.parcel_pricing_service.common.ApiException.unauthorized("A customer login is required.");
         }
 
         String urgency = (request.urgency() != null && !request.urgency().isBlank())
                 ? request.urgency().trim().toUpperCase()
                 : "NORMAL";
 
+        String paymentMethod = (request.paymentMethod() != null && !request.paymentMethod().isBlank())
+                ? request.paymentMethod().trim().toUpperCase()
+                : "ONLINE";
+
+        if (!java.util.Set.of("ONLINE", "COD").contains(paymentMethod)) throw new com.swiftdrop.parcel_pricing_service.common.ApiException(HttpStatus.BAD_REQUEST,"INVALID_PAYMENT_METHOD","Choose ONLINE or COD.");
         Parcel parcel = new Parcel();
         parcel.setId(UUID.randomUUID());
         String trackingNumber = referenceGenerator.generateTrackingNumber();
@@ -45,16 +85,23 @@ public class BookingService {
         parcel.setDescription(request.description());
         parcel.setWeightKg(request.weightKg());
         parcel.setUrgency(urgency);
-        parcel.setStatus("BOOKED");
+        parcel.setStatus("COD".equals(paymentMethod) ? "BOOKED" : "CHECKOUT_DRAFT");
+        parcel.setPaymentStatus("COD".equals(paymentMethod) ? "PENDING" : "UNPAID");
+        parcel.setPaymentMethod(paymentMethod);
+        parcel.setChannel("DIRECT_WEBSITE");
         parcel.setCreatedAt(OffsetDateTime.now());
         parcel.setUpdatedAt(OffsetDateTime.now());
 
+        // Generate immutable pricing snapshot ID & expiration (valid for 24 hours)
+        String snapshotId = "SNP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        parcel.setPricingSnapshotId(snapshotId);
+        parcel.setPricingExpiresAt(OffsetDateTime.now().plusHours(24));
+
         // Estimated fee formula (Base 350 + 150/kg + 300 if Urgent)
-        // Note: Designed so Member 4 can seamlessly inject their dynamic PricingService here
         BigDecimal baseFee = BigDecimal.valueOf(350);
         BigDecimal weightCharge = request.weightKg().multiply(BigDecimal.valueOf(150));
         BigDecimal urgentCharge = "URGENT".equals(urgency) ? BigDecimal.valueOf(300) : BigDecimal.ZERO;
-        BigDecimal totalFee = baseFee.add(weightCharge).add(urgentCharge);
+        BigDecimal totalFee = baseFee.add(weightCharge).add(urgentCharge).setScale(2, java.math.RoundingMode.HALF_UP);
         parcel.setEstimatedFee(totalFee);
 
         // Add Pickup and Delivery addresses
@@ -86,6 +133,7 @@ public class BookingService {
 
         Parcel savedParcel = parcelRepository.save(parcel);
 
+        if (!"COD".equals(paymentMethod)) return BookingResponseDto.from(savedParcel, null);
         // Generate and save receipt
         String receiptNumber = referenceGenerator.generateReceiptNumber(trackingNumber);
         BookingReceipt receipt = new BookingReceipt(receiptNumber, savedParcel, totalFee, "LKR");
@@ -98,6 +146,7 @@ public class BookingService {
     public List<BookingSummaryDto> getCustomerBookings(UUID customerId) {
         return parcelRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
+                .filter(p -> !"CHECKOUT_DRAFT".equals(p.getStatus()) && ("COD".equals(p.getPaymentMethod()) || "PAID".equals(p.getPaymentStatus())))
                 .map(BookingSummaryDto::from)
                 .toList();
     }
@@ -120,9 +169,95 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public BookingReceiptDto getReceiptByParcelId(UUID parcelId) {
+        Parcel parcel = parcelRepository.findById(parcelId).orElseThrow(() -> new NoSuchElementException("Booking not found"));
+        if (!"COD".equals(parcel.getPaymentMethod()) && !"PAID".equals(parcel.getPaymentStatus()))
+            throw new com.swiftdrop.parcel_pricing_service.common.ApiException(HttpStatus.CONFLICT,"PAYMENT_REQUIRED","Online payment must be verified before a receipt is available.");
         BookingReceipt receipt = receiptRepository.findByParcelId(parcelId)
                 .orElseThrow(() -> new NoSuchElementException("Receipt not found for parcel: " + parcelId));
         return BookingReceiptDto.from(receipt);
     }
-}
 
+    /**
+     * Resolves the authoritative payment context for Payment Service.
+     * Requires valid Identity JWT and enforces strict customer/merchant ownership.
+     */
+    @Transactional(readOnly = true)
+    public PaymentContextResponse getPaymentContext(UUID bookingId, Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid authorization token");
+        }
+
+        Parcel parcel = parcelRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        // 1. Authorize caller
+        String subject = jwt.getSubject();
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean isDispatcher = roles != null && (roles.contains("DISPATCHER") || roles.contains("ROLE_DISPATCHER")
+                || roles.contains("ADMIN") || roles.contains("ROLE_ADMIN"));
+
+        if (!isDispatcher) {
+            try {
+                UUID callerId = UUID.fromString(subject);
+                if (!callerId.equals(parcel.getCustomerId())) {
+                    if (parcel.getMerchantId() == null || !callerId.equals(parcel.getMerchantId())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: caller does not own this booking");
+                    }
+                }
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: invalid token subject");
+            }
+        }
+
+        // 2. Payable eligibility
+        if ("CANCELLED".equalsIgnoreCase(parcel.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Booking is cancelled and cannot be paid");
+        }
+
+        boolean isEligibleStatus = "BOOKED".equalsIgnoreCase(parcel.getStatus()) || "CHECKOUT_DRAFT".equalsIgnoreCase(parcel.getStatus());
+        boolean isOnlinePayment = !"COD".equalsIgnoreCase(parcel.getPaymentMethod());
+        boolean isNotExpired = parcel.getPricingExpiresAt() == null || parcel.getPricingExpiresAt().isAfter(OffsetDateTime.now());
+        boolean payable = isEligibleStatus && isOnlinePayment && isNotExpired && !"PAID".equals(parcel.getPaymentStatus());
+
+        // 3. Payer billing details from CustomerProfile
+        CustomerProfile profile = profileRepository != null
+                ? profileRepository.findById(parcel.getCustomerId()).orElse(null)
+                : null;
+
+        String fullName = (profile != null && profile.getFullName() != null) ? profile.getFullName() : "Customer";
+        String[] nameParts = fullName.trim().split("\\s+", 2);
+        String firstName = nameParts[0];
+        String lastName = nameParts.length > 1 ? nameParts[1] : "Customer";
+
+        String email = (profile != null && profile.getEmail() != null) ? profile.getEmail() : "customer@swiftdrop.lk";
+        String phone = (profile != null && profile.getPhoneNumber() != null) ? profile.getPhoneNumber() : "+94770000000";
+        String address = (profile != null && profile.getStreetAddress() != null) ? profile.getStreetAddress() : "Colombo";
+        String city = (profile != null && profile.getCity() != null) ? profile.getCity() : "Colombo";
+
+        PaymentContextResponse.PayerDetailsDto payer = new PaymentContextResponse.PayerDetailsDto(
+                firstName,
+                lastName,
+                email,
+                phone,
+                address,
+                city,
+                "Sri Lanka"
+        );
+
+        String snapshotId = parcel.getPricingSnapshotId() != null
+                ? parcel.getPricingSnapshotId()
+                : "SNP-" + parcel.getId().toString().substring(0, 8).toUpperCase();
+
+        return new PaymentContextResponse(
+                parcel.getId().toString(),
+                parcel.getChannel() != null ? parcel.getChannel() : "DIRECT_WEBSITE",
+                parcel.getCustomerId(),
+                parcel.getMerchantId(),
+                payable,
+                snapshotId,
+                parcel.getEstimatedFee(),
+                "LKR",
+                payer
+        );
+    }
+}

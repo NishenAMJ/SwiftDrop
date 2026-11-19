@@ -10,6 +10,7 @@ services:
       DELIVERY_DB_PASSWORD: ${DELIVERY_DB_PASSWORD:?Set DELIVERY_DB_PASSWORD}
       PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
       COMMUNICATION_DB_PASSWORD: ${COMMUNICATION_DB_PASSWORD:?Set COMMUNICATION_DB_PASSWORD}
+      TRACKING_DB_PASSWORD: ${TRACKING_DB_PASSWORD:?Set TRACKING_DB_PASSWORD}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -21,29 +22,141 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  identity-merchant-service:
+    build:
+      context: ./services/identity-merchant-service
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      IDENTITY_DB_USER: identity_merchant_user
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD}
+      IDENTITY_COOKIE_SECURE: ${IDENTITY_COOKIE_SECURE:-false}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:4200}
+      DISPATCHER_BOOTSTRAP_EMAIL: ${DISPATCHER_BOOTSTRAP_EMAIL:-}
+      DISPATCHER_BOOTSTRAP_PASSWORD: ${DISPATCHER_BOOTSTRAP_PASSWORD:-}
+      DISPATCHER_BOOTSTRAP_NAME: ${DISPATCHER_BOOTSTRAP_NAME:-SwiftDrop Dispatcher}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  parcel-pricing-service:
+    build:
+      context: ./services/parcel-pricing-service
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8082:8082"
+    environment:
+      PARCEL_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      PARCEL_DB_USER: parcel_pricing_user
+      PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
+      IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      identity-merchant-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8082'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  tracking-reporting-service:
+    build:
+      context: ./services/tracking-reporting-service
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8084:8084"
+    environment:
+      TRACKING_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      TRACKING_DB_USER: tracking_user
+      TRACKING_DB_PASSWORD: ${TRACKING_DB_PASSWORD:?Set TRACKING_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-merchant-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8084'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   payment-settlement-service:
     build:
-      context: .
-      dockerfile: Dockerfile.payment
+      context: ./services/payment-settlement-service
+      dockerfile: Dockerfile
     ports:
       - "8085:8085"
     environment:
       PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
       PAYMENT_DB_USER: payment_settlement_user
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
-      SPRING_RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      IDENTITY_JWKS_URI: ${IDENTITY_JWKS_URI:-http://identity-merchant-service:8081/.well-known/jwks.json}
+      PAYMENT_PRICING_BASE_URL: ${PAYMENT_PRICING_BASE_URL:-http://parcel-pricing-service:8082}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      PAYMENT_PRICING_STUB_ENABLED: ${PAYMENT_PRICING_STUB_ENABLED:-false}
+      PAYMENT_PAYHERE_MERCHANT_ID: ${PAYMENT_PAYHERE_MERCHANT_ID:-}
+      PAYMENT_PAYHERE_MERCHANT_SECRET: ${PAYMENT_PAYHERE_MERCHANT_SECRET:-}
+      PAYMENT_PAYHERE_APP_ID: ${PAYMENT_PAYHERE_APP_ID:-}
+      PAYMENT_PAYHERE_APP_SECRET: ${PAYMENT_PAYHERE_APP_SECRET:-}
+      PAYMENT_PAYHERE_BASE_URL: ${PAYMENT_PAYHERE_BASE_URL:-https://sandbox.payhere.lk}
+      PAYMENT_PAYHERE_NOTIFY_URL: ${PAYMENT_PAYHERE_NOTIFY_URL:-}
+      PAYMENT_PAYHERE_RETURN_URL: ${PAYMENT_PAYHERE_RETURN_URL:-http://localhost:4200/payments/return}
+      PAYMENT_PAYHERE_CANCEL_URL: ${PAYMENT_PAYHERE_CANCEL_URL:-http://localhost:4200/payments/cancel}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      identity-merchant-service:
+        condition: service_healthy
+      parcel-pricing-service:
         condition: service_healthy
 
   delivery-operations-service:
     image: swiftdrop/delivery-operations-service:latest
     build:
       context: ./services/delivery-operations-service
+      dockerfile: Dockerfile
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
     environment:
       DELIVERY_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
       DELIVERY_DB_USER: delivery_user
@@ -52,16 +165,34 @@ services:
       postgres:
         condition: service_healthy
 
-  rabbitmq:
-    image: rabbitmq:4-management
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
     ports:
-      - "127.0.0.1:5672:5672"     # apps connect here
-      - "127.0.0.1:15672:15672"   # web UI: http://localhost:15672 (guest / guest)
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      - "127.0.0.1:8080:8080"
+    environment:
+      IDENTITY_ISSUER_URI: ${IDENTITY_ISSUER_URI:-swiftdrop-identity}
+      IDENTITY_AUDIENCE: ${IDENTITY_AUDIENCE:-swiftdrop-api}
+      IDENTITY_JWKS_URI: ${GATEWAY_IDENTITY_JWKS_URI:-http://identity-merchant-service:8081/.well-known/jwks.json}
+      IDENTITY_SERVICE_URI: ${GATEWAY_IDENTITY_SERVICE_URI:-http://identity-merchant-service:8081}
+      PARCEL_SERVICE_URI: ${GATEWAY_PARCEL_SERVICE_URI:-http://parcel-pricing-service:8082}
+      DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://delivery-operations-service:8083}
+      TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://tracking-reporting-service:8084}
+      PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      identity-merchant-service:
+        condition: service_healthy
+      parcel-pricing-service:
+        condition: service_healthy
+      tracking-reporting-service:
+        condition: service_healthy
+      payment-settlement-service:
+        condition: service_started
+      delivery-operations-service:
+        condition: service_started
 
   mailpit:
     image: axllent/mailpit
@@ -71,3 +202,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:

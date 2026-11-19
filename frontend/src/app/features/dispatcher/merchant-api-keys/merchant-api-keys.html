@@ -1,0 +1,98 @@
+@let panelId = 'merchant-keys-' + merchantId();
+<div class="keys">
+  <button
+    class="sd-button sd-button--secondary keys__toggle"
+    type="button"
+    [attr.aria-expanded]="expanded()"
+    [attr.aria-controls]="panelId"
+    (click)="toggle()"
+  >
+    {{ expanded() ? 'Hide API keys' : 'Show API keys' }}<span class="sd-visually-hidden"> of {{ businessName() }}</span>
+  </button>
+
+  @if (expanded()) {
+    <section class="keys__panel" [id]="panelId" [attr.aria-labelledby]="panelId + '-title'">
+      <h4 class="keys__title" [id]="panelId + '-title'">API keys</h4>
+
+      @if (status() === 'SUSPENDED') {
+        <div class="sd-alert sd-alert--info">
+          While this merchant is suspended, none of its keys work. Revoked keys stay revoked after
+          reactivation.
+        </div>
+      }
+
+      @if (notice(); as message) {
+        <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+      }
+
+      @if (loading()) {
+        <p class="page__loading" role="status">
+          <span class="sd-spinner" aria-hidden="true"></span>
+          Loading keys…
+        </p>
+      } @else if (loadError(); as message) {
+        <div class="sd-alert sd-alert--error" role="alert">
+          {{ message }}
+          <button class="sd-button sd-button--secondary keys__retry" type="button" (click)="load()">Try again</button>
+        </div>
+      } @else if (keys(); as keys) {
+        @if (keys.length === 0) {
+          <p class="page__muted">This merchant hasn't created any API keys.</p>
+        } @else {
+          <div class="sd-table-wrap" role="region" [attr.aria-labelledby]="panelId + '-title'" tabindex="0">
+            <table class="sd-table">
+              <caption class="sd-visually-hidden">API keys of {{ businessName() }}, newest first</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Key starts with</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Last used</th>
+                  <th scope="col">Expires</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span class="sd-visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (key of keys; track key.id) {
+                  <tr>
+                    <td>{{ key.name }}</td>
+                    <td><code class="keys__prefix">{{ key.prefix }}…</code></td>
+                    <td class="sd-tabular">{{ key.createdAt | colomboDate: 'date' }}</td>
+                    <td class="sd-tabular">{{ (key.lastUsedAt | colomboDate) || 'Never' }}</td>
+                    <td class="sd-tabular">{{ (key.expiresAt | colomboDate: 'date') || 'Never' }}</td>
+                    <td><span [class]="stateBadge(key)">{{ stateLabel(key) }}</span></td>
+                    <td class="keys__actions">
+                      @if (stateOf(key) !== 'revoked') {
+                        <button class="sd-button sd-button--secondary" type="button" (click)="askRevoke(key)">
+                          Revoke<span class="sd-visually-hidden"> {{ key.name }}</span>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    </section>
+  }
+</div>
+
+<app-confirm-dialog
+  [open]="revoking() !== null"
+  [title]="'Revoke ' + (revoking()?.name ?? 'key') + '?'"
+  confirmLabel="Revoke key"
+  tone="danger"
+  [busy]="revokeBusy()"
+  [error]="revokeError()"
+  (confirmed)="confirmRevoke()"
+  (cancelled)="cancelRevoke()"
+>
+  <p>
+    Any system of {{ businessName() }} using this key stops working straight away. Their other keys
+    keep working. This can't be undone; the merchant would need to create a new key.
+  </p>
+  <p>Let the merchant know why, so they can update their system.</p>
+</app-confirm-dialog>

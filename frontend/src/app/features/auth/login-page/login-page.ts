@@ -11,9 +11,10 @@ import {
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { safeReturnUrl } from '../../../core/auth/auth.guards';
+import { homeFor, safeReturnUrl } from '../../../core/auth/auth.guards';
 import { AuthService, GOOGLE_LOGIN_URL } from '../../../core/auth/auth.service';
 import { errorMessage } from '../../../core/auth/problem-messages';
+import { PasswordField } from '../../../shared/components/password-field/password-field';
 
 const MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email or password is incorrect.',
@@ -22,7 +23,7 @@ const MESSAGES: Record<string, string> = {
 
 @Component({
   selector: 'app-login-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PasswordField],
   templateUrl: './login-page.html',
   styleUrl: './login-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -60,9 +61,10 @@ export class LoginPage {
     this.submitting.set(true);
     const { email, password } = this.form.getRawValue();
     this.auth.login({ email: email.trim(), password }).subscribe({
-      next: () => {
+      next: (user) => {
+        // Back to the page that asked for login, otherwise to this user's own start page.
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-        void this.router.navigateByUrl(safeReturnUrl(returnUrl));
+        void this.router.navigateByUrl(safeReturnUrl(returnUrl, homeFor(user)));
       },
       error: (error: unknown) => {
         this.submitting.set(false);

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { HOME_AFTER_LOGIN } from '../../../core/auth/auth.guards';
+import { homeFor } from '../../../core/auth/auth.guards';
 import { AuthService } from '../../../core/auth/auth.service';
 
 /** Wording for the ?error= values identity sends back after Google login. */
@@ -39,7 +39,7 @@ export class AuthCallbackPage implements OnInit {
       return;
     }
     this.auth.refresh().subscribe({
-      next: () => void this.router.navigateByUrl(HOME_AFTER_LOGIN, { replaceUrl: true }),
+      next: (user) => void this.router.navigateByUrl(homeFor(user), { replaceUrl: true }),
       error: () => this.error.set(FALLBACK),
     });
   }

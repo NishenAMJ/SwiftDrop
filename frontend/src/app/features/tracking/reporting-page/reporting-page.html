@@ -1,0 +1,242 @@
+<div class="reports-page">
+  <header class="reports-header">
+    <div>
+      <a class="reports-brand" routerLink="/tracking">SwiftDrop</a>
+      <span class="sd-badge sd-badge--accent">Dispatcher</span>
+    </div>
+    <nav aria-label="Report navigation">
+      <a class="sd-button sd-button--secondary" routerLink="/tracking">Track a parcel</a>
+      <a class="sd-link reports-header__account" routerLink="/account">Account</a>
+    </nav>
+  </header>
+
+  <main class="reports-main">
+    <div class="reports-title">
+      <div>
+        <p class="reports-title__eyebrow">Tracking and reporting</p>
+        <h1>Delivery reports</h1>
+        <p>Review booking-cohort status and completed deliveries using UTC date boundaries.</p>
+      </div>
+    </div>
+
+    <section class="sd-card report-filters" aria-labelledby="report-filters-title">
+      <h2 id="report-filters-title">Report filters</h2>
+      <form [formGroup]="filterForm" (ngSubmit)="applyFilters()">
+        <div class="report-filters__grid">
+          <div class="sd-field">
+            <label class="sd-label" for="report-start-date">
+              Start date <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input
+              id="report-start-date"
+              class="sd-input"
+              type="date"
+              formControlName="startDate"
+              aria-describedby="report-date-help report-date-error"
+              [attr.aria-invalid]="dateRangeError() ? true : null"
+            />
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="report-end-date">
+              End date <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input
+              id="report-end-date"
+              class="sd-input"
+              type="date"
+              formControlName="endDate"
+              aria-describedby="report-date-help report-date-error"
+              [attr.aria-invalid]="dateRangeError() ? true : null"
+            />
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="report-interval">Delivery result interval</label>
+            <select id="report-interval" class="sd-input" formControlName="interval">
+              <option value="daily">Daily</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <button
+            class="sd-button sd-button--primary report-filters__submit"
+            type="submit"
+            [disabled]="state() === 'loading'"
+            [attr.aria-busy]="state() === 'loading'"
+          >
+            @if (state() === 'loading') {
+              <span class="sd-spinner" aria-hidden="true"></span>
+              Loading…
+            } @else {
+              Apply filters
+            }
+          </button>
+        </div>
+        <p id="report-date-help" class="sd-help">
+          Both dates are inclusive. Clear a date to remove that boundary.
+        </p>
+        @if (dateRangeError()) {
+          <p id="report-date-error" class="sd-error report-filters__error" role="alert">
+            {{ dateRangeError() }}
+          </p>
+        }
+      </form>
+    </section>
+
+    <div class="reports-feedback" aria-live="polite">
+      @if (state() === 'loading') {
+        <section class="sd-card reports-loading" aria-label="Loading delivery reports">
+          <span class="sd-spinner" aria-hidden="true"></span>
+          <div>
+            <h2>Loading reports</h2>
+            <p>Calculating current status and delivery totals…</p>
+          </div>
+        </section>
+      } @else if (state() === 'error') {
+        <section class="sd-alert sd-alert--error reports-error" role="alert">
+          <div>
+            <h2>Reports could not be loaded</h2>
+            <p>{{ error() }}</p>
+          </div>
+          <button class="sd-button sd-button--secondary" type="button" (click)="retry()">
+            Try again
+          </button>
+        </section>
+      }
+    </div>
+
+    @if (state() === 'success' && data(); as reports) {
+      <section class="summary-section" aria-labelledby="summary-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="summary-title">Summary</h2>
+            <p>Current state of parcels booked within the selected dates.</p>
+          </div>
+        </div>
+        <div class="summary-grid">
+          <article class="sd-card summary-card">
+            <h3>Total parcels booked</h3>
+            <p class="summary-card__value sd-tabular">{{ reports.summary.totalParcelsBooked }}</p>
+          </article>
+          <article class="sd-card summary-card">
+            <h3>Currently in transit</h3>
+            <p class="summary-card__value sd-tabular">
+              {{ reports.summary.parcelsCurrentlyInTransit }}
+            </p>
+          </article>
+          <article class="sd-card summary-card summary-card--success">
+            <h3>Delivered</h3>
+            <p class="summary-card__value sd-tabular">{{ reports.summary.deliveredParcels }}</p>
+          </article>
+          <article class="sd-card summary-card summary-card--danger">
+            <h3>Failed deliveries</h3>
+            <p class="summary-card__value sd-tabular">{{ reports.summary.failedDeliveries }}</p>
+          </article>
+          <article class="sd-card summary-card summary-card--wide">
+            <h3>Delivery success rate</h3>
+            <p class="summary-card__value sd-tabular">
+              {{ reports.summary.deliverySuccessRate.toFixed(2) }}%
+            </p>
+            <p>Delivered ÷ terminal outcomes (delivered and failed).</p>
+          </article>
+        </div>
+      </section>
+
+      <div class="report-grid">
+        <section class="sd-card report-panel" aria-labelledby="status-breakdown-title">
+          <div class="section-heading">
+            <div>
+              <h2 id="status-breakdown-title">Status breakdown</h2>
+              <p>Current delivery status for the booking cohort.</p>
+            </div>
+          </div>
+
+          @if (reports.statusBreakdown.statuses.length === 0) {
+            <div class="report-empty" role="status">
+              <h3>No status results</h3>
+              <p>No parcels were booked in this date range.</p>
+            </div>
+          } @else {
+            <div
+              class="report-table-wrap"
+              role="region"
+              aria-labelledby="status-breakdown-title"
+              tabindex="0"
+            >
+              <table class="report-table">
+                <caption class="sd-visually-hidden">
+                  Current parcel status totals
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="report-table__number">Parcels</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of reports.statusBreakdown.statuses; track item.status) {
+                    <tr>
+                      <th scope="row">
+                        <span>{{ statusLabel(item.status) }}</span>
+                        <span class="status-bar" aria-hidden="true">
+                          <span [style.width.%]="statusWidth(item.total)"></span>
+                        </span>
+                      </th>
+                      <td class="report-table__number sd-tabular">{{ item.total }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        <section class="sd-card report-panel" aria-labelledby="delivery-results-title">
+          <div class="section-heading">
+            <div>
+              <h2 id="delivery-results-title">{{ intervalLabel() }} deliveries</h2>
+              <p>Distinct parcels that reached Delivered in each UTC period.</p>
+            </div>
+          </div>
+
+          @if (reports.deliveryCounts.counts.length === 0) {
+            <div class="report-empty" role="status">
+              <h3>No completed deliveries</h3>
+              <p>There are no delivery completions in this date range.</p>
+            </div>
+          } @else {
+            <div
+              class="report-table-wrap"
+              role="region"
+              aria-labelledby="delivery-results-title"
+              tabindex="0"
+            >
+              <table class="report-table">
+                <caption class="sd-visually-hidden">
+                  {{
+                    intervalLabel()
+                  }}
+                  delivered parcel totals
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Period</th>
+                    <th scope="col" class="report-table__number">Delivered parcels</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of reports.deliveryCounts.counts; track item.period) {
+                    <tr>
+                      <th scope="row" class="sd-tabular">{{ formatPeriod(item.period) }}</th>
+                      <td class="report-table__number sd-tabular">
+                        {{ item.deliveredParcels }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      </div>
+    }
+  </main>
+</div>

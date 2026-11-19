@@ -6,12 +6,12 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 | Folder | What is in it |
 |---|---|
-| `services/` | Backend services, including Identity (8081), Parcel & Pricing (8082), Delivery Operations (8083), Notification & Webhook (8086), and Payment (8085) |
+| `services/` | Backend services including API Gateway (8080), Identity (8081), Parcel & Pricing (8082), Delivery Operations (8083), Tracking (8084), Payment (8085), and Notification & Webhook (8086) |
 | `frontend/` | Angular frontend (port 4200) |
 | `infrastructure/` | Docker/database setup, for example `postgres/init` (runs when the database is first created) |
 | `contracts/` | API contracts shared between services |
 | `docs/` | Documentation, including [prerequisites](docs/contributions/prerequisites.md) |
-| `compose.yaml` | Starts PostgreSQL in Docker |
+| `compose.yaml` | Starts PostgreSQL, RabbitMQ, payment service and API Gateway |
 
 ## 1. Install the tools
 
@@ -41,14 +41,17 @@ The `.env` file holds the database passwords. It is **never committed** to Git, 
 Copy-Item .env.example .env        # macOS/Linux: cp .env.example .env
 ```
 
-Open `.env` and set a value for every password:
+Open `.env` and set a private value for every password placeholder:
 
 ```
 POSTGRES_ADMIN_PASSWORD=choose-a-password
 IDENTITY_DB_PASSWORD=choose-another-password
-PAYMENT_DB_PASSWORD=choose-a-payment-password
 DELIVERY_DB_PASSWORD=choose-a-delivery-password
-PARCEL_DB_PASSWORD=choose-a-parcel-password
+PAYMENT_DB_PASSWORD=choose-another-password
+PARCEL_DB_PASSWORD=choose-another-password
+COMMUNICATION_DB_PASSWORD=choose-another-password
+TRACKING_DB_PASSWORD=choose-another-password
+RABBITMQ_PASSWORD=choose-another-password
 ```
 
 Each person can pick their own passwords, because the database runs only on their own computer.
@@ -97,7 +100,24 @@ cd services\parcel-pricing-service
 
 The service runs on http://localhost:8082. It uses the `parcel_pricing` schema and applies migrations from `src/main/resources/db/migration`.
 
-## 7. Check that everything worked
+## 7. Run the API Gateway
+
+After starting the Identity, Parcel & Pricing, Delivery Operations, Tracking and
+Payment services, start the gateway from the repository root:
+
+```powershell
+docker compose up -d --build api-gateway
+Invoke-RestMethod http://localhost:8080/actuator/health/readiness
+```
+
+The gateway listens on port 8080 and routes service paths without removing their
+prefixes. Payment routes require a valid access token except for PayHere's
+`POST /api/v1/payments/callbacks/payhere`, whose signature is verified by the payment
+service. The payment service receives the original `Authorization` and
+`Idempotency-Key` headers. Configure `GATEWAY_IDENTITY_JWKS_URI` and upstream service
+URIs in `.env` when the defaults do not match your network.
+
+## 8. Check that everything worked
 
 After step 4 (database running), confirm the `identity_merchant` schema exists:
 
@@ -119,7 +139,7 @@ After step 6 (parcel service started once), confirm its schema:
 docker compose exec postgres psql -U postgres -d swiftdrop -c "\dt parcel_pricing.*"
 ```
 
-## 8. Run the frontend
+## 9. Run the frontend
 
 The web client lives in [`frontend/`](frontend) (Angular, standalone components, SCSS, Vitest). It does not need the database to start.
 
@@ -166,6 +186,9 @@ The service connects to `jdbc:postgresql://localhost:5432/swiftdrop` as `identit
 
 **"password authentication failed for user identity_merchant_user"**
 The configured password differs from the one the database was created with. Clear any outdated terminal override. The database keeps its original password even if you edit `.env` later. To reset it without deleting data, run `docker compose exec postgres psql -U postgres -d swiftdrop` from the root, enter `\password identity_merchant_user`, supply the password from `.env` at the prompts, then enter `\q` and restart the service.
+
+**"password authentication failed for user communication_user"**
+The root `.env` file is missing `COMMUNICATION_DB_PASSWORD`, or the database role was created using a different password than the one in `.env`. Update `.env`, then reset the user password in PostgreSQL with `\password communication_user` if needed, and restart the service.
 
 **"Could not resolve placeholder 'IDENTITY_DB_PASSWORD'"**
 Check that the root `.env` contains `IDENTITY_DB_PASSWORD` and the working directory is the service directory or the SwiftDrop root. For other working directories, set the variable in the terminal or IDE run configuration.

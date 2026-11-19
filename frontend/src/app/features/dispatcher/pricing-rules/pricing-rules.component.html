@@ -1,0 +1,117 @@
+<div class="sd-page sd-aura">
+  <div class="sd-aura__content" style="padding: var(--sd-space-6); max-width: 1200px; margin:auto;">
+    <h1 class="sd-page-title" style="font-size: clamp(1.5rem,3vw,2rem); margin-bottom: var(--sd-space-5);">Pricing Rules Management</h1>
+
+    <div class="sd-toolbar" style="display:flex; gap: var(--sd-space-4); margin-bottom: var(--sd-space-5); align-items:center; flex-wrap:wrap;">
+      <button class="sd-button sd-button--primary" (click)="openAddModal()">Add New Rule</button>
+      <input type="text" placeholder="Search rules..." [formControl]="searchCtrl" class="sd-input" style="flex:1; max-width:300px;" />
+      <select [formControl]="statusCtrl" class="sd-select" style="max-width:150px;">
+        <option value="ALL">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+      </select>
+    </div>
+
+    <ng-container *ngIf="loading()">
+      <div class="sd-spinner" style="margin:auto;"></div>
+    </ng-container>
+
+    <ng-container *ngIf="errorMessage() as errMsg">
+      <div class="sd-alert sd-alert--error" role="alert">{{ errMsg }}</div>
+    </ng-container>
+
+    <ng-container *ngIf="!loading() && !errorMessage()">
+      <ng-container *ngIf="filteredRules().length > 0; else emptyState">
+        <table class="sd-table" style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th>Rule Name</th>
+              <th>Code</th>
+              <th>Base Fee (LKR)</th>
+              <th>Rate / Kg (LKR)</th>
+              <th>Default Zone Charge (LKR)</th>
+              <th>Urgent Surcharge (LKR)</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of filteredRules()">
+              <td>{{ r.ruleName }}</td>
+              <td>{{ r.ruleCode }}</td>
+              <td>{{ r.baseFee | number:'1.2-2' }}</td>
+              <td>{{ r.ratePerKg | number:'1.2-2' }}</td>
+              <td>{{ r.defaultZoneCharge | number:'1.2-2' }}</td>
+              <td>{{ r.urgentSurchargeEnabled ? (r.urgentSurcharge | number:'1.2-2') : '-' }}</td>
+              <td>
+                <span class="sd-badge" [ngClass]="{'sd-badge--success': r.active, 'sd-badge--danger': !r.active}">{{ r.active ? 'ACTIVE' : 'INACTIVE' }}</span>
+              </td>
+              <td>
+                <button class="sd-button sd-button--secondary" (click)="openEditModal(r)" style="margin-right: var(--sd-space-2);">Edit</button>
+                <button class="sd-button" [ngClass]="{'sd-button--danger': r.active, 'sd-button--success': !r.active}" (click)="toggleStatus(r)">{{ r.active ? 'Deactivate' : 'Activate' }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </ng-container>
+      <ng-template #emptyState>
+        <div class="sd-card" style="text-align:center; padding: var(--sd-space-6);">
+          <p>No pricing rules found.</p>
+        </div>
+      </ng-template>
+    </ng-container>
+  </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<dialog #pricingDialog class="sd-dialog">
+  <form (ngSubmit)="submitRule()" [formGroup]="ruleForm" class="sd-dialog-content" style="padding: var(--sd-space-6); max-width:400px;">
+    <h2 class="sd-dialog-title">{{ isEditMode ? 'Edit Rule' : 'Add New Rule' }}</h2>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="ruleName">Rule Name *</label>
+      <input id="ruleName" formControlName="ruleName" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="ruleCode">Rule Code *</label>
+      <input id="ruleCode" formControlName="ruleCode" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="baseFee">Base Fee (LKR)</label>
+      <input type="number" id="baseFee" formControlName="baseFee" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="ratePerKg">Rate per Kg (LKR)</label>
+      <input type="number" id="ratePerKg" formControlName="ratePerKg" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="defaultZoneCharge">Default Zone Charge (LKR)</label>
+      <input type="number" id="defaultZoneCharge" formControlName="defaultZoneCharge" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="urgentSurchargeEnabled">
+        <input type="checkbox" id="urgentSurchargeEnabled" formControlName="urgentSurchargeEnabled" /> Enable Urgent Surcharge
+      </label>
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);" *ngIf="ruleForm.get('urgentSurchargeEnabled')?.value">
+      <label class="sd-label" for="urgentSurcharge">Urgent Surcharge (LKR)</label>
+      <input type="number" id="urgentSurcharge" formControlName="urgentSurcharge" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="minWeightKg">Min Weight (Kg)</label>
+      <input type="number" step="0.01" id="minWeightKg" formControlName="minWeightKg" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="maxWeightKg">Max Weight (Kg)</label>
+      <input type="number" step="0.01" id="maxWeightKg" formControlName="maxWeightKg" class="sd-input" />
+    </div>
+    <div class="sd-form-group" style="margin-bottom: var(--sd-space-4);">
+      <label class="sd-label" for="active">
+        <input type="checkbox" id="active" formControlName="active" /> Active
+      </label>
+    </div>
+    <div class="sd-dialog-actions" style="display:flex; justify-content:flex-end; gap: var(--sd-space-3);">
+      <button type="button" class="sd-button" (click)="closeDialog()">Cancel</button>
+      <button type="submit" class="sd-button sd-button--primary" [disabled]="ruleForm.invalid">Save</button>
+    </div>
+  </form>
+</dialog>

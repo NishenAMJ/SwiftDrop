@@ -1,0 +1,236 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">
+      @if (isCourier()) {
+        Courier account
+      } @else {
+        Become a courier
+      }
+    </h1>
+    <p class="page__intro">
+      Couriers pick up and deliver SwiftDrop parcels. A dispatcher checks your identity and vehicle
+      details before you can take deliveries.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Loading your application…
+      </p>
+    }
+    @case ('error') {
+      <div class="sd-alert sd-alert--error" role="alert">
+        We couldn't load your courier application.
+        <button class="sd-button sd-button--secondary app-retry" type="button" (click)="load()">
+          Try again
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (courier(); as courier) {
+        <section class="sd-card status" aria-labelledby="courier-status-title">
+          <div class="status__header">
+            <h2 #statusHeading id="courier-status-title" class="page__card-title" tabindex="-1">
+              Your courier application
+            </h2>
+            <app-application-status-badge [status]="courier.status" />
+          </div>
+
+          @switch (courier.status) {
+            @case ('PENDING') {
+              <p class="page__muted">
+                Sent on {{ courier.submittedAt | colomboDate }}. A dispatcher will review it; you'll
+                see the decision here. You can't change the details while it is waiting.
+              </p>
+            }
+            @case ('APPROVED') {
+              <p class="page__muted">
+                @if (courier.lastDecision; as decision) {
+                  You've been approved to deliver for SwiftDrop since
+                  {{ decision.decidedAt | colomboDate: 'date' }}.
+                } @else {
+                  You're approved to deliver for SwiftDrop.
+                }
+                A dispatcher will assign deliveries to you.
+              </p>
+            }
+            @case ('REJECTED') {
+              <div class="sd-alert sd-alert--error">
+                <p class="status__reason-label">Reason from the dispatcher</p>
+                <p class="status__reason">{{ courier.lastDecision?.reason || 'No reason was given.' }}</p>
+              </div>
+              <p class="page__muted">Correct the details below and send the application again.</p>
+            }
+            @case ('SUSPENDED') {
+              <div class="sd-alert sd-alert--error">
+                <p class="status__reason-label">Reason from the dispatcher</p>
+                <p class="status__reason">{{ courier.lastDecision?.reason || 'No reason was given.' }}</p>
+              </div>
+              <p class="page__muted">
+                While your account is suspended you can't take deliveries. Contact SwiftDrop support to
+                resolve this.
+              </p>
+            }
+          }
+
+          @if (courier.status !== 'REJECTED') {
+            <dl class="details">
+              <div>
+                <dt>Vehicle</dt>
+                <dd>{{ vehicleLabels[courier.vehicleType] }}</dd>
+              </div>
+              @if (courier.nationalIdNumber) {
+                <div>
+                  <dt>National identity card</dt>
+                  <dd>{{ courier.nationalIdNumber }}</dd>
+                </div>
+              }
+              @if (courier.drivingLicenceNumber) {
+                <div>
+                  <dt>Driving licence</dt>
+                  <dd>{{ courier.drivingLicenceNumber }}</dd>
+                </div>
+              }
+              @if (courier.vehicleRegistrationNumber) {
+                <div>
+                  <dt>Vehicle registration</dt>
+                  <dd>{{ courier.vehicleRegistrationNumber }}</dd>
+                </div>
+              }
+            </dl>
+          }
+        </section>
+      }
+
+      @if (canApply()) {
+        <section class="sd-card" aria-labelledby="courier-form-title">
+          <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <div class="page__header">
+              <h2 id="courier-form-title" class="page__card-title">
+                @if (courier()) {
+                  Update and send again
+                } @else {
+                  Your details
+                }
+              </h2>
+              <p class="form__note">All fields are required.</p>
+            </div>
+
+            @if (serverError(); as message) {
+              <div #errorAlert class="sd-alert sd-alert--error" role="alert" tabindex="-1">{{ message }}</div>
+            }
+
+            <div class="form__grid">
+              <div class="sd-field">
+                @let nicError = error('nationalIdNumber');
+                <label class="sd-label" for="courier-nationalIdNumber">National identity card number</label>
+                <input
+                  id="courier-nationalIdNumber"
+                  class="sd-input"
+                  type="text"
+                  formControlName="nationalIdNumber"
+                  autocomplete="off"
+                  maxlength="20"
+                  [attr.aria-invalid]="!!nicError"
+                  [attr.aria-describedby]="nicError ? 'courier-nationalIdNumber-error' : null"
+                />
+                @if (nicError) {
+                  <p id="courier-nationalIdNumber-error" class="sd-error">{{ nicError }}</p>
+                }
+              </div>
+
+              <div class="sd-field">
+                @let vehicleError = error('vehicleType');
+                <label class="sd-label" for="courier-vehicleType">Vehicle</label>
+                <select
+                  id="courier-vehicleType"
+                  class="sd-input"
+                  formControlName="vehicleType"
+                  [attr.aria-invalid]="!!vehicleError"
+                  [attr.aria-describedby]="vehicleError ? 'courier-vehicleType-error' : null"
+                >
+                  <option value="" disabled>Choose a vehicle</option>
+                  @for (type of vehicleTypes; track type[0]) {
+                    <option [value]="type[0]">{{ type[1] }}</option>
+                  }
+                </select>
+                @if (vehicleError) {
+                  <p id="courier-vehicleType-error" class="sd-error">{{ vehicleError }}</p>
+                }
+              </div>
+
+              @if (needsDocuments()) {
+                <div class="sd-field">
+                  @let licenceError = error('drivingLicenceNumber');
+                  <label class="sd-label" for="courier-drivingLicenceNumber">Driving licence number</label>
+                  <input
+                    id="courier-drivingLicenceNumber"
+                    class="sd-input"
+                    type="text"
+                    formControlName="drivingLicenceNumber"
+                    autocomplete="off"
+                    maxlength="20"
+                    [attr.aria-invalid]="!!licenceError"
+                    [attr.aria-describedby]="licenceError ? 'courier-drivingLicenceNumber-error' : null"
+                  />
+                  @if (licenceError) {
+                    <p id="courier-drivingLicenceNumber-error" class="sd-error">{{ licenceError }}</p>
+                  }
+                </div>
+
+                <div class="sd-field">
+                  @let registrationError = error('vehicleRegistrationNumber');
+                  <label class="sd-label" for="courier-vehicleRegistrationNumber">Vehicle registration number</label>
+                  <input
+                    id="courier-vehicleRegistrationNumber"
+                    class="sd-input"
+                    type="text"
+                    formControlName="vehicleRegistrationNumber"
+                    autocomplete="off"
+                    maxlength="20"
+                    [attr.aria-invalid]="!!registrationError"
+                    [attr.aria-describedby]="
+                      registrationError ? 'courier-vehicleRegistrationNumber-error' : null
+                    "
+                  />
+                  @if (registrationError) {
+                    <p id="courier-vehicleRegistrationNumber-error" class="sd-error">{{ registrationError }}</p>
+                  }
+                </div>
+              } @else {
+                <p class="form__note form__full">
+                  Choose a vehicle. A bicycle needs no licence; every other vehicle needs a driving
+                  licence and registration number.
+                </p>
+              }
+            </div>
+
+            <div class="page__actions">
+              <button
+                class="sd-button sd-button--primary"
+                type="submit"
+                [disabled]="submitting()"
+                [attr.aria-busy]="submitting()"
+              >
+                @if (submitting()) {
+                  <span class="sd-spinner" aria-hidden="true"></span>
+                  Sending…
+                } @else if (courier()) {
+                  Send application again
+                } @else {
+                  Send application
+                }
+              </button>
+            </div>
+          </form>
+        </section>
+      }
+    }
+  }
+</div>

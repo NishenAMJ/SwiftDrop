@@ -36,6 +36,39 @@ public class Parcel {
     @Column(name = "estimated_fee", precision = 10, scale = 2)
     private BigDecimal estimatedFee;
 
+    @Column(name = "channel", nullable = false, length = 30)
+    private String channel = "DIRECT_WEBSITE";
+
+    @Column(name = "merchant_id")
+    private UUID merchantId;
+
+    @Column(name = "payment_method", nullable = false, length = 20)
+    private String paymentMethod = "ONLINE";
+
+    @Column(name = "pricing_snapshot_id", length = 64)
+    private String pricingSnapshotId;
+
+    @Column(name = "pricing_expires_at")
+    private OffsetDateTime pricingExpiresAt;
+
+    @Column(name = "cancellation_fee")
+    private BigDecimal cancellationFee;
+
+    @Column(name = "refund_amount")
+    private BigDecimal refundAmount;
+
+    @Column(name = "cancellation_status")
+    private String cancellationStatus;
+
+    @Column(name = "cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @Column(name = "cancellation_transaction_ref")
+    private String cancellationTransactionRef;
+
+    @Column(name = "payment_status")
+    private String paymentStatus;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -104,6 +137,7 @@ public class Parcel {
     }
 
     public void setStatus(String status) {
+        if ("CANCELLED".equals(this.status) && !"CANCELLED".equals(status)) throw new IllegalStateException("Cancelled bookings cannot be reactivated");
         this.status = status;
     }
 
@@ -131,6 +165,46 @@ public class Parcel {
         this.updatedAt = updatedAt;
     }
 
+    public String getChannel() {
+        return channel;
+    }
+
+    public void setChannel(String channel) {
+        this.channel = channel;
+    }
+
+    public UUID getMerchantId() {
+        return merchantId;
+    }
+
+    public void setMerchantId(UUID merchantId) {
+        this.merchantId = merchantId;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public String getPricingSnapshotId() {
+        return pricingSnapshotId;
+    }
+
+    public void setPricingSnapshotId(String pricingSnapshotId) {
+        this.pricingSnapshotId = pricingSnapshotId;
+    }
+
+    public OffsetDateTime getPricingExpiresAt() {
+        return pricingExpiresAt;
+    }
+
+    public void setPricingExpiresAt(OffsetDateTime pricingExpiresAt) {
+        this.pricingExpiresAt = pricingExpiresAt;
+    }
+
     public List<ParcelAddress> getAddresses() {
         return addresses;
     }
@@ -148,5 +222,19 @@ public class Parcel {
         addresses.remove(address);
         address.setParcel(null);
     }
+
+    // Cancellation related getters and setters
+    public BigDecimal getCancellationFee() { return cancellationFee; }
+    public void setCancellationFee(BigDecimal cancellationFee) { this.cancellationFee = cancellationFee; }
+    public BigDecimal getRefundAmount() { return refundAmount; }
+    public void setRefundAmount(BigDecimal refundAmount) { this.refundAmount = refundAmount; }
+    public String getCancellationStatus() { return cancellationStatus; }
+    public void setCancellationStatus(String cancellationStatus) { this.cancellationStatus = cancellationStatus; }
+    public OffsetDateTime getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(OffsetDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
+    public String getCancellationTransactionRef() { return cancellationTransactionRef; }
+    public void setCancellationTransactionRef(String cancellationTransactionRef) { this.cancellationTransactionRef = cancellationTransactionRef; }
+    public String getPaymentStatus() { return paymentStatus; }
+    public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
 }
 

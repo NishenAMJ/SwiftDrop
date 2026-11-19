@@ -19,6 +19,8 @@ public record CreateBookingRequest(
     @NotBlank(message = "Urgency is required (NORMAL or URGENT)")
     String urgency,
 
+    String paymentMethod,
+
     @NotNull(message = "Pickup address is required")
     @Valid
     AddressDto pickupAddress,
@@ -27,5 +29,7 @@ public record CreateBookingRequest(
     @Valid
     AddressDto deliveryAddress
 ) {
+    public CreateBookingRequest(String description, BigDecimal weightKg, String urgency, AddressDto pickupAddress, AddressDto deliveryAddress) {
+        this(description, weightKg, urgency, "ONLINE", pickupAddress, deliveryAddress);
+    }
 }
-

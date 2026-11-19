@@ -1,0 +1,16 @@
+{
+  "eventId": "9a4c2e6b-1d7f-4e3a-b8c0-6f2d4a9e1b57",
+  "eventType": "merchant.rejected",
+  "version": 1,
+  "occurredAt": "2026-11-02T04:20:00Z",
+  "producer": "identity-merchant-service",
+  "data": {
+    "merchantId": "e2b8d4f6-3a1c-4d9e-8f7b-1c5a3e9d2b80",
+    "userId": "3e9d1b7f-6c2a-4f8e-9d4b-8a1c5e3f7d29",
+    "businessName": "Silva Traders",
+    "status": "REJECTED",
+    "previousStatus": "PENDING",
+    "reason": "Business registration number could not be verified. Please check it and resubmit.",
+    "decidedBy": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+  }
+}

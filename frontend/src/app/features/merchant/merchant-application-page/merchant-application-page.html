@@ -1,0 +1,347 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">
+      @if (isMerchant()) {
+        Merchant account
+      } @else {
+        Become a merchant
+      }
+    </h1>
+    <p class="page__intro">
+      Merchants send parcels for their customers and can connect their own systems to SwiftDrop with
+      API keys. A dispatcher checks every application before the account is opened.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Loading your application…
+      </p>
+    }
+    @case ('error') {
+      <div class="sd-alert sd-alert--error" role="alert">
+        We couldn't load your merchant application.
+        <button class="sd-button sd-button--secondary app-retry" type="button" (click)="load()">
+          Try again
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (merchant(); as merchant) {
+        <section class="sd-card status" aria-labelledby="merchant-status-title">
+          <div class="status__header">
+            <h2 #statusHeading id="merchant-status-title" class="page__card-title" tabindex="-1">
+              {{ merchant.businessName }}
+            </h2>
+            <app-application-status-badge [status]="merchant.status" />
+          </div>
+
+          @switch (merchant.status) {
+            @case ('PENDING') {
+              <p class="page__muted">
+                Sent on {{ merchant.submittedAt | colomboDate }}. A dispatcher will review it; you'll
+                see the decision here. You can't change the details while it is waiting.
+              </p>
+            }
+            @case ('APPROVED') {
+              <p class="page__muted">
+                @if (merchant.lastDecision; as decision) {
+                  Your merchant account has been open since {{ decision.decidedAt | colomboDate: 'date' }}.
+                } @else {
+                  Your merchant account is open.
+                }
+              </p>
+              @if (isMerchant()) {
+                <div class="page__actions">
+                  <a class="sd-button sd-button--primary" routerLink="/merchant/api-keys">Manage API keys</a>
+                </div>
+              }
+            }
+            @case ('REJECTED') {
+              <div class="sd-alert sd-alert--error">
+                <p class="status__reason-label">Reason from the dispatcher</p>
+                <p class="status__reason">{{ merchant.lastDecision?.reason || 'No reason was given.' }}</p>
+              </div>
+              <p class="page__muted">Correct the details below and send the application again.</p>
+            }
+            @case ('SUSPENDED') {
+              <div class="sd-alert sd-alert--error">
+                <p class="status__reason-label">Reason from the dispatcher</p>
+                <p class="status__reason">{{ merchant.lastDecision?.reason || 'No reason was given.' }}</p>
+              </div>
+              <p class="page__muted">
+                While your account is suspended, your API keys don't work and you can't send merchant
+                orders. Contact SwiftDrop support to resolve this.
+              </p>
+            }
+          }
+
+          @if (merchant.status !== 'REJECTED') {
+            <dl class="details">
+              <div>
+                <dt>Business type</dt>
+                <dd>{{ businessTypeLabels[merchant.businessType] }}</dd>
+              </div>
+              @if (merchant.businessRegistrationNumber) {
+                <div>
+                  <dt>Registration number</dt>
+                  <dd>{{ merchant.businessRegistrationNumber }}</dd>
+                </div>
+              }
+              <div>
+                <dt>Contact phone</dt>
+                <dd class="sd-tabular">{{ merchant.contactPhone }}</dd>
+              </div>
+              @if (merchant.contactEmail) {
+                <div>
+                  <dt>Contact email</dt>
+                  <dd>{{ merchant.contactEmail }}</dd>
+                </div>
+              }
+              <div class="details__full">
+                <dt>Business address</dt>
+                <dd>{{ formatAddress(merchant.businessAddress) }}</dd>
+              </div>
+            </dl>
+          }
+        </section>
+      }
+
+      @if (canApply()) {
+        <section class="sd-card" aria-labelledby="merchant-form-title">
+          <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <div class="page__header">
+              <h2 id="merchant-form-title" class="page__card-title">
+                @if (merchant()) {
+                  Update and send again
+                } @else {
+                  Your business
+                }
+              </h2>
+              <p class="form__note">All fields are required unless marked optional.</p>
+            </div>
+
+            @if (serverError(); as message) {
+              <div #errorAlert class="sd-alert sd-alert--error" role="alert" tabindex="-1">{{ message }}</div>
+            }
+
+            <div class="form__grid">
+              <div class="sd-field form__full">
+                @let nameError = error('businessName');
+                <label class="sd-label" for="merchant-businessName">Business name</label>
+                <input
+                  id="merchant-businessName"
+                  class="sd-input"
+                  type="text"
+                  formControlName="businessName"
+                  autocomplete="organization"
+                  maxlength="120"
+                  [attr.aria-invalid]="!!nameError"
+                  [attr.aria-describedby]="nameError ? 'merchant-businessName-error' : null"
+                />
+                @if (nameError) {
+                  <p id="merchant-businessName-error" class="sd-error">{{ nameError }}</p>
+                }
+              </div>
+
+              <div class="sd-field">
+                @let typeError = error('businessType');
+                <label class="sd-label" for="merchant-businessType">Business type</label>
+                <select
+                  id="merchant-businessType"
+                  class="sd-input"
+                  formControlName="businessType"
+                  [attr.aria-invalid]="!!typeError"
+                  [attr.aria-describedby]="typeError ? 'merchant-businessType-error' : null"
+                >
+                  <option value="" disabled>Choose a type</option>
+                  @for (type of businessTypes; track type[0]) {
+                    <option [value]="type[0]">{{ type[1] }}</option>
+                  }
+                </select>
+                @if (typeError) {
+                  <p id="merchant-businessType-error" class="sd-error">{{ typeError }}</p>
+                }
+              </div>
+
+              <div class="sd-field">
+                @let regError = error('businessRegistrationNumber');
+                <label class="sd-label" for="merchant-businessRegistrationNumber">
+                  Business registration number
+                  @if (!needsRegistration()) {
+                    <span class="sd-label__optional">(optional)</span>
+                  }
+                </label>
+                <input
+                  id="merchant-businessRegistrationNumber"
+                  class="sd-input"
+                  type="text"
+                  formControlName="businessRegistrationNumber"
+                  maxlength="50"
+                  [attr.aria-invalid]="!!regError"
+                  [attr.aria-describedby]="
+                    'merchant-businessRegistrationNumber-help' +
+                    (regError ? ' merchant-businessRegistrationNumber-error' : '')
+                  "
+                />
+                <p id="merchant-businessRegistrationNumber-help" class="sd-help">
+                  Required for companies and partnerships.
+                </p>
+                @if (regError) {
+                  <p id="merchant-businessRegistrationNumber-error" class="sd-error">{{ regError }}</p>
+                }
+              </div>
+
+              <div class="sd-field">
+                @let phoneError = error('contactPhone');
+                <label class="sd-label" for="merchant-contactPhone">Contact phone</label>
+                <input
+                  id="merchant-contactPhone"
+                  class="sd-input"
+                  type="tel"
+                  formControlName="contactPhone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  [attr.aria-invalid]="!!phoneError"
+                  [attr.aria-describedby]="
+                    'merchant-contactPhone-help' + (phoneError ? ' merchant-contactPhone-error' : '')
+                  "
+                />
+                <p id="merchant-contactPhone-help" class="sd-help">With country code, for example +94771234567.</p>
+                @if (phoneError) {
+                  <p id="merchant-contactPhone-error" class="sd-error">{{ phoneError }}</p>
+                }
+              </div>
+
+              <div class="sd-field">
+                @let emailError = error('contactEmail');
+                <label class="sd-label" for="merchant-contactEmail">
+                  Contact email <span class="sd-label__optional">(optional)</span>
+                </label>
+                <input
+                  id="merchant-contactEmail"
+                  class="sd-input"
+                  type="email"
+                  formControlName="contactEmail"
+                  autocomplete="email"
+                  inputmode="email"
+                  maxlength="254"
+                  [attr.aria-invalid]="!!emailError"
+                  [attr.aria-describedby]="emailError ? 'merchant-contactEmail-error' : null"
+                />
+                @if (emailError) {
+                  <p id="merchant-contactEmail-error" class="sd-error">{{ emailError }}</p>
+                }
+              </div>
+            </div>
+
+            <fieldset class="form__fieldset" formGroupName="businessAddress">
+              <legend class="form__legend">Business address</legend>
+              <div class="form__grid">
+                <div class="sd-field form__full">
+                  @let line1Error = error('businessAddress.line1');
+                  <label class="sd-label" for="merchant-line1">Address line 1</label>
+                  <input
+                    id="merchant-line1"
+                    class="sd-input"
+                    type="text"
+                    formControlName="line1"
+                    autocomplete="address-line1"
+                    maxlength="120"
+                    [attr.aria-invalid]="!!line1Error"
+                    [attr.aria-describedby]="line1Error ? 'merchant-line1-error' : null"
+                  />
+                  @if (line1Error) {
+                    <p id="merchant-line1-error" class="sd-error">{{ line1Error }}</p>
+                  }
+                </div>
+
+                <div class="sd-field form__full">
+                  @let line2Error = error('businessAddress.line2');
+                  <label class="sd-label" for="merchant-line2">
+                    Address line 2 <span class="sd-label__optional">(optional)</span>
+                  </label>
+                  <input
+                    id="merchant-line2"
+                    class="sd-input"
+                    type="text"
+                    formControlName="line2"
+                    autocomplete="address-line2"
+                    maxlength="120"
+                    [attr.aria-invalid]="!!line2Error"
+                    [attr.aria-describedby]="line2Error ? 'merchant-line2-error' : null"
+                  />
+                  @if (line2Error) {
+                    <p id="merchant-line2-error" class="sd-error">{{ line2Error }}</p>
+                  }
+                </div>
+
+                <div class="sd-field">
+                  @let cityError = error('businessAddress.city');
+                  <label class="sd-label" for="merchant-city">City</label>
+                  <input
+                    id="merchant-city"
+                    class="sd-input"
+                    type="text"
+                    formControlName="city"
+                    autocomplete="address-level2"
+                    maxlength="80"
+                    [attr.aria-invalid]="!!cityError"
+                    [attr.aria-describedby]="cityError ? 'merchant-city-error' : null"
+                  />
+                  @if (cityError) {
+                    <p id="merchant-city-error" class="sd-error">{{ cityError }}</p>
+                  }
+                </div>
+
+                <div class="sd-field">
+                  @let postalError = error('businessAddress.postalCode');
+                  <label class="sd-label" for="merchant-postalCode">
+                    Postal code <span class="sd-label__optional">(optional)</span>
+                  </label>
+                  <input
+                    id="merchant-postalCode"
+                    class="sd-input"
+                    type="text"
+                    formControlName="postalCode"
+                    autocomplete="postal-code"
+                    maxlength="20"
+                    [attr.aria-invalid]="!!postalError"
+                    [attr.aria-describedby]="postalError ? 'merchant-postalCode-error' : null"
+                  />
+                  @if (postalError) {
+                    <p id="merchant-postalCode-error" class="sd-error">{{ postalError }}</p>
+                  }
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="page__actions">
+              <button
+                class="sd-button sd-button--primary"
+                type="submit"
+                [disabled]="submitting()"
+                [attr.aria-busy]="submitting()"
+              >
+                @if (submitting()) {
+                  <span class="sd-spinner" aria-hidden="true"></span>
+                  Sending…
+                } @else if (merchant()) {
+                  Send application again
+                } @else {
+                  Send application
+                }
+              </button>
+            </div>
+          </form>
+        </section>
+      }
+    }
+  }
+</div>
