@@ -2,14 +2,14 @@ openapi: 3.1.0
 
 info:
   title: SwiftDrop Payment & Settlement Service
-  version: 0.1.0
-  summary: Online payment creation, verification, status, history and refunds.
+  version: 0.2.0
+  summary: Online payments, COD reconciliation, merchant ledger and settlements.
   description: |
     **Status: proposal for team review.**
 
-    This contract covers Member 8's online-payment responsibilities. COD collection,
-    courier cash handovers, reconciliation and merchant settlements remain owned by
-    the settlement team.
+    This contract covers Member 8's online-payment responsibilities and Member 9's
+    COD collection, courier cash handovers, reconciliation, merchant ledger and
+    settlement responsibilities.
 
     PayHere is the selected online payment provider. Authentication is supplied by
     identity-merchant-service; this service validates its JWTs and checks ownership.
@@ -33,6 +33,12 @@ tags:
     description: Provider-to-service payment notifications
   - name: Refunds
     description: Refund completed online payments
+  - name: COD handovers
+    description: Courier cash submission and dispatcher reconciliation
+  - name: Merchant ledger
+    description: Immutable merchant financial entries and audited adjustments
+  - name: Merchant settlements
+    description: Settlement calculation, approval and external-payment recording
 
 security:
   - bearerAuth: []
@@ -326,6 +332,286 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /api/v1/cod-handovers:
+    post:
+      tags: [COD handovers]
+      operationId: createCashHandover
+      summary: Submit a courier cash handover
+      description: |
+        COURIER only. Every collection must be an unassigned COD collection owned by
+        the authenticated courier. The service derives the expected total from those
+        collections; callers cannot override it. Replaying the same command with the
+        same Idempotency-Key returns the existing handover. Collections cannot be
+        included in two active handovers.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCashHandoverRequest' }
+      responses:
+        '201':
+          description: Handover submitted or safely replayed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CashHandover' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Idempotency conflict or a collection is already assigned/ineligible
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    get:
+      tags: [COD handovers]
+      operationId: listCashHandovers
+      summary: List visible cash handovers
+      description: |
+        COURIER sees only their own handovers. DISPATCHER sees all handovers and may
+        filter by courier and status. Ownership filtering occurs before pagination.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: courierId
+          in: query
+          required: false
+          description: DISPATCHER-only filter; couriers cannot select another courier.
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SUBMITTED, CONFIRMED, FLAGGED]
+      responses:
+        '200':
+          description: Paginated visible handovers
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CashHandoverPage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/cod-handovers/{handoverId}:
+    get:
+      tags: [COD handovers]
+      operationId: getCashHandover
+      summary: Get an authorized cash handover
+      description: The owning COURIER or a DISPATCHER may read the handover.
+      parameters:
+        - $ref: '#/components/parameters/HandoverId'
+      responses:
+        '200':
+          description: Handover and its reconciliation, when confirmed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CashHandover' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/cod-handovers/{handoverId}/confirm:
+    post:
+      tags: [COD handovers]
+      operationId: confirmCashHandover
+      summary: Confirm and reconcile a courier cash handover
+      description: |
+        DISPATCHER only. Records the received amount, confirming dispatcher and UTC
+        confirmation time. The result is EXACT, SHORT or EXCESS. A discrepancy is
+        preserved as FLAGGED and does not automatically charge a merchant or courier.
+      parameters:
+        - $ref: '#/components/parameters/HandoverId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmCashHandoverRequest' }
+      responses:
+        '200':
+          description: Confirmed or flagged handover
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CashHandover' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Handover is already finalized or the idempotency key conflicts
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/merchant-ledger/entries:
+    get:
+      tags: [Merchant ledger]
+      operationId: listMerchantLedgerEntries
+      summary: List authorized merchant ledger entries
+      description: |
+        MERCHANT sees only entries for the JWT merchant_id. DISPATCHER must provide
+        merchantId to select a merchant. Positive amounts increase merchant payable;
+        negative amounts decrease it. Ownership filtering occurs before pagination.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/MerchantIdQuery'
+      responses:
+        '200':
+          description: Paginated immutable ledger entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantLedgerPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/merchant-ledger/adjustments:
+    post:
+      tags: [Merchant ledger]
+      operationId: createMerchantLedgerAdjustment
+      summary: Post an audited correcting ledger entry
+      description: |
+        DISPATCHER only. Posts a new immutable ADJUSTMENT; it never edits or deletes
+        the original entry. amount is signed from the merchant-payable perspective
+        and cannot be zero. sourceReference and reason must identify the correction.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLedgerAdjustmentRequest' }
+      responses:
+        '201':
+          description: Adjustment posted or safely replayed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantLedgerEntry' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Idempotency/source-reference conflict
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/merchant-settlements/calculate:
+    post:
+      tags: [Merchant settlements]
+      operationId: calculateMerchantSettlement
+      summary: Calculate and freeze a merchant settlement
+      description: |
+        DISPATCHER only. Selects eligible, unsettled ledger entries through cutoffAt,
+        freezes their IDs and creates a CALCULATED settlement. The signed total must
+        be positive and all entries must use the requested currency.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CalculateSettlementRequest' }
+      responses:
+        '201':
+          description: Settlement calculated or safely replayed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantSettlement' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: No positive eligible balance, mixed currencies, or conflicting request
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/merchant-settlements/{settlementId}:
+    get:
+      tags: [Merchant settlements]
+      operationId: getMerchantSettlement
+      summary: Get an authorized merchant settlement
+      description: The owning MERCHANT or a DISPATCHER may read the settlement.
+      parameters:
+        - $ref: '#/components/parameters/SettlementId'
+      responses:
+        '200':
+          description: Settlement details and frozen ledger-entry IDs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantSettlement' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/merchant-settlements/{settlementId}/approve:
+    post:
+      tags: [Merchant settlements]
+      operationId: approveMerchantSettlement
+      summary: Approve a calculated merchant settlement
+      description: DISPATCHER only. Approval does not claim that money was paid.
+      parameters:
+        - $ref: '#/components/parameters/SettlementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApproveSettlementRequest' }
+      responses:
+        '200':
+          description: Approved settlement
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantSettlement' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Settlement is not in CALCULATED state or the request conflicts
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/merchant-settlements/{settlementId}/record-payment:
+    post:
+      tags: [Merchant settlements]
+      operationId: recordMerchantSettlementPayment
+      summary: Record externally confirmed settlement payment
+      description: |
+        DISPATCHER only. This endpoint does not move money. Use it only after an
+        approved external payout process confirms payment. The external reference,
+        paid time and resulting negative SETTLEMENT ledger entry are recorded once.
+      parameters:
+        - $ref: '#/components/parameters/SettlementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordSettlementPaymentRequest' }
+      responses:
+        '200':
+          description: Settlement marked PAID or safely replayed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantSettlement' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Settlement is not APPROVED or the payment evidence conflicts
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /api/v1/payments/{paymentId}/refund:
     post:
       tags: [Refunds]
@@ -415,6 +701,28 @@ components:
       name: paymentId
       in: path
       required: true
+      schema:
+        type: string
+        format: uuid
+    HandoverId:
+      name: handoverId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SettlementId:
+      name: settlementId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MerchantIdQuery:
+      name: merchantId
+      in: query
+      required: false
+      description: Required for DISPATCHER; MERCHANT identity comes from the JWT merchant_id claim.
       schema:
         type: string
         format: uuid
@@ -712,6 +1020,259 @@ components:
         md5sig:
           type: string
 
+    CreateCashHandoverRequest:
+      type: object
+      required: [collectionIds, submittedAmount, currency]
+      additionalProperties: false
+      properties:
+        collectionIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        submittedAmount:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 9999999999.99
+          multipleOf: 0.01
+          description: Cash amount the courier says is being handed over.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: LKR
+
+    ConfirmCashHandoverRequest:
+      type: object
+      required: [receivedAmount]
+      additionalProperties: false
+      properties:
+        receivedAmount:
+          type: number
+          minimum: 0
+          maximum: 9999999999.99
+          multipleOf: 0.01
+          description: Cash physically received and counted by the dispatcher.
+        investigationNote:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Required by implementation when reconciliation is SHORT or EXCESS.
+
+    CashReconciliation:
+      type: object
+      required: [id, expectedAmount, receivedAmount, differenceAmount, currency, status, confirmedBy, confirmedAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        expectedAmount:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+        receivedAmount:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+        differenceAmount:
+          type: number
+          multipleOf: 0.01
+          description: receivedAmount minus expectedAmount; negative is short and positive is excess.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        status:
+          type: string
+          enum: [EXACT, SHORT, EXCESS]
+        investigationNote:
+          type: string
+          maxLength: 500
+        confirmedBy: { type: string, format: uuid }
+        confirmedAt: { type: string, format: date-time }
+
+    CashHandover:
+      type: object
+      required: [id, courierId, collectionIds, expectedAmount, submittedAmount, currency, status, submittedAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        courierId: { type: string, format: uuid }
+        collectionIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        expectedAmount:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+        submittedAmount:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        status:
+          type: string
+          enum: [SUBMITTED, CONFIRMED, FLAGGED]
+        submittedAt: { type: string, format: date-time }
+        reconciliation:
+          $ref: '#/components/schemas/CashReconciliation'
+
+    CashHandoverPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/CashHandover' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1 }
+        totalElements: { type: integer, format: int64, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+
+    CreateLedgerAdjustmentRequest:
+      type: object
+      required: [merchantId, amount, currency, sourceReference, reason]
+      additionalProperties: false
+      properties:
+        merchantId: { type: string, format: uuid }
+        amount:
+          type: number
+          multipleOf: 0.01
+          anyOf:
+            - exclusiveMinimum: 0
+            - exclusiveMaximum: 0
+          description: Signed merchant-payable correction; zero is forbidden.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        sourceReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Stable reference to the fact or entry being corrected.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    MerchantLedgerEntry:
+      type: object
+      required: [id, merchantId, amount, currency, entryType, sourceReference, idempotencyKey, createdAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        merchantId: { type: string, format: uuid }
+        amount:
+          type: number
+          multipleOf: 0.01
+          description: Positive increases merchant payable; negative decreases it.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        entryType:
+          type: string
+          enum: [COD_COLLECTION, DELIVERY_CHARGE, ADJUSTMENT, SETTLEMENT]
+        sourceReference: { type: string, minLength: 1, maxLength: 200 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+        reason: { type: string, maxLength: 500 }
+        settlementId: { type: string, format: uuid }
+        settlementEligible: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    MerchantLedgerPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages, balance]
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/MerchantLedgerEntry' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1 }
+        totalElements: { type: integer, format: int64, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+        balance:
+          type: number
+          multipleOf: 0.01
+          description: Signed payable balance across all visible entries, not only this page.
+
+    CalculateSettlementRequest:
+      type: object
+      required: [merchantId, currency, cutoffAt]
+      additionalProperties: false
+      properties:
+        merchantId: { type: string, format: uuid }
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: LKR
+        cutoffAt:
+          type: string
+          format: date-time
+          description: Inclusive UTC ledger-entry cutoff.
+
+    ApproveSettlementRequest:
+      type: object
+      required: [confirmCalculatedAmount]
+      additionalProperties: false
+      properties:
+        confirmCalculatedAmount:
+          type: boolean
+          const: true
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    RecordSettlementPaymentRequest:
+      type: object
+      required: [externalReference, paidAt, confirmExternalPayment]
+      additionalProperties: false
+      properties:
+        externalReference:
+          type: string
+          minLength: 1
+          maxLength: 200
+        paidAt:
+          type: string
+          format: date-time
+        confirmExternalPayment:
+          type: boolean
+          const: true
+
+    MerchantSettlement:
+      type: object
+      required: [id, merchantId, ledgerEntryIds, amount, currency, cutoffAt, status, calculatedBy, calculatedAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        merchantId: { type: string, format: uuid }
+        ledgerEntryIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        amount:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        cutoffAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [CALCULATED, APPROVED, PAID]
+        calculatedBy: { type: string, format: uuid }
+        calculatedAt: { type: string, format: date-time }
+        approvedBy: { type: string, format: uuid }
+        approvedAt: { type: string, format: date-time }
+        approvalNote: { type: string, maxLength: 500 }
+        paidBy: { type: string, format: uuid }
+        paidAt: { type: string, format: date-time }
+        externalPaymentReference: { type: string, maxLength: 200 }
+
     Problem:
       type: object
       required: [type, title, status, detail, instance, code]
@@ -760,12 +1321,12 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     Forbidden:
-      description: Authenticated user cannot access this payment
+      description: Authenticated user cannot access this resource or operation
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     NotFound:
-      description: Payment or related booking was not found
+      description: Requested resource or related booking was not found
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }

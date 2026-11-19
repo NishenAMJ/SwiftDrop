@@ -1,7 +1,8 @@
-# Payment & Settlement service — Member 8
+# Payment & Settlement service — Members 8 and 9
 
-Java 21 / Spring Boot 4.1.2, port **8085**. Online payments use PayHere; COD, ledger,
-cash reconciliation and merchant settlements remain Member 9 responsibilities.
+Java 21 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
+PayHere. Member 9 owns COD collection, courier cash reconciliation, the merchant
+ledger and merchant settlements.
 
 ## Current state and references
 
@@ -9,6 +10,7 @@ cash reconciliation and merchant settlements remain Member 9 responsibilities.
 - [Payment events](../../contracts/events/payment-settlement-service/README.md)
 - [Pricing integration proposal and provider notes](../../docs/architecture/payment-integrations.md)
 - [Authentication agreement](../../docs/architecture/authentication.md)
+- [Member 9 COD and ledger contract proposal](../../docs/architecture/member9-cod-ledger-contract.md)
 
 On 2026-11-15 `mvn -B clean test` against the isolated payment test database and
 RabbitMQ reported **32 tests, 0 failures, 0 errors, 0 skipped**, including Flyway
