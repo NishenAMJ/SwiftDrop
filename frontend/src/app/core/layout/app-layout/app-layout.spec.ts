@@ -52,6 +52,7 @@ describe('AppLayout', () => {
   it('shows dispatchers their tools and nothing for customers', async () => {
     const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'] })).nativeElement as HTMLElement;
     expect(links(page)).toEqual([
+      'Warehouse operations',
       'Merchant applications',
       'Courier applications',
       'Users',

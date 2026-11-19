@@ -62,6 +62,7 @@ export class AppLayout {
       groups.push({
         heading: 'Dispatcher',
         items: [
+          { label: 'Warehouse operations', path: '/warehouse' },
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
