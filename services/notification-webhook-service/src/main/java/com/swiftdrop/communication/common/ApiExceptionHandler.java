@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -50,6 +51,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = Problems.of(status, "VALIDATION_FAILED", "Validation failed", "One or more fields are invalid.");
         problem.setProperty("errors", errors);
         return ResponseEntity.status(status).headers(headers).body(problem);
+    }
+
+    /**
+     * Role checks from @PreAuthorize throw AccessDeniedException inside the controller. Without
+     * this handler the generic handler below would turn them into 500 instead of 403.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
+        HttpStatus status = HttpStatus.FORBIDDEN;
+        return ResponseEntity.status(status).body(Problems.of(status, "FORBIDDEN", status.getReasonPhrase(),
+                "You do not have permission to do this."));
     }
 
     @ExceptionHandler(Exception.class)

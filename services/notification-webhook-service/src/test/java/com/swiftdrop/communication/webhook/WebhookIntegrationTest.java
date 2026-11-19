@@ -18,20 +18,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import com.swiftdrop.communication.event.IdentityEventListener;
+import com.swiftdrop.communication.support.AbstractIntegrationTest;
 
 import tools.jackson.databind.json.JsonMapper;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class WebhookIntegrationTest {
+class WebhookIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -158,13 +155,15 @@ class WebhookIntegrationTest {
         UUID merchantId1 = UUID.randomUUID();
         UUID merchantId2 = UUID.randomUUID();
 
+        // Inactive on purpose: the background dispatcher then postpones the retried delivery
+        // instead of sending it, so its status stays PENDING while this test checks it.
         WebhookSubscription sub1 = new WebhookSubscription(
                 UUID.randomUUID(),
                 merchantId1,
                 "http://localhost:8086/dev/webhook-receiver",
                 "parcel.status-changed",
                 "dummy_secret",
-                true,
+                false,
                 null,
                 Instant.now(),
                 Instant.now()
@@ -265,7 +264,10 @@ class WebhookIntegrationTest {
         assertThat(deliveries).hasSize(1);
 
         WebhookDelivery delivery = deliveries.get(0);
-        assertThat(delivery.getStatus()).isEqualTo(WebhookDeliveryStatus.PENDING);
+        // The background dispatcher may already have tried it (and failed: nothing listens on
+        // that URL), so only check that it was not delivered. The real send is tested in
+        // WebhookDeliveryFlowIntegrationTest.
+        assertThat(delivery.getStatus()).isNotEqualTo(WebhookDeliveryStatus.DELIVERED);
         assertThat(delivery.getSubscriptionId()).isEqualTo(sub.getSubscriptionId());
 
         // Verify privacy: merchant payload strictly excludes customerUserId

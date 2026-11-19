@@ -3,61 +3,54 @@ package com.swiftdrop.communication.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
 import com.swiftdrop.communication.config.WebhookProperties;
 
+/** Unit tests for {@link RetryPolicy}, the schedule the dispatcher uses after a failed attempt. */
 class RetryScheduleTest {
 
+    private static final List<Duration> DEFAULT_DELAYS = new WebhookProperties().getRetryDelays();
+
     @Test
-    void retryDelaysAndTerminalFailureProgression() {
-        WebhookProperties props = new WebhookProperties();
-        List<Duration> delays = List.of(
-                Duration.ofSeconds(10),
-                Duration.ofSeconds(30),
-                Duration.ofMinutes(1),
-                Duration.ofMinutes(2),
-                Duration.ofMinutes(5)
-        );
-        props.setRetryDelays(delays);
+    void defaultScheduleIs10s30s1m2m5m() {
+        assertThat(DEFAULT_DELAYS).containsExactly(
+                Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(1),
+                Duration.ofMinutes(2), Duration.ofMinutes(5));
+    }
 
-        Instant baseTime = Instant.parse("2026-11-20T10:00:00Z");
+    @Test
+    void eachFailedAttemptWaitsForTheMatchingDelay() {
+        assertThat(RetryPolicy.nextDelay(1, DEFAULT_DELAYS)).contains(Duration.ofSeconds(10));
+        assertThat(RetryPolicy.nextDelay(2, DEFAULT_DELAYS)).contains(Duration.ofSeconds(30));
+        assertThat(RetryPolicy.nextDelay(3, DEFAULT_DELAYS)).contains(Duration.ofMinutes(1));
+        assertThat(RetryPolicy.nextDelay(4, DEFAULT_DELAYS)).contains(Duration.ofMinutes(2));
+        assertThat(RetryPolicy.nextDelay(5, DEFAULT_DELAYS)).contains(Duration.ofMinutes(5));
+    }
 
-        WebhookDelivery delivery = new WebhookDelivery(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                "parcel.status-changed",
-                "{}",
-                WebhookDeliveryStatus.PENDING,
-                0,
-                baseTime,
-                baseTime
-        );
+    @Test
+    void afterTheLastDelayTheDeliveryGivesUp() {
+        // 6th failed attempt: no delay left, so the dispatcher marks the delivery FAILED.
+        assertThat(RetryPolicy.nextDelay(6, DEFAULT_DELAYS)).isEmpty();
+        assertThat(RetryPolicy.nextDelay(7, DEFAULT_DELAYS)).isEmpty();
+    }
 
-        // Simulate retry progression logic from WebhookDispatcher
-        for (int attempt = 1; attempt <= delays.size(); attempt++) {
-            delivery.setAttemptCount(attempt);
-            Duration expectedDelay = delays.get(attempt - 1);
-            delivery.setNextAttemptAt(baseTime.plus(expectedDelay));
-            delivery.setStatus(WebhookDeliveryStatus.PENDING);
+    @Test
+    void totalAttemptsIsFirstAttemptPlusOnePerDelay() {
+        assertThat(RetryPolicy.maxAttempts(DEFAULT_DELAYS)).isEqualTo(6);
+        assertThat(RetryPolicy.maxAttempts(List.of())).isEqualTo(1);
+    }
 
-            assertThat(delivery.getStatus()).isEqualTo(WebhookDeliveryStatus.PENDING);
-            assertThat(delivery.getAttemptCount()).isEqualTo(attempt);
-            assertThat(delivery.getNextAttemptAt()).isEqualTo(baseTime.plus(expectedDelay));
-        }
+    @Test
+    void invalidAttemptNumberHasNoDelay() {
+        assertThat(RetryPolicy.nextDelay(0, DEFAULT_DELAYS)).isEmpty();
+        assertThat(RetryPolicy.nextDelay(-1, DEFAULT_DELAYS)).isEmpty();
+    }
 
-        // Attempt 6 (exceeds delays list of 5 retries): terminal failure
-        delivery.setAttemptCount(6);
-        delivery.setStatus(WebhookDeliveryStatus.FAILED);
-        delivery.setNextAttemptAt(null);
-
-        assertThat(delivery.getStatus()).isEqualTo(WebhookDeliveryStatus.FAILED);
-        assertThat(delivery.getNextAttemptAt()).isNull();
-        assertThat(delivery.getAttemptCount()).isEqualTo(6);
+    @Test
+    void noRetriesConfiguredMeansFailAfterFirstAttempt() {
+        assertThat(RetryPolicy.nextDelay(1, List.of())).isEmpty();
     }
 }

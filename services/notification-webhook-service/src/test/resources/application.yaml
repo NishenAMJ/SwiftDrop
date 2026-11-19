@@ -1,3 +1,7 @@
+# Test configuration. It REPLACES src/main/resources/application.yaml on the test classpath,
+# so it must contain every setting the tests need. It has no spring.config.import of .env:
+# tests never read your local passwords. PostgreSQL and RabbitMQ come from Testcontainers
+# (@ServiceConnection in AbstractIntegrationTest), so no datasource or rabbitmq host is set here.
 spring:
   application:
     name: notification-webhook-service
@@ -17,6 +21,17 @@ spring:
       - notification_webhook
     create-schemas: false
     locations: classpath:db/migration
+
+  rabbitmq:
+    listener:
+      simple:
+        # Same behaviour as main config (retry, then dead-letter queue), but fast.
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 100ms
+          multiplier: 1
 
   mail:
     host: localhost
@@ -49,8 +64,23 @@ swiftdrop:
         - DELIVERED
         - FAILED
   webhook:
+    # Fixed key for tests only (32 bytes, base64). Never use it outside tests.
     encryption-key: "u8FwS2k7yL4fJ3e9A1bC5dE7gH8jK0mN2pQ4rS6tU8v="
     allow-http: true
     allow-private-addresses: true
     poll-interval: 200ms
     retry-delays: 100ms,200ms,300ms,400ms,500ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  health:
+    # Tests replace JavaMailSender with a Mockito mock (AbstractIntegrationTest). The mail
+    # health check needs the real JavaMailSenderImpl, so it is turned off in tests only.
+    mail:
+      enabled: false
