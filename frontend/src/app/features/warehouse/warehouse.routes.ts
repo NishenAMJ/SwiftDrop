@@ -23,4 +23,10 @@ export const WAREHOUSE_ROUTES: Routes = [
     title: 'Parcel sorting | SwiftDrop',
     loadComponent: () => import('./parcel-sorting/parcel-sorting').then((m) => m.ParcelSorting),
   },
+  {
+    path: 'transfers',
+    title: 'Parcel transfers | SwiftDrop',
+    loadComponent: () =>
+      import('./transfer-management/transfer-management').then((m) => m.TransferManagement),
+  },
 ];

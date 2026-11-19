@@ -66,6 +66,7 @@ export class AppLayout {
           { label: 'Warehouses', path: '/warehouse/warehouses' },
           { label: 'Parcel intake', path: '/warehouse/intake' },
           { label: 'Parcel sorting', path: '/warehouse/sorting' },
+          { label: 'Parcel transfers', path: '/warehouse/transfers' },
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },

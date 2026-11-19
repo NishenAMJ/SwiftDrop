@@ -62,6 +62,7 @@ describe('AppLayout', () => {
       'Warehouses',
       'Parcel intake',
       'Parcel sorting',
+      'Parcel transfers',
       'Merchant applications',
       'Courier applications',
       'Users',
