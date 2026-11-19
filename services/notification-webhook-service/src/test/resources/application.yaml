@@ -1,14 +1,6 @@
 spring:
-  config:
-    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
   application:
     name: notification-webhook-service
-
-  datasource:
-    url: ${COMMUNICATION_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
-    username: ${COMMUNICATION_DB_USER:communication_user}
-    password: ${COMMUNICATION_DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
 
   jpa:
     open-in-view: false
@@ -26,21 +18,15 @@ spring:
     create-schemas: false
     locations: classpath:db/migration
 
-  rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
-
   mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
+    host: localhost
+    port: 1025
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          jwk-set-uri: http://localhost:8081/.well-known/jwks.json
           issuer-uri: swiftdrop-identity
           audiences: swiftdrop-api
           authorities-claim-name: roles
@@ -48,8 +34,8 @@ spring:
 
 swiftdrop:
   notification:
-    from-email: ${NOTIFICATION_FROM_EMAIL:noreply@swiftdrop.dev}
-    tracking-base-url: ${TRACKING_BASE_URL:http://localhost:4200/track}
+    from-email: noreply@swiftdrop.dev
+    tracking-base-url: http://localhost:4200/track
     parcel:
       email-statuses:
         - CREATED
@@ -63,8 +49,8 @@ swiftdrop:
         - DELIVERED
         - FAILED
   webhook:
-    encryption-key: ${WEBHOOK_ENCRYPTION_KEY:u8FwS2k7yL4fJ3e9A1bC5dE7gH8jK0mN2pQ4rS6tU8v=}
+    encryption-key: "u8FwS2k7yL4fJ3e9A1bC5dE7gH8jK0mN2pQ4rS6tU8v="
     allow-http: true
     allow-private-addresses: true
-    poll-interval: 500ms
+    poll-interval: 200ms
     retry-delays: 100ms,200ms,300ms,400ms,500ms
