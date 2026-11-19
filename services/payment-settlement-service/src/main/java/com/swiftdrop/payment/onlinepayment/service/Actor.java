@@ -14,6 +14,7 @@ public record Actor(UUID id, UUID merchantId, Set<String> roles, String token) {
     }
     public boolean admin() { return roles.contains("DISPATCHER"); }
     public boolean courier() { return roles.contains("COURIER"); }
+    public boolean merchant() { return roles.contains("MERCHANT") && merchantId != null; }
     public boolean owns(UUID customer, UUID merchant) {
         return admin() || (roles.contains("CUSTOMER") && id.equals(customer))
             || (roles.contains("MERCHANT") && merchantId != null && merchantId.equals(merchant));

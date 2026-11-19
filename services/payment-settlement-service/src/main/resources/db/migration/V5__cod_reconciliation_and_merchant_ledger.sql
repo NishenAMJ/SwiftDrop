@@ -100,23 +100,37 @@ CREATE TABLE payment_settlement.merchant_settlements (
     approved_by UUID,
     approved_at TIMESTAMP,
     approval_note VARCHAR(500),
+    approval_idempotency_key VARCHAR(128),
     paid_by UUID,
     paid_at TIMESTAMP,
     external_payment_reference VARCHAR(200),
+    payment_idempotency_key VARCHAR(128),
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT uq_settlement_request UNIQUE (calculated_by, idempotency_key),
     CONSTRAINT chk_settlement_approval CHECK (
-        (status = 'CALCULATED' AND approved_by IS NULL AND approved_at IS NULL)
-        OR (status IN ('APPROVED', 'PAID') AND approved_by IS NOT NULL AND approved_at IS NOT NULL)
+        (status = 'CALCULATED' AND approved_by IS NULL AND approved_at IS NULL AND approval_idempotency_key IS NULL)
+        OR (status IN ('APPROVED', 'PAID') AND approved_by IS NOT NULL AND approved_at IS NOT NULL
+            AND approval_idempotency_key IS NOT NULL)
     ),
     CONSTRAINT chk_settlement_payment CHECK (
-        (status <> 'PAID' AND paid_by IS NULL AND paid_at IS NULL AND external_payment_reference IS NULL)
-        OR (status = 'PAID' AND paid_by IS NOT NULL AND paid_at IS NOT NULL AND external_payment_reference IS NOT NULL)
+        (status <> 'PAID' AND paid_by IS NULL AND paid_at IS NULL
+            AND external_payment_reference IS NULL AND payment_idempotency_key IS NULL)
+        OR (status = 'PAID' AND paid_by IS NOT NULL AND paid_at IS NOT NULL
+            AND external_payment_reference IS NOT NULL AND payment_idempotency_key IS NOT NULL)
     )
 );
 
 CREATE INDEX idx_settlement_merchant
     ON payment_settlement.merchant_settlements(merchant_id, calculated_at DESC);
+CREATE UNIQUE INDEX uq_settlement_approval_request
+    ON payment_settlement.merchant_settlements(approved_by, approval_idempotency_key)
+    WHERE approval_idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX uq_settlement_payment_request
+    ON payment_settlement.merchant_settlements(paid_by, payment_idempotency_key)
+    WHERE payment_idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX uq_settlement_external_payment
+    ON payment_settlement.merchant_settlements(external_payment_reference)
+    WHERE external_payment_reference IS NOT NULL;
 
 CREATE TABLE payment_settlement.merchant_settlement_entries (
     settlement_id UUID NOT NULL REFERENCES payment_settlement.merchant_settlements(id),

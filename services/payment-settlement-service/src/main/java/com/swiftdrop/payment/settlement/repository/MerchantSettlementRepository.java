@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface MerchantSettlementRepository extends JpaRepository<MerchantSettlement, UUID> {
     Optional<MerchantSettlement> findByCalculatedByAndIdempotencyKey(UUID actorId, String key);
+    Optional<MerchantSettlement> findByApprovedByAndApprovalIdempotencyKey(UUID actorId, String key);
+    Optional<MerchantSettlement> findByPaidByAndPaymentIdempotencyKey(UUID actorId, String key);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from MerchantSettlement s where s.id = :id")

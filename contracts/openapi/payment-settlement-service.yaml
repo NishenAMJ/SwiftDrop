@@ -459,6 +459,13 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
         - $ref: '#/components/parameters/MerchantIdQuery'
+        - name: currency
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}$'
+            default: LKR
       responses:
         '200':
           description: Paginated immutable ledger entries
@@ -1183,7 +1190,7 @@ components:
 
     MerchantLedgerPage:
       type: object
-      required: [content, page, size, totalElements, totalPages, balance]
+      required: [content, page, size, totalElements, totalPages, balance, currency]
       properties:
         content:
           type: array
@@ -1196,6 +1203,9 @@ components:
           type: number
           multipleOf: 0.01
           description: Signed payable balance across all visible entries, not only this page.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
 
     CalculateSettlementRequest:
       type: object

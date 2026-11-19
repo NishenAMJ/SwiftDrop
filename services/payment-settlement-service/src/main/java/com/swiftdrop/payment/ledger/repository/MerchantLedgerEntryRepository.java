@@ -11,6 +11,7 @@ public interface MerchantLedgerEntryRepository extends JpaRepository<MerchantLed
     Optional<MerchantLedgerEntry> findByIdempotencyKey(String key);
     Optional<MerchantLedgerEntry> findByEntryTypeAndSourceReference(LedgerEntryType type, String sourceReference);
     Page<MerchantLedgerEntry> findByMerchantId(UUID merchantId, Pageable pageable);
+    Page<MerchantLedgerEntry> findByMerchantIdAndCurrency(UUID merchantId, String currency, Pageable pageable);
 
     @Query("select coalesce(sum(e.amount), 0) from MerchantLedgerEntry e "
         + "where e.merchantId = :merchantId and e.currency = :currency")

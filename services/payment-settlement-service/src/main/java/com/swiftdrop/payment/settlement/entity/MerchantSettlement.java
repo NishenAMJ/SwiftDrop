@@ -45,6 +45,9 @@ public class MerchantSettlement {
     @Column(name = "approval_note", length = 500)
     private String approvalNote;
 
+    @Column(name = "approval_idempotency_key", length = 128)
+    private String approvalIdempotencyKey;
+
     @Column(name = "paid_by")
     private UUID paidBy;
 
@@ -53,6 +56,9 @@ public class MerchantSettlement {
 
     @Column(name = "external_payment_reference", length = 200)
     private String externalPaymentReference;
+
+    @Column(name = "payment_idempotency_key", length = 128)
+    private String paymentIdempotencyKey;
 
     @Version
     @Column(nullable = false)
@@ -82,11 +88,15 @@ public class MerchantSettlement {
     public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
     public String getApprovalNote() { return approvalNote; }
     public void setApprovalNote(String approvalNote) { this.approvalNote = approvalNote; }
+    public String getApprovalIdempotencyKey() { return approvalIdempotencyKey; }
+    public void setApprovalIdempotencyKey(String key) { this.approvalIdempotencyKey = key; }
     public UUID getPaidBy() { return paidBy; }
     public void setPaidBy(UUID paidBy) { this.paidBy = paidBy; }
     public LocalDateTime getPaidAt() { return paidAt; }
     public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
     public String getExternalPaymentReference() { return externalPaymentReference; }
     public void setExternalPaymentReference(String reference) { this.externalPaymentReference = reference; }
+    public String getPaymentIdempotencyKey() { return paymentIdempotencyKey; }
+    public void setPaymentIdempotencyKey(String key) { this.paymentIdempotencyKey = key; }
     public long getVersion() { return version; }
 }
