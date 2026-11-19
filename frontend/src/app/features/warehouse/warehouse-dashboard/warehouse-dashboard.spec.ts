@@ -65,6 +65,15 @@ describe('WarehouseDashboard', () => {
     expect(page.textContent).toContain('Colombo Central');
     expect(page.textContent).toContain('Awaiting sorting');
     expect(page.textContent).toContain('No parcel activity has been recorded');
+    expect(page.querySelector('a[href="/warehouse/intake"]')?.textContent).toContain(
+      'Record arrival',
+    );
+    expect(page.querySelector('a[href="/warehouse/sorting"]')?.textContent).toContain(
+      'Sort parcel',
+    );
+    expect(page.querySelector('a[href="/warehouse/transfers"]')?.textContent).toContain(
+      'Manage transfers',
+    );
     expect(warehouseService.dashboard).toHaveBeenCalledWith('warehouse-1');
   });
 

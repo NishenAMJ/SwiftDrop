@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -42,7 +43,7 @@ const WAREHOUSE_STATUS_LABELS: Record<WarehouseStatus, string> = {
 
 @Component({
   selector: 'app-warehouse-dashboard',
-  imports: [DatePipe, ReactiveFormsModule],
+  imports: [DatePipe, ReactiveFormsModule, RouterLink],
   templateUrl: './warehouse-dashboard.html',
   styleUrl: './warehouse-dashboard.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
