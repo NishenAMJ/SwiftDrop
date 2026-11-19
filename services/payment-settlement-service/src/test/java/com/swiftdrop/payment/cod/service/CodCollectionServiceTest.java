@@ -87,6 +87,7 @@ class CodCollectionServiceTest {
         CodCollection collection = new CodCollection();
         collection.setId(UUID.randomUUID());
         collection.setBookingId(event.data().bookingId());
+        collection.setTrackingNumber(event.data().trackingNumber());
         collection.setPricingSnapshotId(event.data().pricingSnapshotId());
         collection.setMerchantId(event.data().merchantId());
         collection.setCourierId(event.data().courierId());
@@ -94,6 +95,7 @@ class CodCollectionServiceTest {
         collection.setExpectedAmount(event.data().expectedAmount());
         collection.setCollectedAmount(event.data().collectedAmount());
         collection.setCurrency(event.data().currency());
+        collection.setCollectedAt(event.data().collectedAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime());
         collection.setSourceEventId(event.eventId());
         return collection;
     }

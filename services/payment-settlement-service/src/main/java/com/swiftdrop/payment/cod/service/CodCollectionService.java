@@ -80,13 +80,16 @@ public class CodCollectionService {
 
     private static boolean sameCollection(CodCollection existing, CodCollectedEvent.Data data) {
         return Objects.equals(existing.getBookingId(), data.bookingId())
+            && Objects.equals(existing.getTrackingNumber(), data.trackingNumber())
             && Objects.equals(existing.getPricingSnapshotId(), data.pricingSnapshotId())
             && Objects.equals(existing.getMerchantId(), data.merchantId())
             && Objects.equals(existing.getCourierId(), data.courierId())
             && Objects.equals(existing.getDeliveryAttemptId(), data.deliveryAttemptId())
             && moneyEquals(existing.getExpectedAmount(), data.expectedAmount())
             && moneyEquals(existing.getCollectedAmount(), data.collectedAmount())
-            && Objects.equals(existing.getCurrency(), data.currency());
+            && Objects.equals(existing.getCurrency(), data.currency())
+            && Objects.equals(existing.getCollectedAt(),
+                data.collectedAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime());
     }
 
     private static boolean moneyEquals(BigDecimal left, BigDecimal right) {
