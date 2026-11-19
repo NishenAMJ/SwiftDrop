@@ -71,6 +71,7 @@ export class AppLayout {
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
           { label: 'Tracking reports', path: '/tracking/reports' },
+          { label: 'Failed webhooks', path: '/webhooks/failed' },
         ],
       });
     }
@@ -79,6 +80,7 @@ export class AppLayout {
         heading: 'Merchant',
         items: [
           { label: 'API keys', path: '/merchant/api-keys' },
+          { label: 'Webhooks', path: '/webhooks' },
           { label: 'Merchant account', path: '/merchant/application' },
         ],
       });

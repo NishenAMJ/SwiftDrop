@@ -1,0 +1,47 @@
+@use '../../../shared/styles/page';
+
+.back {
+  align-self: flex-start;
+  font-size: 0.875rem;
+}
+
+.webhook-url {
+  font-family: var(--sd-font-mono);
+  overflow-wrap: anywhere;
+  margin-right: var(--sd-space-2);
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-3);
+}
+
+.event-id {
+  display: block;
+  font-family: var(--sd-font-mono);
+  font-size: 0.75rem;
+  color: var(--sd-text-muted);
+}
+
+.num {
+  text-align: right;
+}
+
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.retry {
+  margin-top: var(--sd-space-3);
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3);
+}

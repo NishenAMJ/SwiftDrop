@@ -46,6 +46,7 @@ describe('AppLayout', () => {
       .nativeElement as HTMLElement;
     expect(links(page)).toEqual([
       'API keys',
+      'Webhooks',
       'Merchant account',
       'Customer portal',
       'Become a courier',
@@ -67,6 +68,7 @@ describe('AppLayout', () => {
       'Courier applications',
       'Users',
       'Tracking reports',
+      'Failed webhooks',
       'Your account',
     ]);
   });

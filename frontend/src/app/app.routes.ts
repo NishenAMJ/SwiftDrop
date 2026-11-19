@@ -85,6 +85,12 @@ export const routes: Routes = [
           import('./features/courier/courier.routes').then((m) => m.COURIER_ROUTES),
       },
       {
+        // Merchant webhooks and the dispatcher's failed-webhook view (notification-webhook-service).
+        path: 'webhooks',
+        loadChildren: () =>
+          import('./features/notifications/notifications.routes').then((m) => m.NOTIFICATION_ROUTES),
+      },
+      {
         path: 'warehouse',
         canActivate: [roleGuard('DISPATCHER')],
         loadChildren: () =>
