@@ -1,0 +1,804 @@
+{
+  "info": {
+    "_postman_id": "87c4f1d2-9b24-4f4e-a13e-72bc25d19a01",
+    "name": "SwiftDrop - Notification & Webhook Service",
+    "description": "End-to-end testing and demo collection for SwiftDrop Notification & Webhook Service (Part 3)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "identityBaseUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "notificationBaseUrl",
+      "value": "http://localhost:8086",
+      "type": "string"
+    },
+    {
+      "key": "customerEmail",
+      "value": "merchant.tester@example.com",
+      "type": "string"
+    },
+    {
+      "key": "customerPassword",
+      "value": "Password123!",
+      "type": "string"
+    },
+    {
+      "key": "dispatcherEmail",
+      "value": "Nir@141109",
+      "type": "string"
+    },
+    {
+      "key": "dispatcherPassword",
+      "value": "Nir@141109",
+      "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dispatcherToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "merchantToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "merchantId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "subscriptionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "webhookSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "deliveryId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Register Merchant User (Identity)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const randomId = Math.floor(Math.random() * 100000);",
+              "pm.collectionVariables.set('customerEmail', `merchant.${randomId}@example.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 201 or 200', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"fullName\": \"Merchant Tester\",\n  \"phoneNumber\": \"+94771234567\"\n}"
+        },
+        "url": {
+          "raw": "{{identityBaseUrl}}/api/v1/auth/register",
+          "host": ["{{identityBaseUrl}}"],
+          "path": ["api", "v1", "auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "02. Login Merchant User (Before Approval)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.collectionVariables.set('customerToken', res.accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{identityBaseUrl}}/api/v1/auth/login",
+          "host": ["{{identityBaseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "03. Apply As Merchant (Identity)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.collectionVariables.set('merchantId', res.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"businessName\": \"Demo Store Colombo\",\n  \"businessType\": \"INDIVIDUAL\",\n  \"contactPhone\": \"+94771234567\",\n  \"contactEmail\": \"{{customerEmail}}\",\n  \"businessAddress\": {\n    \"street\": \"123 Galle Road\",\n    \"city\": \"Colombo\",\n    \"postalCode\": \"00300\",\n    \"country\": \"Sri Lanka\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{identityBaseUrl}}/api/v1/merchants",
+          "host": ["{{identityBaseUrl}}"],
+          "path": ["api", "v1", "merchants"]
+        }
+      }
+    },
+    {
+      "name": "04. Webhook Subscription Before Approval (Expect 403 MERCHANT_NOT_APPROVED)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 403 Forbidden', function () {",
+              "    pm.response.to.have.status(403);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('Code is MERCHANT_NOT_APPROVED or FORBIDDEN', function () {",
+              "    pm.expect(res.code).to.be.oneOf(['MERCHANT_NOT_APPROVED', 'FORBIDDEN']);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"http://localhost:8086/dev/webhook-receiver\",\n  \"eventTypes\": [\"parcel.status-changed\"]\n}"
+        },
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions"]
+        }
+      }
+    },
+    {
+      "name": "05. Login Dispatcher (Identity)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.collectionVariables.set('dispatcherToken', res.accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{dispatcherEmail}}\",\n  \"password\": \"{{dispatcherPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{identityBaseUrl}}/api/v1/auth/login",
+          "host": ["{{identityBaseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "06. Approve Merchant (Identity - Dispatcher)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{dispatcherToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{identityBaseUrl}}/api/v1/merchants/{{merchantId}}/approve",
+          "host": ["{{identityBaseUrl}}"],
+          "path": ["api", "v1", "merchants", "{{merchantId}}", "approve"]
+        }
+      }
+    },
+    {
+      "name": "07. Re-login Merchant (Now Approved with merchant_id)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.collectionVariables.set('merchantToken', res.accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{identityBaseUrl}}/api/v1/auth/login",
+          "host": ["{{identityBaseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "08. Create Webhook Subscription (Approved Merchant)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.collectionVariables.set('subscriptionId', res.id);",
+              "pm.collectionVariables.set('webhookSecret', res.secret);",
+              "pm.test('Secret is returned on creation', function () {",
+              "    pm.expect(res.secret).to.be.a('string');",
+              "    pm.expect(res.secret.startsWith('whsec_')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"http://localhost:8086/dev/webhook-receiver\",\n  \"eventTypes\": [\"parcel.status-changed\"]\n}"
+        },
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions"]
+        }
+      }
+    },
+    {
+      "name": "09. List Webhook Subscriptions",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('Items array is present', function () {",
+              "    pm.expect(res.items).to.be.an('array');",
+              "    pm.expect(res.items.length).to.be.at.least(1);",
+              "    pm.expect(res.items[0].secret).to.be.undefined;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions"]
+        }
+      }
+    },
+    {
+      "name": "10. Get Webhook Subscription By ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('ID matches', function () {",
+              "    pm.expect(res.id).to.eql(pm.collectionVariables.get('subscriptionId'));",
+              "    pm.expect(res.secret).to.be.undefined;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions/{{subscriptionId}}",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions", "{{subscriptionId}}"]
+        }
+      }
+    },
+    {
+      "name": "11. Partial Update Subscription (PATCH)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventTypes\": [\"parcel.status-changed\"]\n}"
+        },
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions/{{subscriptionId}}",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions", "{{subscriptionId}}"]
+        }
+      }
+    },
+    {
+      "name": "12. Trigger Test Webhook Delivery",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 202 Accepted', function () {",
+              "    pm.response.to.have.status(202);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.collectionVariables.set('deliveryId', res.id);",
+              "pm.test('Delivery enqueued as PENDING', function () {",
+              "    pm.expect(res.status).to.eql('PENDING');",
+              "    pm.expect(res.payload).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions/{{subscriptionId}}/test",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions", "{{subscriptionId}}", "test"]
+        }
+      }
+    },
+    {
+      "name": "12. Check Delivery Details (After Dispatcher Runs)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('Payload contains expected fields and NO customerUserId', function () {",
+              "    const parsedPayload = JSON.parse(res.payload);",
+              "    pm.expect(parsedPayload.eventId).to.be.a('string');",
+              "    pm.expect(parsedPayload.eventType).to.eql('parcel.status-changed');",
+              "    pm.expect(parsedPayload.data.parcelId).to.be.a('string');",
+              "    pm.expect(parsedPayload.data.customerUserId).to.be.undefined;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/deliveries/{{deliveryId}}",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "deliveries", "{{deliveryId}}"]
+        }
+      }
+    },
+    {
+      "name": "13. Check Dev Receiver History",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('Received webhooks array is present', function () {",
+              "    pm.expect(res).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/dev/webhook-receiver/history",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["dev", "webhook-receiver", "history"]
+        }
+      }
+    },
+    {
+      "name": "14. Rotate Subscription Secret",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('New secret is returned and different from old', function () {",
+              "    pm.expect(res.secret).to.be.a('string');",
+              "    pm.expect(res.secret.startsWith('whsec_')).to.be.true;",
+              "    pm.expect(res.secret).to.not.eql(pm.collectionVariables.get('webhookSecret'));",
+              "    pm.collectionVariables.set('webhookSecret', res.secret);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions/{{subscriptionId}}/rotate-secret",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions", "{{subscriptionId}}", "rotate-secret"]
+        }
+      }
+    },
+    {
+      "name": "15. Manual Retry Webhook Delivery",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 202 Accepted or 409 Conflict', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([202, 409]);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/deliveries/{{deliveryId}}/retry",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "deliveries", "{{deliveryId}}", "retry"]
+        }
+      }
+    },
+    {
+      "name": "16. Dispatcher - List Failed Deliveries",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const res = pm.response.json();",
+              "pm.test('Items array present', function () {",
+              "    pm.expect(res.items).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{dispatcherToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/deliveries?status=FAILED",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "deliveries"],
+          "query": [
+            {
+              "key": "status",
+              "value": "FAILED"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "16. Delete Webhook Subscription",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 204 No Content', function () {",
+              "    pm.response.to.have.status(204);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{merchantToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "DELETE",
+        "url": {
+          "raw": "{{notificationBaseUrl}}/api/v1/webhooks/subscriptions/{{subscriptionId}}",
+          "host": ["{{notificationBaseUrl}}"],
+          "path": ["api", "v1", "webhooks", "subscriptions", "{{subscriptionId}}"]
+        }
+      }
+    }
+  ]
+}

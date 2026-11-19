@@ -1,0 +1,655 @@
+openapi: 3.1.0
+
+info:
+  title: SwiftDrop Notification & Webhook Service
+  version: 0.1.0
+  summary: Customer notifications (email & mock SMS) and reliable merchant webhooks with retries.
+  description: |
+    **SwiftDrop Notification & Webhook Service (Port 8086)**
+
+    This service is responsible for:
+    1. Consuming events from RabbitMQ and delivering user notifications (email via SMTP/Mailpit, SMS via mock log channel).
+    2. Managing merchant webhook subscriptions and reliably delivering event notifications to external merchant HTTP endpoints with HMAC-SHA256 signing and exponential backoff retry.
+
+    ### Webhook Delivery & Security Guarantees
+    - **Outbox Pattern:** Events are enqueued as `PENDING` deliveries and polled by a background dispatcher with pessimistic locking (`FOR UPDATE SKIP LOCKED`).
+    - **At-Least-Once Delivery:** Network failures or non-2xx responses trigger retries. Default retry schedule: immediate 1st attempt, then 5 retries (after 10s, 30s, 1m, 2m, 5m), totaling 6 attempts before marking as `FAILED`.
+    - **SSRF Protection:** Webhook URLs must use HTTPS and cannot point to loopback, link-local, or private RFC 1918 IP addresses (configurable in dev/test profiles).
+    - **Payload Privacy:** Merchant payloads strictly exclude internal identifiers (e.g. `customerUserId`). Only merchant-safe parcel fields are dispatched.
+    - **Secret Storage:** Webhook secrets (`whsec_...`) are encrypted at rest with AES-256-GCM using `WEBHOOK_ENCRYPTION_KEY`.
+
+    ### Webhook Signature Verification
+    Each webhook HTTP POST request contains the following headers:
+    - `X-SwiftDrop-Event`: The event name (e.g. `parcel.status-changed`).
+    - `X-SwiftDrop-Delivery`: Unique delivery attempt UUID.
+    - `X-SwiftDrop-Timestamp`: Epoch timestamp in seconds when the signature was computed.
+    - `X-SwiftDrop-Signature`: Formatted as `t=<timestamp>,v1=<hex_hmac_sha256>`.
+
+    The signature is computed over `<timestamp>.<raw_body_bytes>` using the subscription secret with HMAC-SHA256.
+
+    #### Verification Example (Node.js)
+    ```javascript
+    const crypto = require('crypto');
+
+    function verifyWebhook(secret, signatureHeader, rawBody, toleranceSec = 300) {
+      const parts = signatureHeader.split(',').reduce((acc, part) => {
+        const [k, v] = part.split('=');
+        acc[k.trim()] = v.trim();
+        return acc;
+      }, {});
+      const timestamp = parseInt(parts['t'], 10);
+      const signature = parts['v1'];
+      if (Math.abs(Date.now() / 1000 - timestamp) > toleranceSec) {
+        throw new Error('Signature timestamp out of tolerance');
+      }
+      const expected = crypto.createHmac('sha256', secret)
+        .update(`${timestamp}.${rawBody}`)
+        .digest('hex');
+      if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
+        throw new Error('Signature mismatch');
+      }
+      return true;
+    }
+    ```
+
+    #### Verification Example (Java)
+    ```java
+    import javax.crypto.Mac;
+    import javax.crypto.spec.SecretKeySpec;
+    import java.nio.charset.StandardCharsets;
+    import java.security.MessageDigest;
+    import java.util.HexFormat;
+
+    public boolean verifySignature(String secret, String signatureHeader, String rawBody) throws Exception {
+        String[] parts = signatureHeader.split(",");
+        long timestamp = Long.parseLong(parts[0].split("=")[1]);
+        String expectedSig = parts[1].split("=")[1];
+
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] digest = mac.doFinal((timestamp + "." + rawBody).getBytes(StandardCharsets.UTF_8));
+        String actualSig = HexFormat.of().formatHex(digest);
+        return MessageDigest.isEqual(expectedSig.getBytes(StandardCharsets.UTF_8), actualSig.getBytes(StandardCharsets.UTF_8));
+    }
+    ```
+
+servers:
+  - url: http://localhost:8086
+    description: Direct service instance
+  - url: http://localhost:8080
+    description: Via API Gateway
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Subscriptions
+    description: Webhook subscription management for merchants
+  - name: Deliveries
+    description: Delivery history and monitoring
+
+paths:
+  /api/v1/webhooks/subscriptions:
+    post:
+      tags:
+        - Subscriptions
+      summary: Create a webhook subscription
+      description: |
+        Creates a new webhook subscription. Returns the newly generated subscription secret (`whsec_...`).
+        **Store this secret securely; it will not be shown again.**
+      operationId: createSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '201':
+          description: Subscription created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags:
+        - Subscriptions
+      summary: List webhook subscriptions
+      description: Returns a paginated list of subscriptions owned by the authenticated merchant.
+      operationId: listSubscriptions
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/webhooks/subscriptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags:
+        - Subscriptions
+      summary: Get subscription details
+      operationId: getSubscription
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscriptionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Subscriptions
+      summary: Update webhook subscription
+      operationId: updateSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionRequest'
+      responses:
+        '200':
+          description: Subscription updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Subscriptions
+      summary: Delete webhook subscription
+      operationId: deleteSubscription
+      responses:
+        '204':
+          description: Subscription deleted
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/webhooks/subscriptions/{id}/rotate-secret:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Subscriptions
+      summary: Rotate subscription secret
+      description: Generates and returns a new secret for the subscription. Previous signature verification will immediately fail.
+      operationId: rotateSecret
+      responses:
+        '200':
+          description: Secret rotated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscriptionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/webhooks/subscriptions/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Subscriptions
+      summary: Trigger test webhook delivery
+      description: Immediately enqueues a synthetic `parcel.status-changed` event delivery for this subscription.
+      operationId: testSubscription
+      responses:
+        '202':
+          description: Test delivery enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/webhooks/subscriptions/{id}/deliveries:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Deliveries
+      summary: List deliveries for subscription
+      description: Returns paginated delivery history for a subscription (payloads excluded from summary).
+      operationId: listSubscriptionDeliveries
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated deliveries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/webhooks/deliveries/{deliveryId}:
+    parameters:
+      - name: deliveryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Deliveries
+      summary: Get delivery details
+      description: Returns full delivery attempt details including the raw JSON payload.
+      operationId: getDelivery
+      responses:
+        '200':
+          description: Full delivery details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/webhooks/deliveries/{deliveryId}/retry:
+    parameters:
+      - name: deliveryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags:
+        - Deliveries
+      summary: Manually retry a failed delivery
+      description: |
+        Allows a merchant to manually retry their own failed webhook delivery.
+        Resets status to `PENDING`, `next_attempt_at` to now, clears `last_error`, and resets `attempt_count` to 0.
+        Only deliveries in `FAILED` status can be retried; any other status returns `409 Conflict` with `DELIVERY_NOT_RETRYABLE`.
+      operationId: retryDelivery
+      responses:
+        '202':
+          description: Delivery retry accepted and queued as PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/webhooks/deliveries:
+    get:
+      tags:
+        - Deliveries
+      summary: List permanently failed deliveries (Dispatcher only)
+      description: Operational endpoint allowing dispatchers to monitor dead-lettered / failed deliveries across all merchants.
+      operationId: listFailedDeliveries
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [FAILED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated failed deliveries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthenticated:
+      description: Authentication required or token expired
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Permission denied or merchant not approved
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: Conflict or invalid resource state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    CreateSubscriptionRequest:
+      type: object
+      required:
+        - url
+        - eventTypes
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          example: https://api.merchant.com/webhooks/swiftdrop
+        eventTypes:
+          type: array
+          items:
+            type: string
+          example: ["parcel.status-changed"]
+
+    UpdateSubscriptionRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+        eventTypes:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+
+    WebhookSubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        url:
+          type: string
+        eventTypes:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        pausedReason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        secret:
+          type: string
+          description: Included only when creating subscription or rotating secret.
+          nullable: true
+
+    WebhookDeliveryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscriptionId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        payload:
+          type: string
+          description: Stringified JSON payload (omitted in summary lists)
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, DELIVERED, FAILED]
+        attemptCount:
+          type: integer
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastStatusCode:
+          type: integer
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    MerchantWebhookPayload:
+      type: object
+      description: Privacy-safe payload dispatched to merchant endpoints. Does NOT contain customerUserId or internal fields.
+      required:
+        - eventId
+        - eventType
+        - occurredAt
+        - data
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          example: parcel.status-changed
+        occurredAt:
+          type: string
+          format: date-time
+        data:
+          type: object
+          required:
+            - parcelId
+            - trackingNumber
+            - status
+            - changedAt
+          properties:
+            parcelId:
+              type: string
+              format: uuid
+            trackingNumber:
+              type: string
+              example: SD-12345678-AB
+            status:
+              type: string
+              example: OUT_FOR_DELIVERY
+            previousStatus:
+              type: string
+              nullable: true
+              example: PICKED_UP
+            failureReason:
+              type: string
+              nullable: true
+            changedAt:
+              type: string
+              format: date-time
+
+    SubscriptionPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookSubscriptionResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+
+    DeliveryPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDeliveryResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+
+    ProblemDetail:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string

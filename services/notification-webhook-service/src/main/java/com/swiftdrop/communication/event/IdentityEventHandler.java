@@ -15,6 +15,7 @@ import com.swiftdrop.communication.contact.UserEventData;
 import com.swiftdrop.communication.notification.EmailContent;
 import com.swiftdrop.communication.notification.EmailTemplates;
 import com.swiftdrop.communication.notification.NotificationService;
+import com.swiftdrop.communication.webhook.WebhookSubscriptionService;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -27,17 +28,20 @@ public class IdentityEventHandler {
     private final ProcessedEventRepository processedEventRepository;
     private final ContactService contactService;
     private final NotificationService notificationService;
+    private final WebhookSubscriptionService webhookSubscriptionService;
     private final JsonMapper jsonMapper;
     private final Clock clock;
 
     public IdentityEventHandler(ProcessedEventRepository processedEventRepository,
                                 ContactService contactService,
                                 NotificationService notificationService,
+                                WebhookSubscriptionService webhookSubscriptionService,
                                 JsonMapper jsonMapper,
                                 Clock clock) {
         this.processedEventRepository = processedEventRepository;
         this.contactService = contactService;
         this.notificationService = notificationService;
+        this.webhookSubscriptionService = webhookSubscriptionService;
         this.jsonMapper = jsonMapper;
         this.clock = clock;
     }
@@ -63,8 +67,15 @@ public class IdentityEventHandler {
                 UserEventData userData = jsonMapper.convertValue(envelope.getData(), UserEventData.class);
                 contactService.syncContact(userData, envelope.getOccurredAt());
             }
-            case "merchant.approved", "merchant.rejected", "merchant.suspended" -> {
+            case "merchant.approved", "merchant.rejected", "merchant.suspended", "merchant.reactivated" -> {
                 MerchantEventData merchantData = jsonMapper.convertValue(envelope.getData(), MerchantEventData.class);
+
+                if ("merchant.suspended".equals(eventType) && merchantData.getMerchantId() != null) {
+                    webhookSubscriptionService.pauseSubscriptions(merchantData.getMerchantId(), "MERCHANT_SUSPENDED");
+                } else if ("merchant.reactivated".equals(eventType) && merchantData.getMerchantId() != null) {
+                    webhookSubscriptionService.resumeSubscriptions(merchantData.getMerchantId(), "MERCHANT_SUSPENDED");
+                }
+
                 UUID userId = merchantData.getUserId();
                 Optional<Contact> contactOpt = contactService.findContact(userId);
                 if (contactOpt.isEmpty()) {
