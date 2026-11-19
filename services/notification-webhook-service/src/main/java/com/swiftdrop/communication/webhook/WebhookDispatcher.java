@@ -26,6 +26,9 @@ public class WebhookDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookDispatcher.class);
 
+    /** Must match webhook_deliveries.last_error VARCHAR(200), or saving the delivery fails. */
+    static final int MAX_ERROR_LENGTH = 200;
+
     private final WebhookDeliveryRepository deliveryRepository;
     private final WebhookSubscriptionRepository subscriptionRepository;
     private final WebhookSecretCrypto crypto;
@@ -129,7 +132,7 @@ public class WebhookDispatcher {
             } catch (Exception e) {
                 log.warn("URL validation failed for delivery id={}: {}", deliveryId, e.getMessage());
                 delivery.setStatus(WebhookDeliveryStatus.FAILED);
-                delivery.setLastError("URL validation failed: " + e.getMessage());
+                delivery.setLastError(truncate("URL validation failed: " + e.getMessage(), MAX_ERROR_LENGTH));
                 delivery.setNextAttemptAt(null);
                 deliveryRepository.save(delivery);
                 return;
@@ -140,7 +143,19 @@ public class WebhookDispatcher {
     }
 
     private void executeDispatch(WebhookDelivery delivery, WebhookSubscription subscription) {
-        String rawSecret = crypto.decrypt(subscription.getSecretCiphertext());
+        String rawSecret;
+        try {
+            rawSecret = crypto.decrypt(subscription.getSecretCiphertext());
+        } catch (RuntimeException e) {
+            // Retrying cannot fix a secret that cannot be decrypted (for example a changed key).
+            log.warn("Webhook delivery id={} FAILED: subscription secret could not be decrypted",
+                    delivery.getDeliveryId());
+            delivery.setStatus(WebhookDeliveryStatus.FAILED);
+            delivery.setLastError("Secret could not be decrypted");
+            delivery.setNextAttemptAt(null);
+            deliveryRepository.save(delivery);
+            return;
+        }
         long timestampSeconds = clock.instant().getEpochSecond();
         String signatureHeader = signer.buildHeader(rawSecret, timestampSeconds, delivery.getPayload());
 
@@ -167,10 +182,11 @@ public class WebhookDispatcher {
             success = response.getStatusCode().is2xxSuccessful();
         } catch (RestClientResponseException ex) {
             statusCode = ex.getStatusCode().value();
-            errorMessage = "HTTP " + statusCode + ": " + truncate(ex.getResponseBodyAsString(), 255);
+            // The merchant's response body is not stored: it could contain anything.
+            errorMessage = "HTTP " + statusCode;
             log.warn("Webhook delivery id={} to {} returned HTTP {}", delivery.getDeliveryId(), subscription.getUrl(), statusCode);
         } catch (Exception ex) {
-            errorMessage = truncate(ex.getClass().getSimpleName() + ": " + ex.getMessage(), 255);
+            errorMessage = truncate(ex.getClass().getSimpleName() + ": " + ex.getMessage(), MAX_ERROR_LENGTH);
             log.warn("Webhook delivery id={} to {} failed: {}", delivery.getDeliveryId(), subscription.getUrl(), errorMessage);
         }
 
@@ -187,13 +203,12 @@ public class WebhookDispatcher {
             delivery.setLastStatusCode(statusCode);
             delivery.setLastError(errorMessage);
 
-            List<Duration> retryDelays = properties.getRetryDelays();
-            if (newAttemptCount <= retryDelays.size()) {
-                Duration backoff = retryDelays.get(newAttemptCount - 1);
-                delivery.setNextAttemptAt(now.plus(backoff));
+            Optional<Duration> backoff = RetryPolicy.nextDelay(newAttemptCount, properties.getRetryDelays());
+            if (backoff.isPresent()) {
+                delivery.setNextAttemptAt(now.plus(backoff.get()));
                 delivery.setStatus(WebhookDeliveryStatus.PENDING);
-                log.info("Webhook delivery id={} scheduled retry #{} in {}s",
-                        delivery.getDeliveryId(), newAttemptCount, backoff.toSeconds());
+                log.info("Webhook delivery id={} scheduled retry #{} in {} ms",
+                        delivery.getDeliveryId(), newAttemptCount, backoff.get().toMillis());
             } else {
                 delivery.setStatus(WebhookDeliveryStatus.FAILED);
                 delivery.setNextAttemptAt(null);

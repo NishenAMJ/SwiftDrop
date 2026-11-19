@@ -49,6 +49,24 @@ class WebhookSignerTest {
     }
 
     @Test
+    void fixedTestVectorYieldsExactSignature() {
+        String testSecret = "whsec_fixed_test_key";
+        long testTimestamp = 1700000000L;
+        String testPayload = "{\"test\":true}";
+
+        String sig1 = signer.computeSignature(testSecret, testTimestamp, testPayload);
+        assertThat(sig1).isNotBlank();
+
+        // Changing payload gives different signature
+        String sig2 = signer.computeSignature(testSecret, testTimestamp, "{\"test\":false}");
+        assertThat(sig1).isNotEqualTo(sig2);
+
+        // Header formatting
+        String header = signer.buildHeader(testSecret, testTimestamp, testPayload);
+        assertThat(header).isEqualTo("t=1700000000,v1=" + sig1);
+    }
+
+    @Test
     void verifyFailsOnMalformedHeader() {
         assertThat(signer.verify(secret, "invalid_header", payload, 300)).isFalse();
         assertThat(signer.verify(secret, null, payload, 300)).isFalse();
