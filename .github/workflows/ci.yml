@@ -38,8 +38,8 @@ jobs:
             echo "RABBITMQ_PASSWORD=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
 
-      - name: Start PostgreSQL (same setup as local)
-        run: docker compose up -d --wait postgres
+      - name: Start PostgreSQL and RabbitMQ (same setup as local)
+        run: docker compose up -d --wait postgres rabbitmq
 
       - name: Build and test Identity service
         working-directory: services/identity-merchant-service
