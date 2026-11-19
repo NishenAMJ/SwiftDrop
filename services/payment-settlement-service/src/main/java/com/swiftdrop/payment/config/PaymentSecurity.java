@@ -18,6 +18,10 @@ public class PaymentSecurity{
             .authorizeHttpRequests(a->a
                 .requestMatchers("/actuator/health","/actuator/health/**","/error").permitAll()
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/callbacks/payhere").permitAll()
+                .requestMatchers(HttpMethod.POST,"/api/v1/cod-handovers/*/confirm").hasRole("DISPATCHER")
+                .requestMatchers(HttpMethod.POST,"/api/v1/cod-handovers").hasRole("COURIER")
+                .requestMatchers("/api/v1/cod-handovers","/api/v1/cod-handovers/**")
+                    .hasAnyRole("COURIER","DISPATCHER")
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/*/refund").hasRole("DISPATCHER")
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/*/refunds/*/retry").hasRole("DISPATCHER")
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/*/refunds/*/resolve").hasRole("DISPATCHER")

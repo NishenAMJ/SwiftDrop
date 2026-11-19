@@ -11,6 +11,6 @@ public interface CodCollectionRepository extends JpaRepository<CodCollection, UU
     Optional<CodCollection> findByBookingId(String bookingId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select c from CodCollection c where c.id in :ids")
+    @Query("select c from CodCollection c where c.id in :ids order by c.id")
     List<CodCollection> lockAllById(@Param("ids") Collection<UUID> ids);
 }
