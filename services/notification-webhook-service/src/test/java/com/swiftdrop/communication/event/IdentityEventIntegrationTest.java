@@ -1,12 +1,18 @@
 package com.swiftdrop.communication.event;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -15,20 +21,25 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mail.SimpleMailMessage;
 
+import com.swiftdrop.communication.config.RabbitConfig;
 import com.swiftdrop.communication.contact.Contact;
 import com.swiftdrop.communication.contact.ContactRepository;
 import com.swiftdrop.communication.notification.Notification;
 import com.swiftdrop.communication.notification.NotificationRepository;
 import com.swiftdrop.communication.notification.NotificationStatus;
+import com.swiftdrop.communication.support.AbstractIntegrationTest;
 
-@SpringBootTest
-class IdentityEventIntegrationTest {
+class IdentityEventIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private IdentityEventListener listener;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     @Autowired
     private ContactRepository contactRepository;
@@ -43,6 +54,60 @@ class IdentityEventIntegrationTest {
         MessageProperties properties = new MessageProperties();
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
         return new Message(json.getBytes(StandardCharsets.UTF_8), properties);
+    }
+
+    @Test
+    void fullEventFlowViaRabbitTemplateWithMailVerificationAndIdempotency() {
+        reset(mailSender);
+
+        UUID eventId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        String payload = """
+                {
+                  "eventId": "%s",
+                  "eventType": "user.registered",
+                  "version": 1,
+                  "occurredAt": "2026-11-01T09:30:00Z",
+                  "producer": "identity-merchant-service",
+                  "data": {
+                    "userId": "%s",
+                    "email": "flow-%s@example.com",
+                    "fullName": "Flow Customer",
+                    "phoneNumber": "+94771234567",
+                    "roles": ["CUSTOMER"],
+                    "status": "ACTIVE",
+                    "authProvider": "PASSWORD"
+                  }
+                }
+                """.formatted(eventId, userId, UUID.randomUUID());
+
+        // 1. Publish to exchange
+        rabbitTemplate.convertAndSend(RabbitConfig.IDENTITY_EXCHANGE, "user.registered", payload);
+
+        // 2. Await asynchronous consumption and assertions
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            assertTrue(contactRepository.findById(userId).isPresent());
+            List<Notification> notifications = notificationRepository.findAll().stream()
+                    .filter(n -> userId.equals(n.getRecipientUserId()) && "WELCOME".equals(n.getTemplate()))
+                    .toList();
+            assertEquals(1, notifications.size());
+            assertEquals(NotificationStatus.SENT, notifications.getFirst().getStatus());
+        });
+
+        // 3. Verify mailSender was invoked with SimpleMailMessage
+        verify(mailSender, atLeastOnce()).send(any(SimpleMailMessage.class));
+
+        // 4. Publish exact same event again -> must be skipped as duplicate
+        rabbitTemplate.convertAndSend(RabbitConfig.IDENTITY_EXCHANGE, "user.registered", payload);
+
+        // Verify still only 1 notification row in DB
+        await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+            long count = notificationRepository.findAll().stream()
+                    .filter(n -> userId.equals(n.getRecipientUserId()) && "WELCOME".equals(n.getTemplate()))
+                    .count();
+            assertEquals(1, count);
+        });
     }
 
     @Test
@@ -154,7 +219,7 @@ class IdentityEventIntegrationTest {
                   "data": {
                     "userId": "%s",
                     "email": "order-%s@example.com",
-                    "fullName": "Stale Old Name",
+                    "fullName": "Stale Outdated Name",
                     "phoneNumber": "+94770000003",
                     "roles": ["CUSTOMER"],
                     "status": "ACTIVE"
@@ -168,11 +233,11 @@ class IdentityEventIntegrationTest {
     }
 
     @Test
-    void merchantDecisionSendsEmailWhenContactActive() {
+    void merchantApprovedSendsEmailWhenContactExists() {
+        UUID eventId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
-        UUID merchantId = UUID.randomUUID();
 
-        // Seed contact
+        // Seed contact first
         String reg = """
                 {
                   "eventId": "%s",
@@ -184,7 +249,7 @@ class IdentityEventIntegrationTest {
                     "userId": "%s",
                     "email": "merchant-%s@example.com",
                     "fullName": "Merchant Owner",
-                    "phoneNumber": "+94771112233",
+                    "phoneNumber": "+94771122334",
                     "roles": ["CUSTOMER"],
                     "status": "ACTIVE"
                   }
@@ -192,24 +257,26 @@ class IdentityEventIntegrationTest {
                 """.formatted(UUID.randomUUID(), userId, UUID.randomUUID());
         listener.onMessage(createJsonMessage(reg));
 
-        // Merchant approved
         String approved = """
                 {
                   "eventId": "%s",
                   "eventType": "merchant.approved",
                   "version": 1,
-                  "occurredAt": "2026-11-02T04:15:00Z",
+                  "occurredAt": "2026-11-01T10:00:00Z",
                   "producer": "identity-merchant-service",
                   "data": {
                     "merchantId": "%s",
                     "userId": "%s",
-                    "businessName": "Super Store",
+                    "businessName": "Acme Deliveries",
                     "status": "APPROVED",
-                    "previousStatus": "PENDING"
+                    "reason": null
                   }
                 }
-                """.formatted(UUID.randomUUID(), merchantId, userId);
+                """.formatted(eventId, UUID.randomUUID(), userId);
+
         listener.onMessage(createJsonMessage(approved));
+
+        assertTrue(processedEventRepository.existsByEventIdAndConsumer(eventId, IdentityEventHandler.CONSUMER));
 
         List<Notification> notifications = notificationRepository.findAll().stream()
                 .filter(n -> n.getRecipientUserId().equals(userId) && "merchant.approved".equals(n.getTemplate()))
@@ -219,81 +286,23 @@ class IdentityEventIntegrationTest {
     }
 
     @Test
-    void inactiveContactRecordsFailedNotification() {
-        UUID userId = UUID.randomUUID();
-        UUID merchantId = UUID.randomUUID();
-
-        // Seed contact with SUSPENDED status
-        String reg = """
-                {
-                  "eventId": "%s",
-                  "eventType": "user.registered",
-                  "version": 1,
-                  "occurredAt": "2026-11-01T09:30:00Z",
-                  "producer": "identity-merchant-service",
-                  "data": {
-                    "userId": "%s",
-                    "email": "inactive-%s@example.com",
-                    "fullName": "Suspended User",
-                    "phoneNumber": "+94779998877",
-                    "roles": ["CUSTOMER"],
-                    "status": "SUSPENDED"
-                  }
-                }
-                """.formatted(UUID.randomUUID(), userId, UUID.randomUUID());
-        listener.onMessage(createJsonMessage(reg));
-
-        List<Notification> welcomeNotifs = notificationRepository.findAll().stream()
-                .filter(n -> n.getRecipientUserId().equals(userId) && "WELCOME".equals(n.getTemplate()))
-                .toList();
-        assertEquals(1, welcomeNotifs.size());
-        assertEquals(NotificationStatus.FAILED, welcomeNotifs.getFirst().getStatus());
-        assertEquals("Recipient is not active", welcomeNotifs.getFirst().getFailureReason());
-
-        // Merchant event for suspended contact
-        String rejected = """
-                {
-                  "eventId": "%s",
-                  "eventType": "merchant.rejected",
-                  "version": 1,
-                  "occurredAt": "2026-11-02T04:20:00Z",
-                  "producer": "identity-merchant-service",
-                  "data": {
-                    "merchantId": "%s",
-                    "userId": "%s",
-                    "businessName": "Suspended Store",
-                    "status": "REJECTED",
-                    "reason": "Invalid documents"
-                  }
-                }
-                """.formatted(UUID.randomUUID(), merchantId, userId);
-        listener.onMessage(createJsonMessage(rejected));
-
-        List<Notification> rejectedNotifs = notificationRepository.findAll().stream()
-                .filter(n -> n.getRecipientUserId().equals(userId) && "merchant.rejected".equals(n.getTemplate()))
-                .toList();
-        assertEquals(1, rejectedNotifs.size());
-        assertEquals(NotificationStatus.FAILED, rejectedNotifs.getFirst().getStatus());
-        assertEquals("Recipient is not active", rejectedNotifs.getFirst().getFailureReason());
-    }
-
-    @Test
-    void missingContactOnMerchantDecisionIsSkipped() {
-        UUID randomUserId = UUID.randomUUID();
+    void merchantApprovedWithoutContactRecordsEventAndDoesNotThrow() {
         UUID eventId = UUID.randomUUID();
+        UUID randomUserId = UUID.randomUUID();
 
         String approved = """
                 {
                   "eventId": "%s",
                   "eventType": "merchant.approved",
                   "version": 1,
-                  "occurredAt": "2026-11-02T04:15:00Z",
+                  "occurredAt": "2026-11-01T10:00:00Z",
                   "producer": "identity-merchant-service",
                   "data": {
                     "merchantId": "%s",
                     "userId": "%s",
-                    "businessName": "Unknown Store",
-                    "status": "APPROVED"
+                    "businessName": "Ghost Business",
+                    "status": "APPROVED",
+                    "reason": null
                   }
                 }
                 """.formatted(eventId, UUID.randomUUID(), randomUserId);

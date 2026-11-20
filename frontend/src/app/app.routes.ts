@@ -16,9 +16,9 @@ export const routes: Routes = [
       import('./features/landing/landing-page/landing-page').then((m) => m.LandingPage),
   },
   {
-    path: 'dispatcher',
+    path: 'tracking',
     loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
   },
   {
     // Login, register and the Google callback share the Arctic Frost auth layout.
@@ -26,11 +26,6 @@ export const routes: Routes = [
     loadComponent: () => import('./core/layout/auth-layout/auth-layout').then((m) => m.AuthLayout),
     children: [
       {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
-  },
-  {
         path: 'login',
         title: 'Log in | SwiftDrop',
         canActivate: [guestGuard],
@@ -38,11 +33,6 @@ export const routes: Routes = [
           import('./features/auth/login-page/login-page').then((m) => m.LoginPage),
       },
       {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
-  },
-  {
         path: 'register',
         title: 'Create account | SwiftDrop',
         canActivate: [guestGuard],
@@ -50,11 +40,6 @@ export const routes: Routes = [
           import('./features/auth/register-page/register-page').then((m) => m.RegisterPage),
       },
       {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
-  },
-  {
         path: 'auth/callback',
         title: 'Logging in | SwiftDrop',
         loadComponent: () =>
@@ -63,11 +48,6 @@ export const routes: Routes = [
           ),
       },
     ],
-  },
-  {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   {
     path: 'customer',
@@ -79,12 +59,12 @@ export const routes: Routes = [
   },
   {
     path: 'dispatcher',
+    canActivate: [roleGuard('DISPATCHER')],
     loadChildren: () =>
       import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   {
-    path: 'account',
-    title: 'Your account | SwiftDrop',
+    path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/app-layout/app-layout').then((m) => m.AppLayout),
     children: [
@@ -105,17 +85,18 @@ export const routes: Routes = [
           import('./features/courier/courier.routes').then((m) => m.COURIER_ROUTES),
       },
       {
-        path: 'dispatcher',
+        // Merchant webhooks and the dispatcher's failed-webhook view (notification-webhook-service).
+        path: 'webhooks',
+        loadChildren: () =>
+          import('./features/notifications/notifications.routes').then((m) => m.NOTIFICATION_ROUTES),
+      },
+      {
+        path: 'warehouse',
         canActivate: [roleGuard('DISPATCHER')],
         loadChildren: () =>
-          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+          import('./features/warehouse/warehouse.routes').then((m) => m.WAREHOUSE_ROUTES),
       },
     ],
-  },
-  {
-    path: 'dispatcher',
-    loadChildren: () =>
-      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   { path: '**', redirectTo: 'account' },
 ];

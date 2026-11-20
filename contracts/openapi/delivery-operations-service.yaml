@@ -1,0 +1,275 @@
+openapi: 3.1.0
+info:
+  title: SwiftDrop Delivery Operations Service API
+  version: 0.1.0
+  description: Warehouse, sorting, and parcel-transfer contract owned by Delivery Operations.
+servers:
+  - url: http://localhost:8083
+paths:
+  /api/v1/warehouses:
+    get:
+      summary: List warehouses
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200': { description: Paginated warehouses }
+    post:
+      summary: Create a warehouse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWarehouse' }
+      responses:
+        '201':
+          description: Warehouse created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Warehouse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/warehouses/{warehouseId}:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    get:
+      summary: Get a warehouse
+      responses:
+        '200':
+          description: Warehouse details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Warehouse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Update warehouse details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWarehouse' }
+      responses:
+        '200': { description: Warehouse updated }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/warehouses/{warehouseId}/status:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    patch:
+      summary: Change warehouse operational status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/WarehouseStatus' }
+      responses:
+        '200': { description: Status changed }
+  /api/v1/warehouses/{warehouseId}/dashboard:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    get:
+      summary: Get incoming, outgoing, sorting, and parcel summary
+      responses:
+        '200': { description: Warehouse dashboard data }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/warehouse-parcels/arrivals:
+    post:
+      summary: Record a parcel arriving at a warehouse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordArrival' }
+      responses:
+        '201': { description: Arrival recorded }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/warehouse-parcels/{parcelReference}:
+    get:
+      summary: Get the current warehouse state of a parcel
+      parameters:
+        - name: parcelReference
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Parcel warehouse state }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/sorting-records:
+    post:
+      summary: Record a parcel sorting decision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSortingRecord' }
+      responses:
+        '201': { description: Sorting record created }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/transfers:
+    get:
+      summary: List parcel transfers
+      parameters:
+        - name: parcelReference
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TransferStatus' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200': { description: Paginated transfers }
+    post:
+      summary: Create a warehouse-to-warehouse transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransfer' }
+      responses:
+        '201': { description: Transfer created }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/transfers/{transferId}:
+    get:
+      summary: Get a parcel transfer
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200': { description: Transfer details }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/transfers/{transferId}/dispatch:
+    post:
+      summary: Mark a created transfer as in transit
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200': { description: Transfer dispatched }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/transfers/{transferId}/receive:
+    post:
+      summary: Confirm receipt at the destination warehouse
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReceiveTransfer' }
+      responses:
+        '200': { description: Receipt confirmed }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/transfers/{transferId}/cancel:
+    post:
+      summary: Cancel a transfer that has not been dispatched
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200': { description: Transfer cancelled }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+components:
+  parameters:
+    WarehouseId:
+      name: warehouseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+  schemas:
+    WarehouseStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, MAINTENANCE]
+    TransferStatus:
+      type: string
+      enum: [CREATED, IN_TRANSIT, RECEIVED, CANCELLED]
+    CreateWarehouse:
+      type: object
+      required: [code, name, addressLine1, city, district, contactName, contactPhone]
+      properties:
+        code: { type: string, maxLength: 30, example: CMB-01 }
+        name: { type: string, maxLength: 120, example: Colombo Warehouse }
+        addressLine1: { type: string, maxLength: 160 }
+        addressLine2: { type: [string, 'null'], maxLength: 160 }
+        city: { type: string, maxLength: 80 }
+        district: { type: string, maxLength: 80 }
+        postalCode: { type: [string, 'null'], maxLength: 20 }
+        contactName: { type: string, maxLength: 120 }
+        contactPhone: { type: string, maxLength: 30 }
+        contactEmail: { type: [string, 'null'], format: email }
+    UpdateWarehouse:
+      type: object
+      required: [name, addressLine1, city, district, contactName, contactPhone]
+      properties:
+        name: { type: string, maxLength: 120 }
+        addressLine1: { type: string, maxLength: 160 }
+        addressLine2: { type: [string, 'null'], maxLength: 160 }
+        city: { type: string, maxLength: 80 }
+        district: { type: string, maxLength: 80 }
+        postalCode: { type: [string, 'null'], maxLength: 20 }
+        contactName: { type: string, maxLength: 120 }
+        contactPhone: { type: string, maxLength: 30 }
+        contactEmail: { type: [string, 'null'], format: email }
+    Warehouse:
+      allOf:
+        - $ref: '#/components/schemas/CreateWarehouse'
+        - type: object
+          required: [id, status, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            status: { $ref: '#/components/schemas/WarehouseStatus' }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    RecordArrival:
+      type: object
+      required: [parcelReference, warehouseId]
+      properties:
+        parcelReference: { type: string, maxLength: 50, example: SWD-2026-000125 }
+        warehouseId: { type: string, format: uuid }
+        arrivedAt: { type: [string, 'null'], format: date-time }
+        notes: { type: [string, 'null'], maxLength: 500 }
+    CreateSortingRecord:
+      type: object
+      required: [parcelReference, warehouseId, destination]
+      properties:
+        parcelReference: { type: string, maxLength: 50 }
+        warehouseId: { type: string, format: uuid }
+        nextWarehouseId: { type: [string, 'null'], format: uuid }
+        destination: { type: string, maxLength: 160 }
+        notes: { type: [string, 'null'], maxLength: 500 }
+        sortedAt: { type: [string, 'null'], format: date-time }
+    CreateTransfer:
+      type: object
+      required: [parcelReference, sourceWarehouseId, destinationWarehouseId]
+      properties:
+        parcelReference: { type: string, maxLength: 50 }
+        sourceWarehouseId: { type: string, format: uuid }
+        destinationWarehouseId: { type: string, format: uuid }
+    ReceiveTransfer:
+      type: object
+      required: [receivedBy]
+      properties:
+        receivedAt: { type: [string, 'null'], format: date-time }
+        receivedBy: { type: string, maxLength: 120 }
+        notes: { type: [string, 'null'], maxLength: 500 }
+  responses:
+    NotFound:
+      description: Resource not found
+    Conflict:
+      description: Conflicting resource or active operation
+    InvalidOperation:
+      description: Business state transition is not allowed

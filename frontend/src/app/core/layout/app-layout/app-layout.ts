@@ -62,11 +62,17 @@ export class AppLayout {
       groups.push({
         heading: 'Dispatcher',
         items: [
+          { label: 'Warehouse overview', path: '/warehouse' },
+          { label: 'Warehouses', path: '/warehouse/warehouses' },
+          { label: 'Parcel intake', path: '/warehouse/intake' },
+          { label: 'Parcel sorting', path: '/warehouse/sorting' },
+          { label: 'Parcel transfers', path: '/warehouse/transfers' },
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
           { label: 'Payments and refunds', path: '/dispatcher/payments' },
           { label: 'Tracking reports', path: '/tracking/reports' },
+          { label: 'Failed webhooks', path: '/webhooks/failed' },
         ],
       });
     }
@@ -75,6 +81,7 @@ export class AppLayout {
         heading: 'Merchant',
         items: [
           { label: 'API keys', path: '/merchant/api-keys' },
+          { label: 'Webhooks', path: '/webhooks' },
           { label: 'Payment history', path: '/account/merchant/payments' },
           { label: 'Merchant account', path: '/merchant/application' },
         ],

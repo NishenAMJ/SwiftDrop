@@ -31,16 +31,10 @@ public class ContactService {
 
         if (existingOpt.isPresent()) {
             Contact existing = existingOpt.get();
-            if (occurredAt.isBefore(existing.getLastEventOccurredAt())) {
+            if (!existing.apply(userData, occurredAt, clock.instant())) {
                 log.info("Ignoring out-of-order event for user ID: {}", userId);
                 return existing;
             }
-            existing.setEmail(userData.getEmail());
-            existing.setFullName(userData.getFullName());
-            existing.setPhoneNumber(userData.getPhoneNumber());
-            existing.setStatus(userData.getStatus());
-            existing.setLastEventOccurredAt(occurredAt);
-            existing.setUpdatedAt(clock.instant());
             return contactRepository.save(existing);
         } else {
             Instant now = clock.instant();

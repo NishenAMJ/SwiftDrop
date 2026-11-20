@@ -7,6 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD}
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD}
+      DELIVERY_DB_PASSWORD: ${DELIVERY_DB_PASSWORD:?Set DELIVERY_DB_PASSWORD}
       PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
       COMMUNICATION_DB_PASSWORD: ${COMMUNICATION_DB_PASSWORD:?Set COMMUNICATION_DB_PASSWORD}
       TRACKING_DB_PASSWORD: ${TRACKING_DB_PASSWORD:?Set TRACKING_DB_PASSWORD}
@@ -149,6 +150,21 @@ services:
       parcel-pricing-service:
         condition: service_healthy
 
+  delivery-operations-service:
+    image: swiftdrop/delivery-operations-service:latest
+    build:
+      context: ./services/delivery-operations-service
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8083:8083"
+    environment:
+      DELIVERY_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      DELIVERY_DB_USER: delivery_user
+      DELIVERY_DB_PASSWORD: ${DELIVERY_DB_PASSWORD:?Set DELIVERY_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api-gateway:
     build:
       context: ./services/api-gateway
@@ -161,7 +177,7 @@ services:
       IDENTITY_JWKS_URI: ${GATEWAY_IDENTITY_JWKS_URI:-http://identity-merchant-service:8081/.well-known/jwks.json}
       IDENTITY_SERVICE_URI: ${GATEWAY_IDENTITY_SERVICE_URI:-http://identity-merchant-service:8081}
       PARCEL_SERVICE_URI: ${GATEWAY_PARCEL_SERVICE_URI:-http://parcel-pricing-service:8082}
-      DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://host.docker.internal:8083}
+      DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://delivery-operations-service:8083}
       TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://tracking-reporting-service:8084}
       PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
     extra_hosts:
@@ -175,6 +191,46 @@ services:
         condition: service_healthy
       payment-settlement-service:
         condition: service_started
+      delivery-operations-service:
+        condition: service_started
+
+  notification-webhook-service:
+    build:
+      context: ./services/notification-webhook-service
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8086:8086"
+    environment:
+      COMMUNICATION_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      COMMUNICATION_DB_USER: communication_user
+      COMMUNICATION_DB_PASSWORD: ${COMMUNICATION_DB_PASSWORD:?Set COMMUNICATION_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+      NOTIFICATION_FROM_EMAIL: ${NOTIFICATION_FROM_EMAIL:-noreply@swiftdrop.dev}
+      TRACKING_BASE_URL: ${TRACKING_BASE_URL:-http://localhost:4200/track}
+      # Not ":?" on purpose: a missing key must not stop teammates' "docker compose up".
+      # The service itself refuses to start with a clear message when it is missing.
+      WEBHOOK_ENCRYPTION_KEY: ${WEBHOOK_ENCRYPTION_KEY:-}
+      WEBHOOK_ALLOW_HTTP: ${WEBHOOK_ALLOW_HTTP:-true}
+      WEBHOOK_ALLOW_PRIVATE_ADDRESSES: ${WEBHOOK_ALLOW_PRIVATE_ADDRESSES:-true}
+      # Set NOTIFICATION_PROFILES=dev in .env to enable the demo webhook receiver.
+      SPRING_PROFILES_ACTIVE: ${NOTIFICATION_PROFILES:-default}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8086'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   mailpit:
     image: axllent/mailpit

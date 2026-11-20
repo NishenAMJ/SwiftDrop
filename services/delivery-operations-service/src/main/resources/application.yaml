@@ -1,0 +1,51 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  config:
+    import: "optional:file:../../.env[.properties],optional:file:./.env[.properties]"
+  application:
+    name: delivery-operations-service
+  datasource:
+    url: ${DELIVERY_DB_URL:jdbc:postgresql://localhost:5432/swiftdrop}
+    username: ${DELIVERY_DB_USER:delivery_user}
+    password: ${DELIVERY_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: delivery_operations
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    default-schema: delivery_operations
+    schemas:
+      - delivery_operations
+    create-schemas: false
+    locations: classpath:db/migration
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+
+management:
+  health:
+    rabbit:
+      enabled: ${RABBIT_HEALTH_ENABLED:false}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: SwiftDrop warehouse and delivery operations

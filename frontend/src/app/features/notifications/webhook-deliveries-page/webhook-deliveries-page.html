@@ -1,0 +1,151 @@
+<div class="page page--wide">
+  <header class="page__header">
+    <a class="sd-link back" routerLink="/webhooks">← All webhooks</a>
+    <h1 class="page__title">Webhook deliveries</h1>
+    @if (subscription(); as sub) {
+      @let state = badge(sub);
+      <p class="page__intro">
+        Messages sent to <span class="webhook-url">{{ sub.url }}</span>
+        <span [class]="state.badge">{{ state.label }}</span>
+      </p>
+    }
+    <p class="page__intro">
+      If your server doesn't answer with a 2xx status, SwiftDrop tries again after 10 seconds,
+      30 seconds, 1, 2 and 5 minutes. After 6 attempts the delivery is marked Failed and you can send
+      it again from here.
+    </p>
+  </header>
+
+  @if (notFound()) {
+    <div class="sd-alert sd-alert--error" role="alert">
+      This webhook doesn't exist, or it isn't yours.
+      <a class="sd-link" routerLink="/webhooks">Go back to your webhooks</a>
+    </div>
+  } @else {
+    @if (notice(); as message) {
+      <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+    }
+    @if (retryError(); as message) {
+      <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+    }
+
+    <section class="page__section" aria-labelledby="deliveries-title">
+      <div class="section-head">
+        <h2 id="deliveries-title" class="page__section-title">Recent deliveries</h2>
+        <button class="sd-button sd-button--secondary" type="button" (click)="load()" [disabled]="loading()">
+          Refresh
+        </button>
+      </div>
+
+      @if (loading() && !page()) {
+        <p class="page__loading" role="status">
+          <span class="sd-spinner" aria-hidden="true"></span>
+          Loading deliveries…
+        </p>
+      } @else if (loadError(); as message) {
+        <div class="sd-alert sd-alert--error" role="alert">
+          {{ message }}
+          <button class="sd-button sd-button--secondary retry" type="button" (click)="load()">
+            Try again
+          </button>
+        </div>
+      } @else if (page(); as data) {
+        @if (data.content.length === 0) {
+          <div class="sd-card">
+            <p class="page__muted">
+              Nothing has been sent yet. Use "Send test" on the webhooks page, or wait for one of
+              your parcels to change status.
+            </p>
+          </div>
+        } @else {
+          <p class="form__note sd-tabular" role="status">
+            {{ data.totalElements }} {{ data.totalElements === 1 ? 'delivery' : 'deliveries' }}, newest first.
+          </p>
+          <div class="sd-table-wrap" role="region" aria-labelledby="deliveries-title" tabindex="0">
+            <table class="sd-table">
+              <caption class="sd-visually-hidden">Webhook deliveries, newest first</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Event</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="num">Attempts</th>
+                  <th scope="col">Last result</th>
+                  <th scope="col">Next try / delivered</th>
+                  <th scope="col"><span class="sd-visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (delivery of data.content; track delivery.id) {
+                  <tr>
+                    <td>
+                      {{ eventLabel(delivery.eventType) }}
+                      <span class="event-id">{{ delivery.eventId }}</span>
+                    </td>
+                    <td class="sd-tabular">{{ delivery.createdAt | colomboDate }}</td>
+                    <td><span [class]="status[delivery.status].badge">{{ status[delivery.status].label }}</span></td>
+                    <td class="sd-tabular num">{{ delivery.attemptCount }}</td>
+                    <td>{{ outcome(delivery) }}</td>
+                    <td class="sd-tabular">
+                      @switch (delivery.status) {
+                        @case ('DELIVERED') {
+                          {{ delivery.deliveredAt | colomboDate }}
+                        }
+                        @case ('PENDING') {
+                          {{ (delivery.nextAttemptAt | colomboDate) || 'Soon' }}
+                        }
+                        @default {
+                          No more tries
+                        }
+                      }
+                    </td>
+                    <td class="actions">
+                      @if (delivery.status === 'FAILED') {
+                        <button
+                          class="sd-button sd-button--secondary"
+                          type="button"
+                          (click)="retry(delivery)"
+                          [disabled]="retryingId() !== null"
+                          [attr.aria-busy]="retryingId() === delivery.id"
+                        >
+                          @if (retryingId() === delivery.id) {
+                            <span class="sd-spinner" aria-hidden="true"></span>
+                            Sending…
+                          } @else {
+                            Send again
+                          }
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          @if (data.totalPages > 1) {
+            <nav class="pager" aria-label="Delivery pages">
+              <button
+                class="sd-button sd-button--secondary"
+                type="button"
+                (click)="load(data.page - 1)"
+                [disabled]="data.page === 0 || loading()"
+              >
+                Newer
+              </button>
+              <span class="sd-tabular">Page {{ data.page + 1 }} of {{ data.totalPages }}</span>
+              <button
+                class="sd-button sd-button--secondary"
+                type="button"
+                (click)="load(data.page + 1)"
+                [disabled]="data.page + 1 >= data.totalPages || loading()"
+              >
+                Older
+              </button>
+            </nav>
+          }
+        }
+      }
+    </section>
+  }
+</div>
