@@ -47,6 +47,7 @@ describe('AppLayout', () => {
     expect(links(page)).toEqual([
       'API keys',
       'Webhooks',
+      'Payment history',
       'Merchant account',
       'Customer portal',
       'Become a courier',
@@ -67,6 +68,7 @@ describe('AppLayout', () => {
       'Merchant applications',
       'Courier applications',
       'Users',
+      'Payments and refunds',
       'Tracking reports',
       'Failed webhooks',
       'Your account',

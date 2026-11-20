@@ -1,0 +1,2 @@
+# Maven shell wrappers must use Unix line endings for Linux containers.
+mvnw text eol=lf

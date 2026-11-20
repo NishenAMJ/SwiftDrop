@@ -30,4 +30,10 @@ export const DISPATCHER_ROUTES: Routes = [
       // Additional dispatcher pages can be added here.
     ],
   },
+  {
+    path: 'payments',
+    title: 'Payments and refunds | SwiftDrop',
+    loadComponent: () =>
+      import('../payments/payment-history-page/payment-history-page').then((m) => m.PaymentHistoryPage),
+  },
 ];
