@@ -31,4 +31,11 @@ export const MERCHANT_ROUTES: Routes = [
     canActivate: [roleGuard('MERCHANT')],
     loadComponent: () => import('./api-keys-page/api-keys-page').then((m) => m.ApiKeysPage),
   },
+  {
+    path: 'payments',
+    title: 'Payment history | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () =>
+      import('../payments/payment-history-page/payment-history-page').then((m) => m.PaymentHistoryPage),
+  },
 ];
