@@ -42,14 +42,14 @@ public class ProblemHandler implements AuthenticationEntryPoint, AccessDeniedHan
     }
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ProblemDetail> conflict(Exception e,HttpServletRequest r) {
-        return ResponseEntity.status(409).body(body(409,"CONFLICT","Operation conflicts with an existing payment.",r.getRequestURI()));
+        return ResponseEntity.status(409).body(body(409,"CONFLICT","Operation conflicts with an existing record.",r.getRequestURI()));
     }
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> unexpected(Exception e,HttpServletRequest r) {
         if(e instanceof org.springframework.web.ErrorResponse error)
             return ResponseEntity.status(error.getStatusCode()).body(body(error.getStatusCode().value(),"INVALID_REQUEST","The request could not be processed.",r.getRequestURI()));
-        org.slf4j.LoggerFactory.getLogger(getClass()).error("Payment request failed: type={}",e.getClass().getSimpleName());
-        return ResponseEntity.internalServerError().body(body(500,"INTERNAL_ERROR","The payment operation could not be completed.",r.getRequestURI()));
+        org.slf4j.LoggerFactory.getLogger(getClass()).error("Financial request failed: type={}",e.getClass().getSimpleName());
+        return ResponseEntity.internalServerError().body(body(500,"INTERNAL_ERROR","The operation could not be completed.",r.getRequestURI()));
     }
     @Override public void commence(HttpServletRequest r,HttpServletResponse s,AuthenticationException e) throws IOException {
         s.setHeader("WWW-Authenticate","Bearer"); write(r,s,401,"UNAUTHENTICATED","A valid access token is required.");
