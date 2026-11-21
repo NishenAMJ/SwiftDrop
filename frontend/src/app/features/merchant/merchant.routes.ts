@@ -28,14 +28,18 @@ export const MERCHANT_ROUTES: Routes = [
     path: 'dashboard',
     title: 'Merchant Dashboard | SwiftDrop',
     canActivate: [roleGuard('MERCHANT')],
-    loadComponent: () => import('./merchant-dashboard/merchant-dashboard.component').then((m) => m.MerchantDashboardComponent),
+    loadComponent: () =>
+      import('./merchant-dashboard/merchant-dashboard.component').then(
+        (m) => m.MerchantDashboardComponent,
+      ),
   },
   {
     // Merchant My Bookings
     path: 'bookings',
     title: 'My Bookings | SwiftDrop',
     canActivate: [roleGuard('MERCHANT')],
-    loadComponent: () => import('./orders/merchant-orders.component').then((m) => m.MerchantOrdersComponent),
+    loadComponent: () =>
+      import('./orders/merchant-orders.component').then((m) => m.MerchantOrdersComponent),
   },
   {
     path: 'my-bookings',
@@ -67,13 +71,25 @@ export const MERCHANT_ROUTES: Routes = [
     path: 'orders',
     title: 'Merchant orders | SwiftDrop',
     canActivate: [roleGuard('MERCHANT')],
-    loadComponent: () => import('./orders/merchant-orders.component').then((m) => m.MerchantOrdersComponent),
+    loadComponent: () =>
+      import('./orders/merchant-orders.component').then((m) => m.MerchantOrdersComponent),
   },
   {
     path: 'payments',
     title: 'Payment history | SwiftDrop',
     canActivate: [roleGuard('MERCHANT')],
     loadComponent: () =>
-      import('../payments/payment-history-page/payment-history-page').then((m) => m.PaymentHistoryPage),
+      import('../payments/payment-history-page/payment-history-page').then(
+        (m) => m.PaymentHistoryPage,
+      ),
+  },
+  {
+    path: 'finance',
+    title: 'Ledger and settlements | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () =>
+      import('../payments/merchant-finance-page/merchant-finance-page').then(
+        (m) => m.MerchantFinancePage,
+      ),
   },
 ];

@@ -1,0 +1,204 @@
+<section class="finance-page" aria-labelledby="cash-title">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Courier cash</p>
+      <h1 id="cash-title">COD cash handovers</h1>
+      <p class="intro">
+        Submit collected cash to a dispatcher and keep a record of every reconciliation.
+      </p>
+    </div>
+    <button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="load()"
+      [disabled]="loading()"
+    >
+      Refresh history
+    </button>
+  </header>
+
+  @if (notice(); as message) {
+    <p class="sd-alert sd-alert--success" role="status">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="sd-alert sd-alert--error" role="alert">{{ message }}</p>
+  }
+
+  <div class="content-grid">
+    <form class="sd-card stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div>
+        <h2>Submit a handover</h2>
+        <p class="sd-help">
+          Use the COD collection IDs returned by the delivery flow. Separate multiple IDs with
+          commas or new lines.
+        </p>
+      </div>
+      <div class="sd-field">
+        <label class="sd-label" for="collection-ids">COD collection IDs</label>
+        <textarea
+          id="collection-ids"
+          class="sd-input mono"
+          formControlName="collectionIds"
+          autocomplete="off"
+          [attr.aria-invalid]="
+            form.controls.collectionIds.invalid && form.controls.collectionIds.touched
+          "
+        ></textarea>
+        @if (form.controls.collectionIds.invalid && form.controls.collectionIds.touched) {
+          <p class="sd-error">Enter one or more valid collection UUIDs.</p>
+        }
+      </div>
+      <div class="form-grid">
+        <div class="sd-field">
+          <label class="sd-label" for="submitted-amount">Cash handed over</label>
+          <input
+            id="submitted-amount"
+            class="sd-input"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputmode="decimal"
+            formControlName="submittedAmount"
+            [attr.aria-invalid]="
+              form.controls.submittedAmount.invalid && form.controls.submittedAmount.touched
+            "
+          />
+          @if (form.controls.submittedAmount.invalid && form.controls.submittedAmount.touched) {
+            <p class="sd-error">Enter an amount greater than zero with up to two decimals.</p>
+          }
+        </div>
+        <div class="sd-field">
+          <label class="sd-label" for="handover-currency">Currency</label>
+          <input id="handover-currency" class="sd-input" maxlength="3" formControlName="currency" />
+        </div>
+      </div>
+      <button
+        class="sd-button sd-button--primary"
+        type="submit"
+        [disabled]="busy()"
+        [attr.aria-busy]="busy()"
+      >
+        @if (busy()) {
+          <span class="sd-spinner" aria-hidden="true"></span> Submitting…
+        } @else {
+          Submit cash handover
+        }
+      </button>
+    </form>
+
+    <section class="stack" aria-labelledby="history-title">
+      <div class="section-header">
+        <div>
+          <h2 id="history-title">Handover history</h2>
+          <p class="count">{{ result()?.totalElements ?? 0 }} records</p>
+        </div>
+      </div>
+      @if (loading()) {
+        <div class="sd-card state" role="status">
+          <span class="sd-spinner" aria-hidden="true"></span> Loading handovers…
+        </div>
+      } @else if (!result()?.content?.length) {
+        <div class="sd-card empty">
+          <h3>No handovers yet</h3>
+          <p>Your submitted COD cash will appear here.</p>
+        </div>
+      } @else {
+        <div class="record-list">
+          @for (item of result()?.content ?? []; track item.id) {
+            <article class="sd-card record">
+              <header class="card-header">
+                <div>
+                  <h3 class="mono">{{ item.id }}</h3>
+                  <p class="count">Submitted {{ item.submittedAt | colomboDate }}</p>
+                </div>
+                <span class="sd-badge" [class]="statusClass(item.status)">{{ item.status }}</span>
+              </header>
+              <dl class="facts">
+                <div>
+                  <dt>Submitted</dt>
+                  <dd class="amount">
+                    {{ item.currency }} {{ item.submittedAmount | number: '1.2-2' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Expected</dt>
+                  <dd class="amount">
+                    {{ item.currency }} {{ item.expectedAmount | number: '1.2-2' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Collections</dt>
+                  <dd>{{ item.collectionIds.length }}</dd>
+                </div>
+              </dl>
+              <button
+                class="sd-button sd-button--secondary"
+                type="button"
+                (click)="toggle(item)"
+                [attr.aria-expanded]="selected()?.id === item.id"
+              >
+                {{ selected()?.id === item.id ? 'Hide details' : 'View details' }}
+              </button>
+              @if (selected()?.id === item.id) {
+                <div class="record__details">
+                  <div>
+                    <h3>Collection IDs</h3>
+                    <ul class="collection-list">
+                      @for (collectionId of item.collectionIds; track collectionId) {
+                        <li class="mono">{{ collectionId }}</li>
+                      }
+                    </ul>
+                  </div>
+                  @if (item.reconciliation; as rec) {
+                    <div>
+                      <h3>Dispatcher reconciliation</h3>
+                      <dl class="facts">
+                        <div>
+                          <dt>Outcome</dt>
+                          <dd>{{ rec.status }}</dd>
+                        </div>
+                        <div>
+                          <dt>Received</dt>
+                          <dd>{{ rec.currency }} {{ rec.receivedAmount | number: '1.2-2' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Difference</dt>
+                          <dd>{{ rec.currency }} {{ rec.differenceAmount | number: '1.2-2' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Confirmed</dt>
+                          <dd>{{ rec.confirmedAt | colomboDate }}</dd>
+                        </div>
+                      </dl>
+                      @if (rec.investigationNote) {
+                        <p class="muted">{{ rec.investigationNote }}</p>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </article>
+          }
+        </div>
+        <nav class="pagination" aria-label="Handover history pages">
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="load((result()?.page ?? 0) - 1)"
+            [disabled]="(result()?.page ?? 0) === 0"
+          >
+            Previous</button
+          ><span>Page {{ (result()?.page ?? 0) + 1 }} of {{ result()?.totalPages || 1 }}</span
+          ><button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="load((result()?.page ?? 0) + 1)"
+            [disabled]="(result()?.page ?? 0) + 1 >= (result()?.totalPages ?? 0)"
+          >
+            Next
+          </button>
+        </nav>
+      }
+    </section>
+  </div>
+</section>

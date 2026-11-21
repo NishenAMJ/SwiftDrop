@@ -1,0 +1,14 @@
+@use '../member9-page';
+
+.lookup-grow {
+  flex: 1 1 22rem;
+}
+.operation-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+}
+.operation-tabs button[aria-pressed='true'] {
+  background: var(--sd-brand-soft);
+  border-color: var(--sd-brand);
+}

@@ -1,0 +1,365 @@
+<section class="finance-page" aria-labelledby="operations-title">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Dispatcher tools</p>
+      <h1 id="operations-title">Merchant finance operations</h1>
+      <p class="intro">
+        Review merchant balances, post audited corrections, and control settlement payouts.
+      </p>
+    </div>
+  </header>
+  <nav class="operation-tabs" aria-label="Merchant finance operations">
+    <button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="show('ledger')"
+      [attr.aria-pressed]="operation() === 'ledger'"
+    >
+      Ledger review</button
+    ><button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="show('adjustment')"
+      [attr.aria-pressed]="operation() === 'adjustment'"
+    >
+      Post adjustment</button
+    ><button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="show('settlement')"
+      [attr.aria-pressed]="operation() === 'settlement'"
+    >
+      Settlement payout
+    </button>
+  </nav>
+  @if (notice(); as message) {
+    <p class="sd-alert sd-alert--success" role="status">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="sd-alert sd-alert--error" role="alert">{{ message }}</p>
+  }
+
+  @if (operation() === 'ledger') {
+    <section class="stack" aria-labelledby="dispatcher-ledger-title">
+      <div>
+        <h2 id="dispatcher-ledger-title">Review a merchant ledger</h2>
+        <p class="sd-help">
+          A merchant ID is required because dispatchers can access multiple merchant accounts.
+        </p>
+      </div>
+      <form class="filter-row sd-card" [formGroup]="ledgerForm" (ngSubmit)="loadLedger()">
+        <div class="sd-field">
+          <label class="sd-label" for="ledger-merchant">Merchant ID</label
+          ><input id="ledger-merchant" class="sd-input mono" formControlName="merchantId" />
+        </div>
+        <div class="sd-field">
+          <label class="sd-label" for="ledger-currency">Currency</label
+          ><input id="ledger-currency" class="sd-input" maxlength="3" formControlName="currency" />
+        </div>
+        <button class="sd-button sd-button--primary" type="submit">Load ledger</button>
+      </form>
+      @if (loading()) {
+        <div class="sd-card state" role="status">
+          <span class="sd-spinner" aria-hidden="true"></span> Loading ledger…
+        </div>
+      }
+      @if (ledger(); as result) {
+        <div class="sd-card summary">
+          <dl class="summary-grid">
+            <div>
+              <dt>Payable balance</dt>
+              <dd>{{ result.currency }} {{ result.balance | number: '1.2-2' }}</dd>
+            </div>
+            <div>
+              <dt>Entries</dt>
+              <dd>{{ result.totalElements }}</dd>
+            </div>
+          </dl>
+        </div>
+        @if (!result.content.length) {
+          <div class="sd-card empty">
+            <h3>No ledger entries</h3>
+            <p>This merchant has no entries in {{ result.currency }}.</p>
+          </div>
+        } @else {
+          <div class="sd-table-wrap" tabindex="0" aria-labelledby="dispatcher-ledger-title">
+            <table class="sd-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Reference</th>
+                  <th>Reason</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (entry of result.content; track entry.id) {
+                  <tr>
+                    <td>{{ entry.createdAt | colomboDate }}</td>
+                    <td>{{ entry.entryType.replaceAll('_', ' ') }}</td>
+                    <td class="mono">{{ entry.sourceReference }}</td>
+                    <td>{{ entry.reason || '—' }}</td>
+                    <td class="amount">
+                      {{ entry.currency }} {{ entry.amount | number: '1.2-2' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        <nav class="pagination" aria-label="Ledger pages">
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="loadLedger(result.page - 1)"
+            [disabled]="result.page === 0"
+          >
+            Previous</button
+          ><span>Page {{ result.page + 1 }} of {{ result.totalPages || 1 }}</span
+          ><button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="loadLedger(result.page + 1)"
+            [disabled]="result.page + 1 >= result.totalPages"
+          >
+            Next
+          </button>
+        </nav>
+      }
+    </section>
+  }
+
+  @if (operation() === 'adjustment') {
+    <form
+      class="sd-card stack"
+      [formGroup]="adjustmentForm"
+      (ngSubmit)="createAdjustment()"
+      novalidate
+    >
+      <div>
+        <h2>Post a ledger adjustment</h2>
+        <p class="sd-help">
+          This creates a new immutable audit entry. Positive increases merchant payable; negative
+          decreases it.
+        </p>
+      </div>
+      <div class="form-grid">
+        <div class="sd-field">
+          <label class="sd-label" for="adjust-merchant">Merchant ID</label
+          ><input id="adjust-merchant" class="sd-input mono" formControlName="merchantId" />
+        </div>
+        <div class="sd-field">
+          <label class="sd-label" for="adjust-amount">Signed amount</label
+          ><input
+            id="adjust-amount"
+            class="sd-input"
+            type="number"
+            step="0.01"
+            formControlName="amount"
+          />
+          @if (adjustmentForm.controls.amount.errors?.['nonZero']) {
+            <p class="sd-error">Amount cannot be zero.</p>
+          }
+        </div>
+        <div class="sd-field">
+          <label class="sd-label" for="adjust-currency">Currency</label
+          ><input id="adjust-currency" class="sd-input" maxlength="3" formControlName="currency" />
+        </div>
+        <div class="sd-field">
+          <label class="sd-label" for="source-reference">Source reference</label
+          ><input
+            id="source-reference"
+            class="sd-input"
+            maxlength="200"
+            formControlName="sourceReference"
+          />
+        </div>
+        <div class="sd-field wide">
+          <label class="sd-label" for="adjust-reason">Correction reason</label
+          ><textarea
+            id="adjust-reason"
+            class="sd-input"
+            maxlength="500"
+            formControlName="reason"
+          ></textarea>
+        </div>
+      </div>
+      <button class="sd-button sd-button--primary" type="submit" [disabled]="busy()">
+        Post audited adjustment
+      </button>
+    </form>
+  }
+
+  @if (operation() === 'settlement') {
+    <div class="content-grid">
+      <form class="sd-card stack" [formGroup]="calculateForm" (ngSubmit)="calculate()">
+        <div>
+          <h2>Calculate settlement</h2>
+          <p class="sd-help">
+            Freezes eligible ledger entries through the selected cutoff. Only a positive balance can
+            be settled.
+          </p>
+        </div>
+        <div class="sd-field">
+          <label class="sd-label" for="settle-merchant">Merchant ID</label
+          ><input id="settle-merchant" class="sd-input mono" formControlName="merchantId" />
+        </div>
+        <div class="form-grid">
+          <div class="sd-field">
+            <label class="sd-label" for="settle-currency">Currency</label
+            ><input
+              id="settle-currency"
+              class="sd-input"
+              maxlength="3"
+              formControlName="currency"
+            />
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="cutoff-at">Ledger cutoff</label
+            ><input
+              id="cutoff-at"
+              class="sd-input"
+              type="datetime-local"
+              formControlName="cutoffAt"
+            />
+          </div>
+        </div>
+        <button class="sd-button sd-button--primary" type="submit" [disabled]="busy()">
+          Calculate and freeze entries
+        </button>
+      </form>
+      <section class="sd-card stack" aria-labelledby="lookup-title">
+        <div>
+          <h2 id="lookup-title">Find a settlement</h2>
+          <p class="sd-help">
+            Use the ID returned after calculation to resume approval or payment recording.
+          </p>
+        </div>
+        <form class="actions" [formGroup]="lookupForm" (ngSubmit)="findSettlement()">
+          <div class="sd-field lookup-grow">
+            <label class="sd-label" for="dispatcher-settlement-id">Settlement ID</label
+            ><input
+              id="dispatcher-settlement-id"
+              class="sd-input mono"
+              formControlName="settlementId"
+            />
+          </div>
+          <button class="sd-button sd-button--secondary" type="submit" [disabled]="busy()">
+            Find
+          </button>
+        </form>
+      </section>
+    </div>
+    @if (settlement(); as item) {
+      <article class="sd-card record">
+        <header class="card-header">
+          <div>
+            <h2 class="mono">{{ item.id }}</h2>
+            <p class="count">
+              Merchant <span class="mono">{{ item.merchantId }}</span>
+            </p>
+          </div>
+          <span class="sd-badge" [class]="settlementClass(item.status)">{{ item.status }}</span>
+        </header>
+        <dl class="facts">
+          <div>
+            <dt>Amount</dt>
+            <dd>{{ item.currency }} {{ item.amount | number: '1.2-2' }}</dd>
+          </div>
+          <div>
+            <dt>Cutoff</dt>
+            <dd>{{ item.cutoffAt | colomboDate }}</dd>
+          </div>
+          <div>
+            <dt>Calculated</dt>
+            <dd>{{ item.calculatedAt | colomboDate }}</dd>
+          </div>
+          <div>
+            <dt>Entries frozen</dt>
+            <dd>{{ item.ledgerEntryIds.length }}</dd>
+          </div>
+        </dl>
+        @if (item.status === 'CALCULATED') {
+          <form class="record__details" [formGroup]="approvalForm" (ngSubmit)="approve()">
+            <h3>Approve calculated settlement</h3>
+            <div class="sd-field">
+              <label class="sd-label" for="approval-note"
+                >Approval note <span class="sd-label__optional">Optional</span></label
+              ><textarea
+                id="approval-note"
+                class="sd-input"
+                maxlength="500"
+                formControlName="note"
+              ></textarea>
+            </div>
+            <label class="check-row"
+              ><input type="checkbox" formControlName="confirm" /> I reviewed the frozen entries and
+              confirm the calculated amount.</label
+            ><button
+              class="sd-button sd-button--primary"
+              type="submit"
+              [disabled]="busy() || approvalForm.invalid"
+            >
+              Approve settlement
+            </button>
+          </form>
+        }
+        @if (item.status === 'APPROVED') {
+          <form class="record__details" [formGroup]="paymentForm" (ngSubmit)="recordPayment()">
+            <h3>Record external payment</h3>
+            <p class="sd-alert sd-alert--warning">
+              This does not send money. Continue only after the external payout is confirmed.
+            </p>
+            <div class="form-grid">
+              <div class="sd-field">
+                <label class="sd-label" for="external-reference">External payment reference</label
+                ><input
+                  id="external-reference"
+                  class="sd-input"
+                  maxlength="200"
+                  formControlName="externalReference"
+                />
+              </div>
+              <div class="sd-field">
+                <label class="sd-label" for="paid-at">Paid at</label
+                ><input
+                  id="paid-at"
+                  class="sd-input"
+                  type="datetime-local"
+                  formControlName="paidAt"
+                />
+              </div>
+            </div>
+            <label class="check-row"
+              ><input type="checkbox" formControlName="confirm" /> I verified that the external
+              payout completed.</label
+            ><button
+              class="sd-button sd-button--primary"
+              type="submit"
+              [disabled]="busy() || paymentForm.invalid"
+            >
+              Record payment
+            </button>
+          </form>
+        }
+        @if (item.status === 'PAID') {
+          <div class="record__details">
+            <h3>Payout recorded</h3>
+            <dl class="facts">
+              <div>
+                <dt>Paid at</dt>
+                <dd>{{ item.paidAt | colomboDate }}</dd>
+              </div>
+              <div>
+                <dt>External reference</dt>
+                <dd class="mono">{{ item.externalPaymentReference }}</dd>
+              </div>
+            </dl>
+          </div>
+        }
+      </article>
+    }
+  }
+</section>
