@@ -1,305 +1,222 @@
 package com.swiftdrop.parcel_pricing_service.service;
 
+import com.swiftdrop.parcel_pricing_service.client.IdentityClient;
+import com.swiftdrop.parcel_pricing_service.client.IdentityClient.MerchantContact;
+import com.swiftdrop.parcel_pricing_service.common.ApiException;
+import com.swiftdrop.parcel_pricing_service.dto.AddressDto;
 import com.swiftdrop.parcel_pricing_service.dto.MerchantOrderRequest;
 import com.swiftdrop.parcel_pricing_service.dto.MerchantOrderResponse;
-import com.swiftdrop.parcel_pricing_service.dto.OrderAddressDto;
-import com.swiftdrop.parcel_pricing_service.dto.OrderContactDto;
+import com.swiftdrop.parcel_pricing_service.entity.BookingReceipt;
+import com.swiftdrop.parcel_pricing_service.entity.BookingStatus;
 import com.swiftdrop.parcel_pricing_service.entity.DeliveryType;
-import com.swiftdrop.parcel_pricing_service.entity.MerchantOrder;
-import com.swiftdrop.parcel_pricing_service.entity.OrderAddress;
 import com.swiftdrop.parcel_pricing_service.entity.OrderSource;
-import com.swiftdrop.parcel_pricing_service.entity.OrderStatus;
+import com.swiftdrop.parcel_pricing_service.entity.Parcel;
 import com.swiftdrop.parcel_pricing_service.entity.PaymentMethod;
 import com.swiftdrop.parcel_pricing_service.exception.DuplicateOrderException;
 import com.swiftdrop.parcel_pricing_service.exception.InvalidOrderException;
-import com.swiftdrop.parcel_pricing_service.exception.OrderAccessDeniedException;
 import com.swiftdrop.parcel_pricing_service.exception.OrderNotFoundException;
-import com.swiftdrop.parcel_pricing_service.repository.MerchantOrderRepository;
+import com.swiftdrop.parcel_pricing_service.repository.BookingReceiptRepository;
+import com.swiftdrop.parcel_pricing_service.repository.ParcelRepository;
+import com.swiftdrop.parcel_pricing_service.security.MerchantPrincipal;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
+import static com.swiftdrop.parcel_pricing_service.controller.MerchantOrderTestData.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class MerchantOrderServiceTest {
 
-    private static final String REFERENCE_CONSTRAINT_MESSAGE =
-            "ERROR: duplicate key value violates unique constraint \"uq_merchant_orders_merchant_reference\"";
+    @Mock private ParcelRepository parcelRepository;
+    @Mock private BookingReceiptRepository receiptRepository;
+    @Mock private BookingService bookingService;
+    @Mock private ReferenceGenerator referenceGenerator;
+    @Mock private IdentityClient identityClient;
 
-    @Mock
-    private MerchantOrderRepository orderRepository;
+    private MerchantOrderService service;
+    private final MerchantPrincipal merchant = new MerchantPrincipal(USER_ID, MERCHANT_ID, "token");
 
-    @Mock
-    private DeliveryFeeCalculator feeCalculator;
-
-    @InjectMocks
-    private MerchantOrderService orderService;
-
-    // ---------- fixtures ----------
-
-    private static OrderContactDto contact(String name) {
-        return new OrderContactDto(name, "+94771234567", "contact@shop.lk");
-    }
-
-    private static OrderAddressDto address(String city) {
-        return new OrderAddressDto("12 Galle Road", null, city, "Colombo", "00300");
-    }
-
-    private static MerchantOrderRequest request(String reference, DeliveryType type, String note,
-                                                PaymentMethod method, BigDecimal codAmount) {
-        return new MerchantOrderRequest(reference, contact("Nimal Perera"), contact("Kamal Silva"),
-                address("Colombo"), address("Kandy"), "Phone case", new BigDecimal("2.5"),
-                type, note, method, codAmount);
-    }
-
-    private static MerchantOrder orderEntity(Long id, Long merchantId) {
-        MerchantOrder order = new MerchantOrder();
-        ReflectionTestUtils.setField(order, "id", id);
-        order.setOrderNumber("MO-0000000" + id);
-        order.setMerchantId(merchantId);
-        order.setSenderName("Nimal Perera");
-        order.setSenderPhone("+94771234567");
-        order.setReceiverName("Kamal Silva");
-        order.setReceiverPhone("0712345678");
-        order.setPickupAddress(new OrderAddress("12 Galle Road", null, "Colombo", null, null));
-        order.setDeliveryAddress(new OrderAddress("45 Temple Road", null, "Kandy", null, null));
-        order.setParcelDescription("Phone case");
-        order.setWeightKg(new BigDecimal("1.00"));
-        order.setDeliveryType(DeliveryType.NORMAL);
-        order.setPaymentMethod(PaymentMethod.ONLINE);
-        order.setDeliveryFee(new BigDecimal("300.00"));
-        order.setStatus(OrderStatus.CREATED);
-        order.setSource(OrderSource.DASHBOARD);
-        return order;
-    }
-
-    private void stubSuccessfulCreate(BigDecimal fee) {
-        when(feeCalculator.calculateFee(any())).thenReturn(fee);
-        when(orderRepository.nextOrderSequence()).thenReturn(42L);
-        when(orderRepository.saveAndFlush(any(MerchantOrder.class))).thenAnswer(invocation -> {
-            MerchantOrder order = invocation.getArgument(0);
-            ReflectionTestUtils.setField(order, "id", 10L);
-            return order;
+    @BeforeEach
+    void setUp() {
+        service = new MerchantOrderService(parcelRepository, receiptRepository, bookingService, referenceGenerator, identityClient);
+        when(referenceGenerator.generateTrackingNumber()).thenReturn("SWD-2026-000010");
+        when(identityClient.currentMerchant("token")).thenReturn(Optional.of(
+                new MerchantContact(MERCHANT_ID, "Lanka Gadgets (Pvt) Ltd", "orders@lankagadgets.lk", "+94112345678")));
+        // PricingService is the only fee formula; BookingService.applyQuote copies its quote onto the parcel.
+        doAnswer(inv -> {
+            Parcel p = inv.getArgument(0);
+            p.setEstimatedFee(new BigDecimal("575.00"));
+            p.setPricingZoneCode(inv.getArgument(2));
+            return null;
+        }).when(bookingService).applyQuote(any(), any(), any(), any());
+        when(bookingService.saveNewBooking(any())).thenAnswer(inv -> {
+            Parcel p = inv.getArgument(0);
+            boolean cod = PaymentMethod.COD.name().equals(p.getPaymentMethod());
+            p.setStatus(cod ? BookingStatus.BOOKED : BookingStatus.CHECKOUT_DRAFT);
+            p.setPaymentStatus(cod ? "PENDING" : "UNPAID");
+            return new BookingService.NewBooking(p, cod ? new BookingReceipt("RCP-2026-000010", p, p.getEstimatedFee(), "LKR") : null);
         });
     }
 
-    // ---------- create ----------
-
-    @Test
-    void createOrder_dashboard_savesOrderForTheGivenMerchantWithServerSideFee() {
-        stubSuccessfulCreate(new BigDecimal("450"));
-
-        MerchantOrderResponse response = orderService.createOrder(7L,
-                request("SHOP-1001", DeliveryType.NORMAL, "ignored for normal", PaymentMethod.COD, new BigDecimal("2500")),
-                OrderSource.DASHBOARD);
-
-        ArgumentCaptor<MerchantOrder> saved = ArgumentCaptor.forClass(MerchantOrder.class);
-        verify(orderRepository).saveAndFlush(saved.capture());
-        assertThat(saved.getValue().getMerchantId()).isEqualTo(7L);
-        assertThat(saved.getValue().getUrgentNote()).isNull();
-        assertThat(saved.getValue().getSource()).isEqualTo(OrderSource.DASHBOARD);
-
-        assertThat(response.id()).isEqualTo(10L);
-        assertThat(response.orderNumber()).isEqualTo("MO-00000042");
-        assertThat(response.merchantId()).isEqualTo(7L);
-        assertThat(response.status()).isEqualTo(OrderStatus.CREATED);
-        assertThat(response.deliveryFee()).isEqualTo(new BigDecimal("450.00"));
-        assertThat(response.codAmount()).isEqualTo(new BigDecimal("2500.00"));
-        assertThat(response.weightKg()).isEqualTo(new BigDecimal("2.50"));
+    private Parcel savedParcel() {
+        ArgumentCaptor<Parcel> captor = ArgumentCaptor.forClass(Parcel.class);
+        verify(bookingService).saveNewBooking(captor.capture());
+        return captor.getValue();
     }
 
     @Test
-    void createOrder_passesWeightAndTypeToTheFeeCalculator() {
-        stubSuccessfulCreate(new BigDecimal("600.00"));
+    void codOrder_becomesAMerchantParcelPricedByPricingService() {
+        MerchantOrderResponse response = service.createOrder(merchant, codRequest("SHOP-1001"), OrderSource.DASHBOARD);
 
-        orderService.createOrder(7L, request(null, DeliveryType.URGENT, "Fragile", PaymentMethod.ONLINE, null),
-                OrderSource.DASHBOARD);
+        Parcel parcel = savedParcel();
+        assertThat(parcel.getChannel()).isEqualTo("MERCHANT_API");
+        assertThat(parcel.getMerchantId()).isEqualTo(MERCHANT_ID);
+        assertThat(parcel.getCustomerId()).isEqualTo(USER_ID);
+        assertThat(parcel.getOrderSource()).isEqualTo(OrderSource.DASHBOARD);
+        assertThat(parcel.getTrackingNumber()).isEqualTo("SWD-2026-000010");
+        assertThat(parcel.getCodAmount()).isEqualByComparingTo("2500.00");
+        assertThat(parcel.getPaymentMethod()).isEqualTo("COD");
+        assertThat(parcel.getPickupAddress().getCity()).isEqualTo("Colombo");
+        assertThat(parcel.getDeliveryAddress().getZoneCode()).isEqualTo("KANDY");
+        assertThat(parcel.getCustomerName()).isEqualTo("Lanka Gadgets (Pvt) Ltd");
+        assertThat(parcel.getCustomerEmail()).isEqualTo("orders@lankagadgets.lk");
+        verify(bookingService).applyQuote(any(Parcel.class), eq(new BigDecimal("2.50")), eq("KANDY"), eq(DeliveryType.NORMAL));
+        verify(bookingService).requireActiveZone("COLOMBO");
 
-        ArgumentCaptor<DeliveryFeeRequest> feeRequest = ArgumentCaptor.forClass(DeliveryFeeRequest.class);
-        verify(feeCalculator).calculateFee(feeRequest.capture());
-        assertThat(feeRequest.getValue().weightKg()).isEqualTo(new BigDecimal("2.50"));
-        assertThat(feeRequest.getValue().deliveryType()).isEqualTo(DeliveryType.URGENT);
-        assertThat(feeRequest.getValue().deliveryAddress().getCity()).isEqualTo("Kandy");
+        assertThat(response.trackingNumber()).isEqualTo("SWD-2026-000010");
+        assertThat(response.deliveryFee()).isEqualByComparingTo("575.00");
+        assertThat(response.status()).isEqualTo(BookingStatus.BOOKED);
+        assertThat(response.receiptNumber()).isEqualTo("RCP-2026-000010");
     }
 
     @Test
-    void createOrder_urgentKeepsNote_onlineHasNoCodAmount() {
-        stubSuccessfulCreate(new BigDecimal("600.00"));
+    void onlineOrder_waitsForPaymentAndKeepsUrgentNote() {
+        MerchantOrderResponse response = service.createOrder(merchant, onlineRequest(null), OrderSource.DASHBOARD);
 
-        MerchantOrderResponse response = orderService.createOrder(7L,
-                request(null, DeliveryType.URGENT, "  Fragile  ", PaymentMethod.ONLINE, null), OrderSource.DASHBOARD);
-
-        assertThat(response.urgentNote()).isEqualTo("Fragile");
-        assertThat(response.codAmount()).isNull();
-        assertThat(response.merchantReference()).isNull();
+        Parcel parcel = savedParcel();
+        assertThat(parcel.getUrgency()).isEqualTo("URGENT");
+        assertThat(parcel.getUrgentNote()).isEqualTo("Before 5pm");
+        assertThat(parcel.getCodAmount()).isNull();
+        verify(bookingService).applyQuote(any(Parcel.class), any(), eq("KANDY"), eq(DeliveryType.URGENT));
+        assertThat(response.status()).isEqualTo(BookingStatus.CHECKOUT_DRAFT);
+        assertThat(response.receiptNumber()).isNull();
     }
 
     @Test
-    void createOrder_externalApi_recordsSource() {
-        stubSuccessfulCreate(new BigDecimal("450.00"));
+    void identityUnavailable_fallsBackToThePickupContact() {
+        when(identityClient.currentMerchant(any())).thenReturn(Optional.empty());
 
-        MerchantOrderResponse response = orderService.createOrder(7L,
-                request("WC-5001", DeliveryType.NORMAL, null, PaymentMethod.ONLINE, null), OrderSource.EXTERNAL_API);
+        service.createOrder(merchant, codRequest(null), OrderSource.DASHBOARD);
 
-        assertThat(response.source()).isEqualTo(OrderSource.EXTERNAL_API);
-        assertThat(response.merchantReference()).isEqualTo("WC-5001");
+        Parcel parcel = savedParcel();
+        assertThat(parcel.getCustomerName()).isEqualTo("Lanka Gadgets");
+        assertThat(parcel.getCustomerPhone()).isEqualTo("0112345678");
+        assertThat(parcel.getCustomerEmail()).isNull();
     }
 
     @Test
-    void createOrder_externalApiWithoutReference_isRejected() {
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request("  ", DeliveryType.NORMAL, null, PaymentMethod.ONLINE, null), OrderSource.EXTERNAL_API))
-                .isInstanceOf(InvalidOrderException.class)
-                .hasMessageContaining("merchantReference");
+    void deliveryZoneIsRequired() {
+        AddressDto noZone = new AddressDto("Kamala Silva", "0777654321", "45 Lake Rd", "Kandy", null, " ");
+        MerchantOrderRequest request = new MerchantOrderRequest(null, null, new BigDecimal("1.00"), null, null,
+                PaymentMethod.COD, new BigDecimal("100.00"), pickup(), noZone);
 
-        verifyNoInteractions(orderRepository, feeCalculator);
+        assertThatThrownBy(() -> service.createOrder(merchant, request, OrderSource.DASHBOARD))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("code", "ZONE_REQUIRED");
+        verify(bookingService, never()).saveNewBooking(any());
     }
 
     @Test
-    void createOrder_codWithoutAmount_isRejected() {
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request("A-1", DeliveryType.NORMAL, null, PaymentMethod.COD, null), OrderSource.DASHBOARD))
-                .isInstanceOf(InvalidOrderException.class)
-                .hasMessageContaining("codAmount");
-
-        verifyNoInteractions(orderRepository, feeCalculator);
+    void externalApiOrdersNeedAMerchantReference() {
+        assertThatThrownBy(() -> service.createOrder(merchant, codRequest(null), OrderSource.EXTERNAL_API))
+                .isInstanceOf(InvalidOrderException.class);
+        verify(bookingService, never()).saveNewBooking(any());
     }
 
     @Test
-    void createOrder_onlineWithCodAmount_isRejected() {
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request("A-1", DeliveryType.NORMAL, null, PaymentMethod.ONLINE, new BigDecimal("100")),
-                OrderSource.DASHBOARD))
-                .isInstanceOf(InvalidOrderException.class)
-                .hasMessageContaining("codAmount");
+    void codWithoutAmount_andOnlineWithAmount_areRejected() {
+        MerchantOrderRequest codNoAmount = new MerchantOrderRequest(null, null, new BigDecimal("1.00"), null, null,
+                PaymentMethod.COD, null, pickup(), delivery());
+        MerchantOrderRequest onlineWithAmount = new MerchantOrderRequest(null, null, new BigDecimal("1.00"), null, null,
+                PaymentMethod.ONLINE, new BigDecimal("10.00"), pickup(), delivery());
 
-        verifyNoInteractions(orderRepository, feeCalculator);
+        assertThatThrownBy(() -> service.createOrder(merchant, codNoAmount, OrderSource.DASHBOARD))
+                .isInstanceOf(InvalidOrderException.class);
+        assertThatThrownBy(() -> service.createOrder(merchant, onlineWithAmount, OrderSource.DASHBOARD))
+                .isInstanceOf(InvalidOrderException.class);
+        verify(bookingService, never()).saveNewBooking(any());
     }
 
     @Test
-    void createOrder_duplicateReferenceForSameMerchant_throwsConflictAndSavesNothing() {
-        when(orderRepository.existsByMerchantIdAndMerchantReference(7L, "SHOP-1001")).thenReturn(true);
+    void duplicateReference_isRejectedBeforeSaving() {
+        when(parcelRepository.existsByMerchantIdAndMerchantReference(MERCHANT_ID, "SHOP-1001")).thenReturn(true);
 
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request("SHOP-1001", DeliveryType.NORMAL, null, PaymentMethod.ONLINE, null), OrderSource.EXTERNAL_API))
-                .isInstanceOf(DuplicateOrderException.class)
-                .hasMessageContaining("SHOP-1001");
-
-        verify(orderRepository, never()).saveAndFlush(any());
-        verifyNoInteractions(feeCalculator);
+        assertThatThrownBy(() -> service.createOrder(merchant, codRequest("SHOP-1001"), OrderSource.EXTERNAL_API))
+                .isInstanceOf(DuplicateOrderException.class);
+        verify(bookingService, never()).saveNewBooking(any());
     }
 
     @Test
-    void createOrder_raceOnReferenceConstraint_isTranslatedToDuplicate() {
-        when(feeCalculator.calculateFee(any())).thenReturn(new BigDecimal("450.00"));
-        when(orderRepository.nextOrderSequence()).thenReturn(43L);
-        when(orderRepository.saveAndFlush(any(MerchantOrder.class))).thenThrow(
-                new DataIntegrityViolationException("could not execute statement",
-                        new RuntimeException(REFERENCE_CONSTRAINT_MESSAGE)));
+    void concurrentDuplicateReference_atFlush_becomesDuplicateOrder() {
+        doThrow(new DataIntegrityViolationException("dup",
+                new SQLException("duplicate key value violates unique constraint \"uq_parcels_merchant_reference\"")))
+                .when(parcelRepository).flush();
 
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request("SHOP-1001", DeliveryType.NORMAL, null, PaymentMethod.ONLINE, null), OrderSource.EXTERNAL_API))
+        assertThatThrownBy(() -> service.createOrder(merchant, codRequest("SHOP-1001"), OrderSource.EXTERNAL_API))
                 .isInstanceOf(DuplicateOrderException.class);
     }
 
     @Test
-    void createOrder_otherIntegrityViolation_isNotMaskedAsDuplicate() {
-        when(feeCalculator.calculateFee(any())).thenReturn(new BigDecimal("450.00"));
-        when(orderRepository.nextOrderSequence()).thenReturn(44L);
-        when(orderRepository.saveAndFlush(any(MerchantOrder.class))).thenThrow(
-                new DataIntegrityViolationException("could not execute statement",
-                        new RuntimeException("violates check constraint \"ck_merchant_orders_weight\"")));
+    void otherIntegrityErrors_areNotMaskedAsDuplicates() {
+        doThrow(new DataIntegrityViolationException("other", new SQLException("ck_parcels_cod_amount")))
+                .when(parcelRepository).flush();
 
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request("SHOP-1001", DeliveryType.NORMAL, null, PaymentMethod.ONLINE, null), OrderSource.DASHBOARD))
+        assertThatThrownBy(() -> service.createOrder(merchant, codRequest("SHOP-1001"), OrderSource.EXTERNAL_API))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void createOrder_invalidFeeFromCalculator_isRejected() {
-        when(feeCalculator.calculateFee(any())).thenReturn(new BigDecimal("-1.00"));
+    void getOrder_ofAnotherMerchant_isNotFound() {
+        UUID id = UUID.randomUUID();
+        when(parcelRepository.findByIdAndMerchantId(id, MERCHANT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.createOrder(7L,
-                request(null, DeliveryType.NORMAL, null, PaymentMethod.ONLINE, null), OrderSource.DASHBOARD))
-                .isInstanceOf(IllegalStateException.class);
-
-        verify(orderRepository, never()).saveAndFlush(any());
-    }
-
-    // ---------- read ----------
-
-    @Test
-    void getOrder_ownOrder_returnsIt() {
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(orderEntity(1L, 7L)));
-
-        MerchantOrderResponse response = orderService.getOrder(7L, 1L);
-
-        assertThat(response.id()).isEqualTo(1L);
-        assertThat(response.merchantId()).isEqualTo(7L);
+        assertThatThrownBy(() -> service.getOrder(merchant, id)).isInstanceOf(OrderNotFoundException.class);
     }
 
     @Test
-    void getOrder_unknownId_throwsNotFound() {
-        when(orderRepository.findById(99L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> orderService.getOrder(7L, 99L))
-                .isInstanceOf(OrderNotFoundException.class)
-                .hasMessageContaining("99");
-    }
-
-    @Test
-    void getOrder_anotherMerchantsOrder_throwsAccessDeniedWithoutDetails() {
-        when(orderRepository.findById(2L)).thenReturn(Optional.of(orderEntity(2L, 8L)));
-
-        assertThatThrownBy(() -> orderService.getOrder(7L, 2L))
-                .isInstanceOf(OrderAccessDeniedException.class)
-                .hasMessage("You do not have access to this order");
-    }
-
-    @Test
-    void getOrders_queriesOnlyTheGivenMerchant() {
-        when(orderRepository.findByMerchantId(eq(7L), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(orderEntity(1L, 7L))));
-
-        Page<MerchantOrderResponse> page = orderService.getOrders(7L, 0, 20);
-
-        assertThat(page.getContent()).hasSize(1);
-        assertThat(page.getTotalElements()).isEqualTo(1);
-        verify(orderRepository).findByMerchantId(eq(7L), any(Pageable.class));
-    }
-
-    @Test
-    void getOrders_clampsPageAndSize() {
-        when(orderRepository.findByMerchantId(eq(7L), any(Pageable.class))).thenReturn(Page.empty());
+    void getOrders_clampsPageSizeAndQueriesOnlyTheMerchant() {
+        Parcel parcel = new Parcel();
+        parcel.setMerchantId(MERCHANT_ID);
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        when(parcelRepository.findByMerchantId(eq(MERCHANT_ID), pageable.capture()))
+                .thenAnswer(inv -> new PageImpl<>(List.of(parcel), inv.getArgument(1), 1));
+        when(receiptRepository.findByParcelId(any())).thenReturn(Optional.empty());
 
-        orderService.getOrders(7L, -5, 1000);
-        orderService.getOrders(7L, 3, 0);
+        Page<MerchantOrderResponse> page = service.getOrders(merchant, -3, 1000);
 
-        verify(orderRepository, org.mockito.Mockito.times(2)).findByMerchantId(eq(7L), pageable.capture());
-        assertThat(pageable.getAllValues().get(0).getPageNumber()).isZero();
-        assertThat(pageable.getAllValues().get(0).getPageSize()).isEqualTo(MerchantOrderService.MAX_PAGE_SIZE);
-        assertThat(pageable.getAllValues().get(1).getPageNumber()).isEqualTo(3);
-        assertThat(pageable.getAllValues().get(1).getPageSize()).isEqualTo(MerchantOrderService.DEFAULT_PAGE_SIZE);
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(pageable.getValue().getPageNumber()).isZero();
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(MerchantOrderService.MAX_PAGE_SIZE);
     }
 }

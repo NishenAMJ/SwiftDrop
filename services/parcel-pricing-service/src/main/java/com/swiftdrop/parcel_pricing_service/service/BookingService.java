@@ -77,10 +77,6 @@ public class BookingService {
         String pickupZone = normalizeZone(request.pickupAddress().zoneCode());
         if (pickupZone != null) requireActiveZone(pickupZone);
 
-        // The single source of truth for prices: the pricing rules and zones managed by dispatchers.
-        PricingResponse quote = pricingService.calculateFee(new PricingRequest(
-                request.weightKg(), deliveryZone, null, urgency == DeliveryType.URGENT, null));
-
         Parcel parcel = new Parcel();
         parcel.setId(UUID.randomUUID());
         parcel.setTrackingNumber(referenceGenerator.generateTrackingNumber());
@@ -94,15 +90,8 @@ public class BookingService {
         parcel.setUpdatedAt(OffsetDateTime.now());
         parcel.setStatusUpdatedAt(OffsetDateTime.now());
 
-        parcel.setEstimatedFee(quote.totalDeliveryFee());
-        parcel.setBaseFee(quote.baseFee());
-        parcel.setWeightCharge(quote.weightCharge());
-        parcel.setZoneCharge(quote.zoneCharge());
-        parcel.setUrgentSurcharge(quote.urgentSurcharge());
-        parcel.setPricingRuleCode(quote.appliedRuleCode());
-        parcel.setPricingZoneCode(quote.zoneCode());
-        parcel.setPricingSnapshotId("SNP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase(Locale.ROOT));
-        parcel.setPricingExpiresAt(OffsetDateTime.now().plusHours(CHECKOUT_VALID_HOURS));
+        // The single source of truth for prices: the pricing rules and zones managed by dispatchers.
+        applyQuote(parcel, request.weightKg(), deliveryZone, urgency);
 
         parcel.addAddress(toAddress("PICKUP", request.pickupAddress(), pickupZone));
         parcel.addAddress(toAddress("DELIVERY", request.deliveryAddress(), deliveryZone));
@@ -115,18 +104,50 @@ public class BookingService {
         parcel.setCustomerPhone(account.map(IdentityUser::phoneNumber).filter(s -> !s.isBlank())
                 .orElse(request.pickupAddress().contactPhone().trim()));
 
-        if (paymentMethod == PaymentMethod.COD) {
+        NewBooking saved = saveNewBooking(parcel);
+        return BookingResponseDto.from(saved.parcel(), saved.receipt());
+    }
+
+    /** A just-saved booking and its receipt (null until an ONLINE booking is paid). */
+    public record NewBooking(Parcel parcel, BookingReceipt receipt) {
+    }
+
+    /**
+     * Prices a new parcel with {@link PricingService} (the only fee formula) and copies the quote and
+     * breakdown onto it. Used by customer bookings and merchant orders alike.
+     */
+    public PricingResponse applyQuote(Parcel parcel, BigDecimal weightKg, String deliveryZone, DeliveryType urgency) {
+        PricingResponse quote = pricingService.calculateFee(new PricingRequest(
+                weightKg, deliveryZone, null, urgency == DeliveryType.URGENT, null));
+        parcel.setEstimatedFee(quote.totalDeliveryFee());
+        parcel.setBaseFee(quote.baseFee());
+        parcel.setWeightCharge(quote.weightCharge());
+        parcel.setZoneCharge(quote.zoneCharge());
+        parcel.setUrgentSurcharge(quote.urgentSurcharge());
+        parcel.setPricingRuleCode(quote.appliedRuleCode());
+        parcel.setPricingZoneCode(quote.zoneCode());
+        parcel.setPricingSnapshotId("SNP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase(Locale.ROOT));
+        parcel.setPricingExpiresAt(OffsetDateTime.now().plusHours(CHECKOUT_VALID_HOURS));
+        return quote;
+    }
+
+    /**
+     * Saves a new, priced parcel and starts its lifecycle. COD is confirmed at once (receipt and
+     * booking events); ONLINE waits as CHECKOUT_DRAFT until a verified payment confirms it.
+     * Shared by customer bookings and merchant orders, so both behave exactly the same.
+     */
+    public NewBooking saveNewBooking(Parcel parcel) {
+        if (PaymentMethod.COD.name().equals(parcel.getPaymentMethod())) {
             parcel.setStatus(BookingStatus.BOOKED);
             parcel.setPaymentStatus("PENDING");
             Parcel saved = parcelRepository.save(parcel);
             BookingReceipt receipt = issueReceipt(saved);
             events.bookingConfirmed(saved);
-            return BookingResponseDto.from(saved, receipt);
+            return new NewBooking(saved, receipt);
         }
-
         parcel.setStatus(BookingStatus.CHECKOUT_DRAFT);
         parcel.setPaymentStatus("UNPAID");
-        return BookingResponseDto.from(parcelRepository.save(parcel), null);
+        return new NewBooking(parcelRepository.save(parcel), null);
     }
 
     // ---------------------------------------------------------------- payment confirmation
@@ -347,7 +368,7 @@ public class BookingService {
         return parcel;
     }
 
-    private BookingReceipt issueReceipt(Parcel parcel) {
+    public BookingReceipt issueReceipt(Parcel parcel) {
         return receiptRepository.findByParcelId(parcel.getId()).orElseGet(() -> receiptRepository.save(new BookingReceipt(
                 referenceGenerator.generateReceiptNumber(parcel.getTrackingNumber()), parcel, parcel.getEstimatedFee(), CURRENCY)));
     }
@@ -364,7 +385,7 @@ public class BookingService {
                 || (paymentStatus != null && Set.of("REFUNDED", "PARTIALLY_REFUNDED").contains(paymentStatus));
     }
 
-    private void requireActiveZone(String code) {
+    public void requireActiveZone(String code) {
         DeliveryZone zone = zoneRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> ApiException.badRequest("INVALID_ZONE", "Unknown delivery zone: " + code));
         if (zone.getStatus() != ZoneStatus.ACTIVE) {

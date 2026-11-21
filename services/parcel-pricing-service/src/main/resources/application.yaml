@@ -75,10 +75,3 @@ swiftdrop:
   events:
     publisher:
       delay-ms: 2000
-  # Temporary merchant order fee calculator (Member 4)
-  orders:
-    fee:
-      mode: interim
-      base: 300.00
-      per-kg: 50.00
-      urgent-surcharge: 200.00

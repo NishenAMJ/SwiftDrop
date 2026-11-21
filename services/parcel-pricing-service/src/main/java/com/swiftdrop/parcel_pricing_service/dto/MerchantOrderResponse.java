@@ -1,63 +1,66 @@
 package com.swiftdrop.parcel_pricing_service.dto;
 
-import com.swiftdrop.parcel_pricing_service.entity.DeliveryType;
-import com.swiftdrop.parcel_pricing_service.entity.MerchantOrder;
-import com.swiftdrop.parcel_pricing_service.entity.OrderAddress;
+import com.swiftdrop.parcel_pricing_service.entity.BookingReceipt;
 import com.swiftdrop.parcel_pricing_service.entity.OrderSource;
-import com.swiftdrop.parcel_pricing_service.entity.OrderStatus;
-import com.swiftdrop.parcel_pricing_service.entity.PaymentMethod;
+import com.swiftdrop.parcel_pricing_service.entity.Parcel;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
-/** Merchant order as returned by the API. The JPA entity is never exposed directly. */
+/**
+ * A merchant order as returned to its merchant. It is a parcel, so {@code id} is the booking id used
+ * by every booking endpoint (receipt, payment, cancellation) and {@code trackingNumber} is the
+ * public SWD reference.
+ */
 public record MerchantOrderResponse(
-        Long id,
-        String orderNumber,
-        Long merchantId,
+        UUID id,
+        String trackingNumber,
+        UUID merchantId,
         String merchantReference,
-        OrderContactDto sender,
-        OrderContactDto receiver,
-        OrderAddressDto pickupAddress,
-        OrderAddressDto deliveryAddress,
-        String parcelDescription,
+        String description,
         BigDecimal weightKg,
-        DeliveryType deliveryType,
+        String urgency,
         String urgentNote,
-        PaymentMethod paymentMethod,
+        String paymentMethod,
+        String paymentStatus,
         BigDecimal codAmount,
         BigDecimal deliveryFee,
-        OrderStatus status,
+        String currency,
+        FeeBreakdownDto feeBreakdown,
+        String status,
         OrderSource source,
-        Instant createdAt,
-        Instant updatedAt
+        String receiptNumber,
+        OffsetDateTime pricingExpiresAt,
+        AddressDto pickupAddress,
+        AddressDto deliveryAddress,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
 
-    public static MerchantOrderResponse from(MerchantOrder order) {
+    public static MerchantOrderResponse from(Parcel parcel, BookingReceipt receipt) {
         return new MerchantOrderResponse(
-                order.getId(),
-                order.getOrderNumber(),
-                order.getMerchantId(),
-                order.getMerchantReference(),
-                new OrderContactDto(order.getSenderName(), order.getSenderPhone(), order.getSenderEmail()),
-                new OrderContactDto(order.getReceiverName(), order.getReceiverPhone(), order.getReceiverEmail()),
-                toDto(order.getPickupAddress()),
-                toDto(order.getDeliveryAddress()),
-                order.getParcelDescription(),
-                order.getWeightKg(),
-                order.getDeliveryType(),
-                order.getUrgentNote(),
-                order.getPaymentMethod(),
-                order.getCodAmount(),
-                order.getDeliveryFee(),
-                order.getStatus(),
-                order.getSource(),
-                order.getCreatedAt(),
-                order.getUpdatedAt());
-    }
-
-    private static OrderAddressDto toDto(OrderAddress address) {
-        return new OrderAddressDto(address.getAddressLine1(), address.getAddressLine2(),
-                address.getCity(), address.getDistrict(), address.getPostalCode());
+                parcel.getId(),
+                parcel.getTrackingNumber(),
+                parcel.getMerchantId(),
+                parcel.getMerchantReference(),
+                parcel.getDescription(),
+                parcel.getWeightKg(),
+                parcel.getUrgency(),
+                parcel.getUrgentNote(),
+                parcel.getPaymentMethod(),
+                parcel.getPaymentStatus(),
+                parcel.getCodAmount(),
+                parcel.getEstimatedFee(),
+                "LKR",
+                FeeBreakdownDto.from(parcel),
+                parcel.getStatus(),
+                parcel.getOrderSource(),
+                receipt != null ? receipt.getReceiptNumber() : null,
+                parcel.getPricingExpiresAt(),
+                AddressDto.from(parcel.getPickupAddress()),
+                AddressDto.from(parcel.getDeliveryAddress()),
+                parcel.getCreatedAt(),
+                parcel.getUpdatedAt());
     }
 }

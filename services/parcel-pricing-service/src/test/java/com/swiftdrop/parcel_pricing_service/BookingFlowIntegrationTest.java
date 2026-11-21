@@ -52,7 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * End-to-end check of Member 3's booking flows against real PostgreSQL and RabbitMQ.
  *
- * <p>Replaces the old contextLoads test. It proves that all Flyway migrations (V1-V11) apply to
+ * <p>Replaces the old contextLoads test. It proves that all Flyway migrations (V1-V12) apply to
  * an empty database, that Hibernate's schema validation passes, and that bookings, pricing,
  * events in both directions, payment confirmation and cancellation work together.
  * Identity and Payment HTTP calls are mocked; everything else is real.
@@ -137,8 +137,11 @@ class BookingFlowIntegrationTest {
                 "select count(*) from parcel_pricing.flyway_schema_history where success", Integer.class);
         String latest = jdbc.queryForObject(
                 "select max(cast(version as integer)) from parcel_pricing.flyway_schema_history", String.class);
-        assertThat(applied).isEqualTo(11);
-        assertThat(latest).isEqualTo("11");
+        assertThat(applied).isEqualTo(12);
+        assertThat(latest).isEqualTo("12");
+        // V12 turns the urgent surcharge on for the seeded default rule.
+        assertThat(jdbc.queryForObject("select urgent_surcharge_enabled from parcel_pricing.pricing_rules "
+                + "where rule_code = 'STANDARD_DEFAULT'", Boolean.class)).isTrue();
         assertThat(jdbc.queryForObject("select count(*) from parcel_pricing.delivery_zones where status = 'ACTIVE'",
                 Integer.class)).isGreaterThanOrEqualTo(3);
     }
@@ -240,7 +243,96 @@ class BookingFlowIntegrationTest {
         assertThat(cancelled.path("data").path("refundAmount").decimalValue()).isEqualByComparingTo("0");
     }
 
+    @Test
+    void merchantCodOrderIsAParcelInMyBookingsAndMerchantOrders() throws Exception {
+        JsonNode order = createMerchantOrder("COD", "URGENT", "SHOP-" + UUID.randomUUID().toString().substring(0, 8));
+        String id = order.path("id").asString();
+        String trackingNumber = order.path("trackingNumber").asString();
+
+        // Same pricing as a customer booking, urgent surcharge included: 300 + 2 x 50 + 300 (KANDY) + 200 = 900.
+        assertThat(trackingNumber).matches("^SWD-[0-9]{4}-[0-9]{6,}$");
+        assertThat(order.path("deliveryFee").decimalValue()).isEqualByComparingTo("900.00");
+        assertThat(order.path("feeBreakdown").path("urgentSurcharge").decimalValue()).isEqualByComparingTo("200.00");
+        assertThat(order.path("status").asString()).isEqualTo("BOOKED");
+        assertThat(order.path("merchantId").asString()).isEqualTo(merchantId.toString());
+        assertThat(order.path("receiptNumber").asString()).isEqualTo("RCP-" + trackingNumber.substring(4));
+
+        assertThat(jdbc.queryForObject("select channel from parcel_pricing.parcels where id = ?::uuid", String.class, id))
+                .isEqualTo("MERCHANT_API");
+
+        // The merchant dashboard and My Bookings read /api/v1/bookings/my: the order is there.
+        List<String> mine = new ArrayList<>();
+        getJson("/api/v1/bookings/my", asMerchant()).forEach(b -> mine.add(b.path("id").asString()));
+        assertThat(mine).contains(id);
+        // And in the merchant order list.
+        List<String> orders = new ArrayList<>();
+        getJson("/api/merchant/orders", asMerchant()).forEach(b -> orders.add(b.path("id").asString()));
+        assertThat(orders).contains(id);
+
+        awaitEvent(BOOKED_QUEUE, "parcel.booked", trackingNumber);
+    }
+
+    @Test
+    void merchantOnlineOrderGivesPaymentAMerchantContext() throws Exception {
+        JsonNode order = createMerchantOrder("ONLINE", "NORMAL", null);
+        assertThat(order.path("status").asString()).isEqualTo("CHECKOUT_DRAFT");
+
+        JsonNode context = getJson("/api/v1/bookings/" + order.path("id").asString() + "/payment-context", asMerchant());
+        assertThat(context.path("channel").asString()).isEqualTo("MERCHANT_API");
+        assertThat(context.path("merchantId").asString()).isEqualTo(merchantId.toString());
+        assertThat(context.path("payable").asBoolean()).isTrue();
+        assertThat(context.path("payer").path("email").asString()).isEqualTo("orders@lankagadgets.lk");
+    }
+
+    @Test
+    void duplicateMerchantReferenceIsRejected() throws Exception {
+        String reference = "SHOP-" + UUID.randomUUID().toString().substring(0, 8);
+        createMerchantOrder("COD", "NORMAL", reference);
+
+        mvc.perform(post("/api/merchant/orders").with(asMerchant())
+                        .contentType(MediaType.APPLICATION_JSON).content(merchantOrderJson("COD", "NORMAL", reference)))
+                .andExpect(status().isConflict());
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private final UUID merchantUser = UUID.randomUUID();
+    private final UUID merchantId = UUID.randomUUID();
+
+    private RequestPostProcessor asMerchant() {
+        return jwt().jwt(j -> j.subject(merchantUser.toString()).claim("roles", List.of("MERCHANT"))
+                        .claim("merchant_id", merchantId.toString()))
+                .authorities(new SimpleGrantedAuthority("ROLE_MERCHANT"));
+    }
+
+    private String merchantOrderJson(String paymentMethod, String urgency, String reference) {
+        return """
+                {"merchantReference":%s,"description":"Phone case","weightKg":2.00,"urgency":"%s",
+                 "paymentMethod":"%s",%s
+                 "pickupAddress":{"contactName":"Lanka Gadgets","contactPhone":"0112345678",
+                                  "streetAddress":"12 Galle Road","city":"Colombo","zoneCode":"COLOMBO"},
+                 "deliveryAddress":{"contactName":"Kamala Silva","contactPhone":"0777654321",
+                                    "streetAddress":"45 Lake Road","city":"Kandy","zoneCode":"KANDY"}}
+                """.formatted(reference == null ? "null" : "\"" + reference + "\"", urgency, paymentMethod,
+                "COD".equals(paymentMethod) ? "\"codAmount\":2500.00," : "");
+    }
+
+    private JsonNode createMerchantOrder(String paymentMethod, String urgency, String reference) throws Exception {
+        when(identityClient.currentMerchant(any())).thenReturn(Optional.of(new IdentityClient.MerchantContact(
+                merchantId, "Lanka Gadgets (Pvt) Ltd", "orders@lankagadgets.lk", "+94112345678")));
+        String body = mvc.perform(post("/api/merchant/orders").with(asMerchant())
+                        .contentType(MediaType.APPLICATION_JSON).content(merchantOrderJson(paymentMethod, urgency, reference)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return json.readTree(body);
+    }
+
+    private JsonNode getJson(String path, RequestPostProcessor user) throws Exception {
+        String body = mvc.perform(get(path).with(user))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return json.readTree(body);
+    }
 
     private RequestPostProcessor as(UUID user) {
         return jwt().jwt(j -> j.subject(user.toString()).claim("roles", List.of("CUSTOMER")))
