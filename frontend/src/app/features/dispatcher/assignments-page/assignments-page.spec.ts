@@ -170,6 +170,19 @@ describe('AssignmentsPage', () => {
       expect(fixture.nativeElement.textContent).toContain('Kamala Silva');
     });
 
+    it('shows the cash collected on a Cash on Delivery parcel', () => {
+      service.getProof.mockReturnValue(of({ ...proof, collectedAmount: 2500 }));
+      const component = fixture.componentInstance as any;
+      component.assignments.set(page([{ ...delivered, currency: 'LKR' } as DeliveryAssignment]));
+      fixture.detectChanges();
+
+      component.toggleDetails(delivered);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Cash collected');
+      expect(fixture.nativeElement.textContent).toContain('LKR 2,500.00');
+    });
+
     it('closes the details when asked again', () => {
       const component = fixture.componentInstance as any;
       component.toggleDetails(failed);

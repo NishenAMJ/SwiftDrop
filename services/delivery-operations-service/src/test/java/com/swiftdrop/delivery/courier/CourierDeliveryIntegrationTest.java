@@ -63,7 +63,7 @@ class CourierDeliveryIntegrationTest {
         }
 
         var proof = assignmentService.recordProof(assignment.id(),
-                new RecordProofRequest("Kamala Silva", "Handed over at the gate", null, null));
+                new RecordProofRequest("Kamala Silva", "Handed over at the gate", null, null, null));
         assertThat(proof.recipientName()).isEqualTo("Kamala Silva");
         assertThat(assignmentService.get(assignment.id()).status()).isEqualTo(AssignmentStatus.DELIVERED);
         assertThat(assignmentService.get(assignment.id()).completedAt()).isNotNull();
@@ -104,7 +104,7 @@ class CourierDeliveryIntegrationTest {
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("proof");
         assertThatThrownBy(() -> assignmentService.recordProof(assignment.id(),
-                new RecordProofRequest("Someone", null, null, null)))
+                new RecordProofRequest("Someone", null, null, null, null)))
                 .isInstanceOf(InvalidOperationException.class);
     }
 

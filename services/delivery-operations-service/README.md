@@ -83,7 +83,9 @@ ASSIGNED -> PICKED_UP -> IN_TRANSIT (optional) -> OUT_FOR_DELIVERY -> DELIVERED
 
 - The status endpoint accepts only the steps up to `OUT_FOR_DELIVERY`. `DELIVERED` happens when proof of delivery is recorded, and `DELIVERY_FAILED` when a failed attempt is recorded, so those details are never skipped.
 - A failed assignment is finished. To try again, a dispatcher creates a new assignment for the same parcel.
-- Assigning a parcel looks it up in Parcel & Pricing with the dispatcher's own token, so the parcel must exist. The Parcel & Pricing id is stored and sent in events.
+- Assigning a parcel looks it up in Parcel & Pricing (`GET /api/v1/dispatch/parcels/track/{ref}`, dispatcher only) with the dispatcher's own token, so the parcel must exist. The Parcel & Pricing id, customer, merchant and, for merchant Cash on Delivery orders, the amount due and pricing snapshot are stored with the assignment.
+- The pickup and delivery contact (name, phone, address) is copied onto the assignment when it is created, so the assigned courier can find and call both ends. The API returns it only while the assignment is open and only to that courier or a dispatcher; it is dropped once the parcel is delivered or failed, and it is never put in an event.
+- On a Cash on Delivery parcel the courier must enter the cash collected when recording proof of delivery; on any other parcel an amount is refused.
 
 Each step writes an event to the `outbox_events` table in the same transaction as the change. A scheduled publisher sends them to the topic exchange `swiftdrop.delivery-operations` and marks a row published only after the broker confirms it (at least once; consumers skip repeated `eventId`s). Routing keys: `delivery.assigned`, `delivery.picked-up`, `delivery.in-transit`, `delivery.out-for-delivery`, `delivery.delivered`, `delivery.failed`. The payloads are described in `../../contracts/events/delivery-operations/delivery-status-events.schema.json`, with examples in `../../contracts/examples/delivery-operations/`. Courier notes are never published; a failed delivery carries only a customer-safe `failureCode`.
 
@@ -95,10 +97,12 @@ For customer emails and merchant webhooks, each step except the assignment also 
 | `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED` | the same name |
 | `DELIVERY_FAILED` | `FAILED`, with a customer-safe `failureReason` |
 
-`customerUserId` comes from Parcel & Pricing when the parcel is assigned and is left out when the booking has no registered customer. `merchantId` is not sent yet because Parcel & Pricing does not return it. An example is in `../../contracts/examples/delivery-operations/parcel.status-changed.json`.
+`customerUserId` and `merchantId` come from Parcel & Pricing when the parcel is assigned and are left out when the booking has no registered customer or merchant.
+
+When a Cash on Delivery parcel is delivered, `delivery.cod-collected` is also written to `swiftdrop.delivery-operations`, following `../../contracts/events/delivery-operations/cod-collected.schema.json` (payment-settlement-service consumes it). It carries only the contract fields: booking id, tracking number, pricing snapshot, merchant, courier, the proof id as `deliveryAttemptId`, expected and collected amounts, currency and time. It is written in the same transaction as the delivery, so cash is never reported for an undelivered parcel. Customer-booked COD parcels have no merchant amount and publish nothing. An example is in `../../contracts/examples/delivery-operations/parcel.status-changed.json`.
 
 ## Not done yet
 
-- `delivery.cod-collected` (used by payment-settlement-service) is not published. It needs the COD amount, pricing snapshot id and merchant id, which Parcel & Pricing does not return yet.
-- `parcel.status-changed` has no `merchantId`, so merchant webhooks for delivery steps need Parcel & Pricing to return it.
+- Migrations: `V4__cash_on_delivery.sql` adds the merchant and cash columns. Warehouse work should use `V5` or later.
+- If the collected amount differs from the amount due, the event still carries both; Payment & Settlement decides what to do.
 - Proof of delivery stores an optional media URL but does not upload files.

@@ -1,0 +1,20 @@
+{
+  "eventId": "5c8e1a47-2b9d-4e03-8f16-7a3d9b0e4c25",
+  "eventType": "delivery.cod-collected",
+  "version": 1,
+  "occurredAt": "2026-11-21T11:42:10Z",
+  "producer": "delivery-operations-service",
+  "data": {
+    "bookingId": "7e1a3b5c-9d2f-4a8b-b6e1-2f5c8d0a7e99",
+    "trackingNumber": "SWD-2026-001234",
+    "pricingSnapshotId": "SNP-1A2B3C4D5E6F7A8B",
+    "merchantId": "22222222-2222-2222-2222-222222222222",
+    "courierId": "a93c5e17-8b2d-4f46-b1a9-0c7d3e5f2b84",
+    "deliveryAttemptId": "c1f4b7a0-6d3e-4a92-8b15-9e2c7d4f0a63",
+    "paymentMethod": "COD",
+    "expectedAmount": 2500.00,
+    "collectedAmount": 2500.00,
+    "currency": "LKR",
+    "collectedAt": "2026-11-21T11:42:10Z"
+  }
+}

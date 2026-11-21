@@ -180,7 +180,7 @@ describe('MyDeliveriesPage', () => {
     const component = fixture.componentInstance as any;
     const parcel = assignment('OUT_FOR_DELIVERY');
     component.openPanel(parcel, 'delivered');
-    component.proofForm.setValue({ recipientName: ' Kamala Silva ', notes: '' });
+    component.proofForm.setValue({ recipientName: ' Kamala Silva ', notes: '', collectedAmount: null });
 
     component.submitDelivered(parcel);
 
@@ -189,6 +189,93 @@ describe('MyDeliveriesPage', () => {
       notes: null,
       mediaUrl: null,
       deliveredAt: null,
+      collectedAmount: null,
+    });
+  });
+
+  describe('where to go', () => {
+    const job = {
+      ...assignment('ASSIGNED'),
+      pickup: { name: 'Nimal Stores', phone: '+94 77-123 4567', address: '12 Main St, Colombo' },
+      delivery: { name: 'Kamala Silva', phone: '077 765 4321', address: '45 Lake Rd, Kandy' },
+    } as DeliveryAssignment;
+
+    it('shows who to meet and where, with tap to call and open in maps', async () => {
+      const fixture = await create([job]);
+      const text = fixture.nativeElement.textContent;
+
+      expect(text).toContain('Pick up from');
+      expect(text).toContain('12 Main St, Colombo');
+      expect(text).toContain('Deliver to');
+      expect(text).toContain('Kamala Silva');
+      const links = Array.from<HTMLAnchorElement>(fixture.nativeElement.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+      expect(links).toContain('tel:+94771234567');
+      expect(links).toContain('tel:0777654321');
+      expect(links).toContain('https://www.google.com/maps/search/?api=1&query=45%20Lake%20Rd%2C%20Kandy');
+    });
+
+    it('shows only the delivery end once the parcel has been picked up', async () => {
+      const fixture = await create([{ ...job, status: 'PICKED_UP' } as DeliveryAssignment]);
+      const text = fixture.nativeElement.textContent;
+
+      expect(text).not.toContain('Pick up from');
+      expect(text).toContain('Deliver to');
+    });
+
+    it('shows nothing when no contact details came with the parcel', async () => {
+      const fixture = await create([assignment('ASSIGNED')]);
+
+      expect(fixture.nativeElement.textContent).not.toContain('Deliver to');
+    });
+  });
+
+  describe('Cash on Delivery', () => {
+    const cod = { ...assignment('OUT_FOR_DELIVERY'), codAmount: 2500, currency: 'LKR' } as DeliveryAssignment;
+
+    it('tells the courier how much to collect', async () => {
+      const fixture = await create([cod]);
+
+      expect(fixture.nativeElement.textContent).toContain('Collect LKR 2,500.00 in cash');
+    });
+
+    it('will not mark a COD parcel delivered until the cash collected is entered', async () => {
+      const fixture = await create([cod]);
+      const component = fixture.componentInstance as any;
+      component.openPanel(cod, 'delivered');
+      component.proofForm.patchValue({ recipientName: 'Kamala Silva' });
+
+      component.submitDelivered(cod);
+
+      expect(service.recordProof).not.toHaveBeenCalled();
+      expect(component.fieldError('proof', 'collectedAmount')).toBe('Enter the cash you collected.');
+    });
+
+    it('sends the cash collected with the proof', async () => {
+      const fixture = await create([cod]);
+      const component = fixture.componentInstance as any;
+      component.openPanel(cod, 'delivered');
+      component.proofForm.setValue({ recipientName: 'Kamala Silva', notes: '', collectedAmount: 2500 });
+
+      component.submitDelivered(cod);
+
+      expect(service.recordProof).toHaveBeenCalledWith('assignment-1', {
+        recipientName: 'Kamala Silva',
+        notes: null,
+        mediaUrl: null,
+        deliveredAt: null,
+        collectedAmount: 2500,
+      });
+    });
+
+    it('asks for the amount in an accessible field only on COD parcels', async () => {
+      const fixture = await create([cod]);
+      const component = fixture.componentInstance as any;
+      component.openPanel(cod, 'delivered');
+      fixture.detectChanges();
+
+      const label = fixture.nativeElement.querySelector('label[for="proof-cash-assignment-1"]');
+      expect(label?.textContent).toContain('Cash collected (LKR)');
+      expect(fixture.nativeElement.querySelector('#proof-cash-assignment-1')).not.toBeNull();
     });
   });
 

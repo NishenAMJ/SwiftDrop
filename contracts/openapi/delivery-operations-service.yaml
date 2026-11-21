@@ -735,12 +735,23 @@ components:
         assignedBy: { type: string }
         status: { $ref: '#/components/schemas/AssignmentStatus' }
         notes: { type: [string, 'null'] }
+        codAmount: { type: [number, 'null'], description: 'Cash the courier collects at the door; merchant Cash on Delivery orders only' }
+        currency: { type: [string, 'null'], description: 'Currency of codAmount' }
+        pickup: { $ref: '#/components/schemas/ParcelContact' }
+        delivery: { $ref: '#/components/schemas/ParcelContact' }
         assignedAt: { type: string, format: date-time }
         pickedUpAt: { type: [string, 'null'], format: date-time }
         outForDeliveryAt: { type: [string, 'null'], format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ParcelContact:
+      type: [object, 'null']
+      description: Who to meet and where. Present only while the assignment is open, and only to the assigned courier and dispatchers. Never published in events.
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
     RecordAttempt:
       type: object
       required: [reason]
@@ -756,6 +767,7 @@ components:
         notes: { type: [string, 'null'], maxLength: 500 }
         mediaUrl: { type: [string, 'null'], maxLength: 500 }
         deliveredAt: { type: [string, 'null'], format: date-time }
+        collectedAmount: { type: [number, 'null'], exclusiveMinimum: 0, description: 'Cash handed over. Required for Cash on Delivery parcels (409/422 otherwise) and refused for all others' }
     ProofOfDelivery:
       type: object
       properties:
@@ -766,6 +778,7 @@ components:
         notes: { type: [string, 'null'] }
         mediaUrl: { type: [string, 'null'] }
         deliveredAt: { type: string, format: date-time }
+        collectedAmount: { type: [number, 'null'] }
     ReportIssue:
       type: object
       required: [courierId, issueType, description]

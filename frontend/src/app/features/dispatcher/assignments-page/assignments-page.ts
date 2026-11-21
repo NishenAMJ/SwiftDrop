@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -32,7 +33,7 @@ const STATUS_OPTIONS = Object.keys(ASSIGNMENT_STATUS_LABELS) as AssignmentStatus
 
 @Component({
   selector: 'app-assignments-page',
-  imports: [ColomboDatePipe, ReactiveFormsModule],
+  imports: [ColomboDatePipe, DecimalPipe, ReactiveFormsModule],
   templateUrl: './assignments-page.html',
   styleUrl: './assignments-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

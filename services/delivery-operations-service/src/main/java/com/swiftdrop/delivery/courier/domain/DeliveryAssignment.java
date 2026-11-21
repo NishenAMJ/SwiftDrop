@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.courier.domain;
 
+import com.swiftdrop.delivery.courier.parcel.ParcelContact;
 import com.swiftdrop.delivery.exception.InvalidOperationException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -33,6 +35,40 @@ public class DeliveryAssignment {
     /** The customer who booked the parcel; null when the booking has no registered customer. */
     @Column(name = "customer_id", updatable = false)
     private UUID customerId;
+
+    /** Merchant orders only: the merchant the parcel belongs to; null for customer bookings. */
+    @Column(name = "merchant_id", updatable = false)
+    private UUID merchantId;
+
+    /** Merchant COD orders only: the cash due at the door and the pricing snapshot it was agreed under. */
+
+    @Column(name = "cod_amount", updatable = false, precision = 12, scale = 2)
+    private BigDecimal codAmount;
+
+    @Column(name = "pricing_snapshot_id", updatable = false, length = 64)
+    private String pricingSnapshotId;
+
+    @Column(updatable = false, length = 3)
+    private String currency;
+
+    /** Copied from Parcel & Pricing when assigned, so the courier can find and call both ends. */
+    @Column(name = "pickup_contact_name", updatable = false, length = 100)
+    private String pickupContactName;
+
+    @Column(name = "pickup_contact_phone", updatable = false, length = 25)
+    private String pickupContactPhone;
+
+    @Column(name = "pickup_address", updatable = false, length = 400)
+    private String pickupAddress;
+
+    @Column(name = "delivery_contact_name", updatable = false, length = 100)
+    private String deliveryContactName;
+
+    @Column(name = "delivery_contact_phone", updatable = false, length = 25)
+    private String deliveryContactPhone;
+
+    @Column(name = "delivery_address", updatable = false, length = 400)
+    private String deliveryAddress;
 
     @Column(name = "parcel_reference", nullable = false, length = 50)
     private String parcelReference;
@@ -84,6 +120,44 @@ public class DeliveryAssignment {
         this.status = AssignmentStatus.ASSIGNED;
     }
 
+    public void recordContacts(ParcelContact pickup, ParcelContact delivery) {
+        if (pickup != null) {
+            this.pickupContactName = pickup.name();
+            this.pickupContactPhone = pickup.phone();
+            this.pickupAddress = pickup.address();
+        }
+        if (delivery != null) {
+            this.deliveryContactName = delivery.name();
+            this.deliveryContactPhone = delivery.phone();
+            this.deliveryAddress = delivery.address();
+        }
+    }
+
+    public ParcelContact pickupContact() {
+        return pickupAddress == null ? null : new ParcelContact(pickupContactName, pickupContactPhone, pickupAddress);
+    }
+
+    public ParcelContact deliveryContact() {
+        return deliveryAddress == null ? null
+                : new ParcelContact(deliveryContactName, deliveryContactPhone, deliveryAddress);
+    }
+
+    /** The parcel is a merchant's order; merchant webhooks and cash reporting are keyed on this. */
+    public void forMerchant(UUID merchantId) {
+        this.merchantId = merchantId;
+    }
+
+    /** Marks this as a Cash on Delivery parcel: the courier must collect {@code amount} at the door. */
+    public void collectCash(BigDecimal amount, String pricingSnapshotId, String currency) {
+        this.codAmount = amount;
+        this.pricingSnapshotId = pricingSnapshotId;
+        this.currency = currency == null || currency.isBlank() ? "LKR" : currency;
+    }
+
+    public boolean isCashOnDelivery() {
+        return codAmount != null && merchantId != null;
+    }
+
     public void moveTo(AssignmentStatus next, Instant at) {
         if (!status.canMoveTo(next)) {
             throw new InvalidOperationException("Cannot change assignment status from " + status + " to " + next);
@@ -112,6 +186,10 @@ public class DeliveryAssignment {
     public UUID getId() { return id; }
     public UUID getParcelId() { return parcelId; }
     public UUID getCustomerId() { return customerId; }
+    public UUID getMerchantId() { return merchantId; }
+    public BigDecimal getCodAmount() { return codAmount; }
+    public String getPricingSnapshotId() { return pricingSnapshotId; }
+    public String getCurrency() { return currency; }
     public String getParcelReference() { return parcelReference; }
     public Courier getCourier() { return courier; }
     public String getAssignedBy() { return assignedBy; }
