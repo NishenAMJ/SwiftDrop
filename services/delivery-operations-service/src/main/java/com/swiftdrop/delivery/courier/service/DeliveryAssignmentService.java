@@ -6,8 +6,10 @@ import com.swiftdrop.delivery.courier.api.AttemptResponse;
 import com.swiftdrop.delivery.courier.api.ProofResponse;
 import com.swiftdrop.delivery.courier.api.RecordAttemptRequest;
 import com.swiftdrop.delivery.courier.api.RecordProofRequest;
+import com.swiftdrop.delivery.courier.api.StatusChangeResponse;
 import com.swiftdrop.delivery.courier.api.UpdateAssignmentStatusRequest;
 import com.swiftdrop.delivery.courier.domain.AssignmentStatus;
+import com.swiftdrop.delivery.courier.domain.AssignmentStatusChange;
 import com.swiftdrop.delivery.courier.domain.CategoryStatus;
 import com.swiftdrop.delivery.courier.domain.CourierStatus;
 import com.swiftdrop.delivery.courier.domain.DeliveryAssignment;
@@ -15,9 +17,11 @@ import com.swiftdrop.delivery.courier.domain.DeliveryAttempt;
 import com.swiftdrop.delivery.courier.domain.ProofOfDelivery;
 import com.swiftdrop.delivery.courier.events.DeliveryEventRecorder;
 import com.swiftdrop.delivery.courier.parcel.ParcelLookup;
+import com.swiftdrop.delivery.courier.repository.AssignmentStatusChangeRepository;
 import com.swiftdrop.delivery.courier.repository.DeliveryAssignmentRepository;
 import com.swiftdrop.delivery.courier.repository.DeliveryAttemptRepository;
 import com.swiftdrop.delivery.courier.repository.ProofOfDeliveryRepository;
+import com.swiftdrop.delivery.courier.security.CurrentActor;
 import com.swiftdrop.delivery.exception.ConflictException;
 import com.swiftdrop.delivery.exception.InvalidOperationException;
 import com.swiftdrop.delivery.exception.ResourceNotFoundException;
@@ -41,19 +45,38 @@ public class DeliveryAssignmentService {
     private final CourierService courierService;
     private final ParcelLookup parcelLookup;
     private final DeliveryEventRecorder events;
+    private final AssignmentStatusChangeRepository history;
+    private final CurrentActor actor;
 
     public DeliveryAssignmentService(DeliveryAssignmentRepository assignmentRepository,
                                      DeliveryAttemptRepository attemptRepository,
                                      ProofOfDeliveryRepository proofRepository,
                                      CourierService courierService,
                                      ParcelLookup parcelLookup,
-                                     DeliveryEventRecorder events) {
+                                     DeliveryEventRecorder events,
+                                     AssignmentStatusChangeRepository history,
+                                     CurrentActor actor) {
         this.assignmentRepository = assignmentRepository;
         this.attemptRepository = attemptRepository;
         this.proofRepository = proofRepository;
         this.courierService = courierService;
         this.parcelLookup = parcelLookup;
         this.events = events;
+        this.history = history;
+        this.actor = actor;
+    }
+
+    /** The audit trail of an assignment, oldest first. */
+    public List<StatusChangeResponse> history(UUID assignmentId) {
+        requireAssignment(assignmentId);
+        return history.findAllByAssignment_IdOrderByChangedAtAscIdAsc(assignmentId).stream()
+                .map(StatusChangeResponse::from).toList();
+    }
+
+    /** Records who moved the assignment, from the signed-in user's token, in the same transaction. */
+    private void audit(DeliveryAssignment assignment, AssignmentStatus from, AssignmentStatus to, Instant at) {
+        var who = actor.get();
+        history.save(new AssignmentStatusChange(assignment, from, to, who.id(), who.role(), at));
     }
 
     /**
@@ -87,6 +110,7 @@ public class DeliveryAssignmentService {
         }
         var assignment = assignmentRepository.save(created);
         events.progressed(assignment, null, now);
+        audit(assignment, null, AssignmentStatus.ASSIGNED, now);
         return AssignmentResponse.from(assignment);
     }
 
@@ -131,6 +155,7 @@ public class DeliveryAssignmentService {
         var previous = assignment.getStatus();
         assignment.moveTo(next, occurredAt);
         events.progressed(assignment, previous, occurredAt);
+        audit(assignment, previous, next, occurredAt);
         return AssignmentResponse.from(assignment);
     }
 
@@ -138,11 +163,13 @@ public class DeliveryAssignmentService {
     public AttemptResponse recordFailedAttempt(UUID assignmentId, RecordAttemptRequest request) {
         var assignment = requireAssignment(assignmentId);
         var attemptedAt = request.attemptedAt() == null ? Instant.now() : request.attemptedAt();
+        var previousStatus = assignment.getStatus();
         assignment.moveTo(AssignmentStatus.DELIVERY_FAILED, attemptedAt);
         var number = (int) attemptRepository.countByParcelReferenceIgnoreCase(assignment.getParcelReference()) + 1;
         var attempt = attemptRepository.save(new DeliveryAttempt(assignment, number, request.reason(),
                 cleanNullable(request.notes()), attemptedAt));
         events.failed(assignment, attempt, attemptedAt);
+        audit(assignment, previousStatus, AssignmentStatus.DELIVERY_FAILED, attemptedAt);
         return AttemptResponse.from(attempt);
     }
 
@@ -166,11 +193,13 @@ public class DeliveryAssignmentService {
             throw new InvalidOperationException("This parcel is not Cash on Delivery, so no cash can be recorded");
         }
         var deliveredAt = request.deliveredAt() == null ? Instant.now() : request.deliveredAt();
+        var previousStatus = assignment.getStatus();
         assignment.moveTo(AssignmentStatus.DELIVERED, deliveredAt);
         var proof = proofRepository.save(new ProofOfDelivery(assignment, request.recipientName().trim(),
                 cleanNullable(request.notes()), cleanNullable(request.mediaUrl()), deliveredAt,
                 request.collectedAmount()));
         events.progressed(assignment, AssignmentStatus.OUT_FOR_DELIVERY, deliveredAt);
+        audit(assignment, previousStatus, AssignmentStatus.DELIVERED, deliveredAt);
         if (assignment.isCashOnDelivery()) {
             events.cashCollected(assignment, proof, deliveredAt);
         }

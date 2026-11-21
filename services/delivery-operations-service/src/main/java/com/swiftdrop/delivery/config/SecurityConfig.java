@@ -51,6 +51,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/assignments/*/status").hasRole("COURIER")
                         .requestMatchers(HttpMethod.POST, "/api/v1/assignments/*/attempts",
                                 "/api/v1/assignments/*/proof").hasRole("COURIER")
+                        // The audit trail names staff by identity id, so couriers do not read it.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/assignments/*/history").hasRole("DISPATCHER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/assignments", "/api/v1/assignments/**")
                         .hasAnyRole("COURIER", "DISPATCHER")
 

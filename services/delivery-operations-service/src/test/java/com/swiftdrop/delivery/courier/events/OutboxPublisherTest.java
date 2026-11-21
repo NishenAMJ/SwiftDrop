@@ -26,6 +26,9 @@ import static org.mockito.Mockito.verify;
 @SpringBootTest
 class OutboxPublisherTest {
 
+    /** Already due. Using "now" races the database rounding the timestamp up, so the row looks due a moment later. */
+    private static final Instant DUE = Instant.now().minusSeconds(60);
+
     @Autowired
     private OutboxEventRepository outbox;
     @Autowired
@@ -47,7 +50,7 @@ class OutboxPublisherTest {
     void confirmedEventsAreSentToTheDeliveryExchangeAndMarkedPublished() {
         var id = UUID.randomUUID();
         outbox.save(new OutboxEvent(id, "swiftdrop.delivery-operations", "delivery.delivered",
-                "{\"eventType\":\"delivery.delivered\"}", Instant.now()));
+                "{\"eventType\":\"delivery.delivered\"}", DUE));
         brokerAnswers(true);
 
         publisher.publishPending();
@@ -64,7 +67,7 @@ class OutboxPublisherTest {
     @Test
     void anUnconfirmedEventIsKeptAndRetriedLater() {
         var id = UUID.randomUUID();
-        outbox.save(new OutboxEvent(id, "swiftdrop.delivery-operations", "delivery.failed", "{}", Instant.now()));
+        outbox.save(new OutboxEvent(id, "swiftdrop.delivery-operations", "delivery.failed", "{}", DUE));
         brokerAnswers(false);
 
         publisher.publishPending();
@@ -82,7 +85,7 @@ class OutboxPublisherTest {
     @Test
     void eachEventGoesToTheExchangeItWasWrittenFor() {
         outbox.save(new OutboxEvent(UUID.randomUUID(), "swiftdrop.delivery", "parcel.status-changed", "{}",
-                Instant.now()));
+                DUE));
         brokerAnswers(true);
 
         publisher.publishPending();
@@ -94,7 +97,7 @@ class OutboxPublisherTest {
     @Test
     void publishedEventsAreNotSentAgain() {
         outbox.save(new OutboxEvent(UUID.randomUUID(), "swiftdrop.delivery-operations", "delivery.assigned", "{}",
-                Instant.now()));
+                DUE));
         brokerAnswers(true);
         publisher.publishPending();
 

@@ -435,6 +435,25 @@ paths:
         '201': { description: Attempt recorded }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/history:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Audit trail of an assignment
+      description: >
+        Role DISPATCHER only. Every status change, oldest first, with who made it. changedBy is the
+        identity user id from the access token (sub) and changedByRole is the role on that token; neither
+        is supplied by the caller. Couriers do not read this.
+      responses:
+        '200':
+          description: Status changes, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StatusChange' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/assignments/{assignmentId}/proof:
     parameters:
       - $ref: '#/components/parameters/AssignmentId'
@@ -745,6 +764,15 @@ components:
         completedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    StatusChange:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { oneOf: [ { $ref: '#/components/schemas/AssignmentStatus' }, { type: 'null' } ], description: 'Null for the first entry, when the parcel was assigned' }
+        toStatus: { $ref: '#/components/schemas/AssignmentStatus' }
+        changedBy: { type: [string, 'null'], format: uuid, description: 'Identity user id from the access token sub' }
+        changedByRole: { type: string, enum: [DISPATCHER, COURIER, SYSTEM, UNKNOWN] }
+        changedAt: { type: string, format: date-time }
     ParcelContact:
       type: [object, 'null']
       description: Who to meet and where. Present only while the assignment is open, and only to the assigned courier and dispatchers. Never published in events.
