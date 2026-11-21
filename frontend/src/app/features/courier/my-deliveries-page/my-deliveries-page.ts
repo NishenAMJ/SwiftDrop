@@ -11,11 +11,15 @@ import {
   AssignmentStatus,
   CourierProfile,
   DeliveryAssignment,
+  DeliveryIssue,
   FAILURE_REASON_LABELS,
   FailureReason,
+  ISSUE_STATUS_LABELS,
   ISSUE_TYPE_LABELS,
+  IssueStatus,
   IssueType,
   assignmentStatusClass,
+  issueStatusClass,
   nextStep,
 } from '../courier-delivery.models';
 import { CourierDeliveryService } from '../courier-delivery.service';
@@ -44,6 +48,11 @@ export class MyDeliveriesPage implements OnInit {
   protected readonly failureLabels = FAILURE_REASON_LABELS;
   protected readonly issueTypes = ISSUE_TYPES;
   protected readonly issueLabels = ISSUE_TYPE_LABELS;
+  protected readonly issueStatusLabels = ISSUE_STATUS_LABELS;
+
+  /** Problems this courier has reported, newest first, so they can see whether anyone has acted on them. */
+  protected readonly issues = signal<DeliveryIssue[]>([]);
+  protected readonly issuesFailed = signal(false);
 
   protected readonly profile = signal<CourierProfile | null>(null);
   protected readonly assignments = signal<DeliveryAssignment[]>([]);
@@ -88,6 +97,7 @@ export class MyDeliveriesPage implements OnInit {
       next: (profile) => {
         this.profile.set(profile);
         this.loadAssignments(profile.id);
+        this.loadIssues(profile.id);
       },
       error: (error: unknown) => {
         this.loading.set(false);
@@ -228,7 +238,10 @@ export class MyDeliveriesPage implements OnInit {
         this.closePanel();
         this.notice.set(notice);
         const profile = this.profile();
-        if (profile) this.loadAssignments(profile.id, false);
+        if (profile) {
+          this.loadAssignments(profile.id, false);
+          this.loadIssues(profile.id);
+        }
       },
       error: (error: unknown) => this.error.set(errorMessage(error)),
     });
@@ -243,6 +256,21 @@ export class MyDeliveriesPage implements OnInit {
         next: (page) => this.assignments.set(page.content),
         error: (error: unknown) => this.error.set(errorMessage(error)),
       });
+  }
+
+  protected issueClass(status: IssueStatus): string {
+    return issueStatusClass(status);
+  }
+
+  private loadIssues(courierId: string): void {
+    this.service.listIssues({ courierId, size: 10 }).subscribe({
+      next: (page) => {
+        this.issues.set(page.content);
+        this.issuesFailed.set(false);
+      },
+      // The rest of the page still works, so say so quietly instead of blocking the courier.
+      error: () => this.issuesFailed.set(true),
+    });
   }
 
   private replace(updated: DeliveryAssignment): void {
