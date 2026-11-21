@@ -7,7 +7,7 @@ RUN chmod +x mvnw
 COPY src src
 RUN ./mvnw -B -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /workspace/target/api-gateway-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080

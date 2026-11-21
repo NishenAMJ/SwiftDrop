@@ -1,6 +1,6 @@
 # Payment & Settlement service — Members 8 and 9
 
-Java 21 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
+Java 25 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
 PayHere. Member 9 owns COD collection, courier cash reconciliation, the merchant
 ledger and merchant settlements.
 
@@ -14,7 +14,7 @@ ledger and merchant settlements.
 
 On 2026-11-15, before Member 9's implementation, `mvn -B clean test` against the
 isolated payment test database and RabbitMQ reported **32 tests, 0 failures, 0 errors,
-0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 21
+0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 25
 and isolated infrastructure. Historical results do not verify the new V5 migration,
 COD workflows, live PayHere, actual identity/pricing integration, gateway routing or
 Docker-image end-to-end readiness.

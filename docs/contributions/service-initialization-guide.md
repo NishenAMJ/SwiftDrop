@@ -386,7 +386,7 @@ git commit -m "Initialize parcel and pricing service"
 git push -u origin setup/parcel-pricing-service
 ```
 
-Confirm Java 21 in wrapper output. Compilation checks source/dependency setup, not runtime readiness. Run the generated tests and application after infrastructure and runtime configuration are supplied; skipping tests for the initial compile does not complete testing obligations.
+Confirm Java 25 in wrapper output. Compilation checks source/dependency setup, not runtime readiness. Run the generated tests and application after infrastructure and runtime configuration are supplied; skipping tests for the initial compile does not complete testing obligations.
 
 Create a GitHub pull request from `setup/parcel-pricing-service` into `dev`. Review the names, dependencies and absence of secrets before merge. The second member sharing this service starts a feature branch from updated `dev` after the scaffold merges.
 
@@ -417,7 +417,7 @@ Do not treat an unconfigured service's failed datasource or JWT startup as proof
 - [ ] Scaffold is on its own `setup/<artifact>` branch, created from `dev`.
 - [ ] Correct folder, artifact, package, main class, application name and port.
 - [ ] Configuration is in `src/main/resources/application.yaml` (no `application.properties`).
-- [ ] Java 21 and the shared Spring Boot version (4.1.2).
+- [ ] Java 25 and the shared Spring Boot version (4.1.2).
 - [ ] Correct dependencies for this application.
 - [ ] YAML syntax is valid; no duplicate properties configuration.
 - [ ] Maven Wrapper committed and compilation result recorded.
