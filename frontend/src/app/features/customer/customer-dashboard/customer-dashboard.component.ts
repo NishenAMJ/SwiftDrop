@@ -1,13 +1,20 @@
 import { CommonModule, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { Subject, catchError, debounceTime, of, switchMap } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import {
+  ACTIVE_STATUSES,
   BookingResponseDto,
   BookingSummaryDto,
+  EMPTY_FEE,
   FeeBreakdown,
   UrgencyType,
+  statusBadgeClass,
+  statusLabel,
 } from '../models/customer-booking.models';
 import { CustomerBookingService } from '../services/customer-booking.service';
 import { CustomerProfileService } from '../services/customer-profile.service';
@@ -24,6 +31,8 @@ export class CustomerDashboardComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly profileService = inject(CustomerProfileService);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly estimate$ = new Subject<void>();
 
   readonly user = this.authService.user;
   readonly profile = this.profileService.profile;
@@ -32,28 +41,49 @@ export class CustomerDashboardComponent implements OnInit {
   readonly loading = signal<boolean>(true);
   readonly errorMessage = signal<string | null>(null);
 
-  // Quick Tracker state
+  readonly statusLabel = statusLabel;
+  readonly statusBadgeClass = statusBadgeClass;
+
+  // Quick Tracker state (the customer's own bookings; anyone else uses public tracking)
   readonly trackQuery = signal<string>('');
   readonly trackingLoading = signal<boolean>(false);
   readonly trackResult = signal<BookingResponseDto | null>(null);
   readonly trackError = signal<string | null>(null);
 
-  // Quick Estimator state
+  // Quick Estimator state (prices come from the backend pricing module)
   readonly estimateWeight = signal<number | null>(null);
   readonly estimateUrgency = signal<UrgencyType>('NORMAL');
-  readonly feeBreakdown = signal<FeeBreakdown>({
-    baseFee: 0,
-    weightFee: 0,
-    urgencySurcharge: 0,
-    totalFee: 0,
-  });
+  readonly feeBreakdown = signal<FeeBreakdown>(EMPTY_FEE);
+  readonly estimateLoading = signal(false);
+  readonly estimateError = signal<string | null>(null);
 
   // Copy state helper
   readonly copiedRef = signal<string | null>(null);
 
   ngOnInit(): void {
     this.loadBookings();
-    this.updateEstimate();
+    this.estimate$
+      .pipe(
+        debounceTime(300),
+        switchMap(() => {
+          const weight = Number(this.estimateWeight()) || 0;
+          if (weight <= 0) return of(EMPTY_FEE);
+          this.estimateLoading.set(true);
+          this.estimateError.set(null);
+          return this.bookingService.getFeeQuote(weight, this.estimateUrgency()).pipe(
+            catchError((err: unknown) => {
+              const body = err instanceof HttpErrorResponse ? (err.error as { code?: string; message?: string }) : null;
+              this.estimateError.set(body?.code && body.message ? body.message : 'Estimate not available right now');
+              return of(EMPTY_FEE);
+            }),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((fee) => {
+        this.estimateLoading.set(false);
+        this.feeBreakdown.set(fee);
+      });
   }
 
   loadBookings(): void {
@@ -65,25 +95,20 @@ export class CustomerDashboardComponent implements OnInit {
         this.bookings.set(data);
         this.loading.set(false);
       },
-      error: (err) => {
-        console.error('Failed to load bookings:', err);
+      error: () => {
         this.errorMessage.set('Could not fetch recent bookings. Please try again.');
         this.loading.set(false);
       },
     });
   }
 
-  // Dashboard KPI metrics computed from bookings list
+  // Dashboard KPI metrics computed from bookings list (statuses follow Delivery Operations events)
   get totalCount(): number {
     return this.bookings().length;
   }
 
   get activeCount(): number {
-    return this.bookings().filter((b) =>
-      ['BOOKED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(
-        b.status?.toUpperCase(),
-      ),
-    ).length;
+    return this.bookings().filter((b) => ACTIVE_STATUSES.includes(b.status?.toUpperCase())).length;
   }
 
   get urgentCount(): number {
@@ -112,18 +137,16 @@ export class CustomerDashboardComponent implements OnInit {
         this.trackingLoading.set(false);
       },
       error: () => {
-        this.trackError.set(`No parcel found matching reference "${query}".`);
+        this.trackError.set(
+          `"${query}" is not one of your bookings. For a parcel someone sent to you, use public tracking.`,
+        );
         this.trackingLoading.set(false);
       },
     });
   }
 
   updateEstimate(): void {
-    const fee = this.bookingService.calculateFee(
-      this.estimateWeight() ?? 0,
-      this.estimateUrgency(),
-    );
-    this.feeBreakdown.set(fee);
+    this.estimate$.next();
   }
 
   setEstimateUrgency(val: UrgencyType): void {
@@ -150,4 +173,3 @@ export class CustomerDashboardComponent implements OnInit {
     }, 2000);
   }
 }
-

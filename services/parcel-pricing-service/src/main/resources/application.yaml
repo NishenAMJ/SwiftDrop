@@ -28,6 +28,22 @@ spring:
     create-schemas: false
     locations: classpath:db/migration
 
+  # RabbitMQ: publish booking events, consume delivery and payment events
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 2
+          initial-interval: 1s
+
   security:
     oauth2:
       resourceserver:
@@ -47,8 +63,19 @@ management:
     health:
       show-details: never
 
-# Temporary delivery fee calculator configuration
 swiftdrop:
+  # Other services this one calls over REST (Docker values are set in compose.yaml)
+  identity:
+    base-url: ${SWIFTDROP_IDENTITY_BASE_URL:http://localhost:8081}
+  payment:
+    base-url: ${SWIFTDROP_PAYMENT_BASE_URL:http://localhost:8085}
+  bookings:
+    # Deducted from the refund when a paid online booking is cancelled before courier scheduling.
+    cancellation-fee: ${SWIFTDROP_CANCELLATION_FEE:0.00}
+  events:
+    publisher:
+      delay-ms: 2000
+  # Temporary merchant order fee calculator (Member 4)
   orders:
     fee:
       mode: interim

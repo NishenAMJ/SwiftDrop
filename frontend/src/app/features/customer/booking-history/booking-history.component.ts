@@ -2,7 +2,7 @@ import { CommonModule, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { BookingSummaryDto } from '../models/customer-booking.models';
+import { BookingSummaryDto, statusBadgeClass, statusLabel } from '../models/customer-booking.models';
 import { CustomerBookingService } from '../services/customer-booking.service';
 import { CancelBookingComponent } from '../cancel-booking/cancel-booking.component';
 
@@ -30,6 +30,9 @@ export class BookingHistoryComponent implements OnInit {
 
   // Clipboard copy state
   readonly copiedRef = signal<string | null>(null);
+
+  readonly statusLabel = statusLabel;
+  readonly statusBadgeClass = statusBadgeClass;
 
   readonly filteredBookings = computed(() => {
     let list = this.bookings();

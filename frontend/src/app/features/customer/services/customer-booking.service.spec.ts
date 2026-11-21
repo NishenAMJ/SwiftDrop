@@ -1,8 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { BOOKING_API, CustomerBookingService } from './customer-booking.service';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BOOKING_API, CustomerBookingService, PRICING_API, ZONES_API } from './customer-booking.service';
 import { CreateBookingRequest } from '../models/customer-booking.models';
 
 describe('CustomerBookingService', () => {
@@ -17,22 +17,42 @@ describe('CustomerBookingService', () => {
     httpMock = TestBed.inject(HttpTestingController);
   });
 
-  it('should calculate estimated fee correctly for standard delivery', () => {
-    const fee = service.calculateFee(2.0, 'NORMAL');
-    // Base 350 + (2 * 150) = 650
-    expect(fee.baseFee).toBe(350);
-    expect(fee.weightFee).toBe(300);
-    expect(fee.urgencySurcharge).toBe(0);
-    expect(fee.totalFee).toBe(650);
+  afterEach(() => httpMock.verify());
+
+  it('gets the fee estimate from the backend pricing module, not a local formula', () => {
+    let total = 0;
+    let zoneCharge = 0;
+    service.getFeeQuote(2, 'URGENT', 'COLOMBO').subscribe((fee) => {
+      total = fee.totalFee;
+      zoneCharge = fee.zoneCharge ?? 0;
+    });
+
+    const req = httpMock.expectOne(PRICING_API);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ weightKg: 2, zoneCode: 'COLOMBO', isUrgent: true });
+    req.flush({
+      totalDeliveryFee: 750,
+      baseFee: 300,
+      weightCharge: 100,
+      weightKg: 2,
+      ratePerKg: 50,
+      zoneCharge: 150,
+      zoneCode: 'COLOMBO',
+      urgentSurcharge: 200,
+      urgentSurchargeApplied: true,
+      currency: 'LKR',
+      appliedRuleCode: 'STANDARD_DEFAULT',
+      breakdownDescription: '',
+    });
+    expect(total).toBe(750);
+    expect(zoneCharge).toBe(150);
   });
 
-  it('should calculate estimated fee correctly for urgent delivery with surcharge', () => {
-    const fee = service.calculateFee(3.5, 'URGENT');
-    // Base 350 + (3.5 * 150 = 525) + 300 = 1175
-    expect(fee.baseFee).toBe(350);
-    expect(fee.weightFee).toBe(525);
-    expect(fee.urgencySurcharge).toBe(300);
-    expect(fee.totalFee).toBe(1175);
+  it('loads only active delivery zones', () => {
+    service.getActiveZones().subscribe();
+    const req = httpMock.expectOne((r) => r.url === ZONES_API);
+    expect(req.request.params.get('status')).toBe('ACTIVE');
+    req.flush([]);
   });
 
   it('should post booking to API', () => {
@@ -51,6 +71,7 @@ describe('CustomerBookingService', () => {
         contactPhone: '0722222222',
         streetAddress: '456 Peradeniya Rd',
         city: 'Kandy',
+        zoneCode: 'KANDY',
       },
     };
 
@@ -78,10 +99,16 @@ describe('CustomerBookingService', () => {
         weightKg: 2.0,
         urgency: 'NORMAL',
         status: 'BOOKED',
-        estimatedFee: 650,
+        estimatedFee: 550,
         createdAt: '2026-11-14T10:00:00Z',
       },
     ]);
   });
-});
 
+  it('discards an unpaid checkout', () => {
+    service.discardDraft('draft-1').subscribe();
+    const req = httpMock.expectOne(`${BOOKING_API}/draft-1/discard`);
+    expect(req.request.method).toBe('POST');
+    req.flush(null);
+  });
+});

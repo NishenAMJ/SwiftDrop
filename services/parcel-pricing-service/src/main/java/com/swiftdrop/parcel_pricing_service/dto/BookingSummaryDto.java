@@ -1,5 +1,6 @@
 package com.swiftdrop.parcel_pricing_service.dto;
 
+import com.swiftdrop.parcel_pricing_service.entity.BookingStatus;
 import com.swiftdrop.parcel_pricing_service.entity.Parcel;
 import com.swiftdrop.parcel_pricing_service.entity.ParcelAddress;
 
@@ -7,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/** One row of booking history. */
 public record BookingSummaryDto(
     UUID id,
     String trackingNumber,
@@ -17,22 +19,13 @@ public record BookingSummaryDto(
     BigDecimal estimatedFee,
     OffsetDateTime createdAt,
     String recipientName,
-    String destinationCity
+    String destinationCity,
+    String paymentMethod,
+    String paymentStatus,
+    boolean cancellable
 ) {
     public static BookingSummaryDto from(Parcel parcel) {
-        String recipient = null;
-        String city = null;
-
-        if (parcel.getAddresses() != null) {
-            for (ParcelAddress addr : parcel.getAddresses()) {
-                if ("DELIVERY".equalsIgnoreCase(addr.getAddressType())) {
-                    recipient = addr.getContactName();
-                    city = addr.getCity();
-                    break;
-                }
-            }
-        }
-
+        ParcelAddress delivery = parcel.getDeliveryAddress();
         return new BookingSummaryDto(
             parcel.getId(),
             parcel.getTrackingNumber(),
@@ -42,9 +35,12 @@ public record BookingSummaryDto(
             parcel.getStatus(),
             parcel.getEstimatedFee(),
             parcel.getCreatedAt(),
-            recipient,
-            city
+            delivery != null ? delivery.getContactName() : null,
+            delivery != null ? delivery.getCity() : null,
+            parcel.getPaymentMethod(),
+            parcel.getPaymentStatus(),
+            // Cancellation is allowed only until a courier is scheduled (see BookingCancellationService).
+            BookingStatus.BOOKED.equals(parcel.getStatus())
         );
     }
 }
-

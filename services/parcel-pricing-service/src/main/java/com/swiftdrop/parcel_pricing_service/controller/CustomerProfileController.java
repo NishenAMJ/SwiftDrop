@@ -1,25 +1,20 @@
 package com.swiftdrop.parcel_pricing_service.controller;
 
+import com.swiftdrop.parcel_pricing_service.common.ApiException;
 import com.swiftdrop.parcel_pricing_service.dto.CustomerProfileDto;
 import com.swiftdrop.parcel_pricing_service.dto.UpdateProfileRequest;
 import com.swiftdrop.parcel_pricing_service.service.CustomerProfileService;
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
+/** The signed-in customer's own profile. CORS is configured once in SecurityConfig. */
 @RestController
 @RequestMapping("/api/v1/customer/profile")
-@CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200"})
 public class CustomerProfileController {
-
-
-
 
     private final CustomerProfileService profileService;
 
@@ -28,34 +23,24 @@ public class CustomerProfileController {
     }
 
     @GetMapping
-    public ResponseEntity<CustomerProfileDto> getProfile(@AuthenticationPrincipal Jwt jwt) {
-        UUID customerId = resolveCustomerId(jwt);
-        if (customerId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        }
-        return ResponseEntity.ok(profileService.getProfile(customerId));
+    public CustomerProfileDto getProfile(@AuthenticationPrincipal Jwt jwt) {
+        return profileService.getProfile(customerId(jwt), jwt);
     }
 
     @PutMapping
-    public ResponseEntity<CustomerProfileDto> updateProfile(
-            @Valid @RequestBody UpdateProfileRequest request,
-            @AuthenticationPrincipal Jwt jwt) {
-        UUID customerId = resolveCustomerId(jwt);
-        if (customerId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        }
-        return ResponseEntity.ok(profileService.updateProfile(customerId, request));
+    public CustomerProfileDto updateProfile(@Valid @RequestBody UpdateProfileRequest request,
+                                            @AuthenticationPrincipal Jwt jwt) {
+        return profileService.updateProfile(customerId(jwt), request, jwt);
     }
 
-    private UUID resolveCustomerId(Jwt jwt) {
+    private static UUID customerId(Jwt jwt) {
         if (jwt != null && jwt.getSubject() != null) {
             try {
                 return UUID.fromString(jwt.getSubject());
             } catch (IllegalArgumentException ignored) {
-                // not a UUID, fall through
+                // fall through
             }
         }
-        return null; // no fallback demo ID
+        throw ApiException.unauthorized("A valid customer login is required.");
     }
 }
-

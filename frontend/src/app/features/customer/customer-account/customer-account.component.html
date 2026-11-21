@@ -187,19 +187,19 @@
 
             <div class="sd-field">
               <label class="sd-label" for="edit-email">
-                Email Address <span class="required-star">*</span>
+                Email Address
               </label>
               <input
                 id="edit-email"
                 type="email"
                 class="sd-input"
                 formControlName="email"
-                placeholder="Email address"
-                [attr.aria-invalid]="isFieldInvalid('email')"
+                readonly
+                aria-describedby="edit-email-help"
               />
-              @if (isFieldInvalid('email')) {
-                <p class="sd-error">Please enter a valid email address (e.g. user&#64;gmail.com).</p>
-              }
+              <p id="edit-email-help" class="sd-help">
+                This is your login email, so it cannot be changed here. Name and phone are saved to your SwiftDrop account.
+              </p>
             </div>
 
             <div class="sd-field">

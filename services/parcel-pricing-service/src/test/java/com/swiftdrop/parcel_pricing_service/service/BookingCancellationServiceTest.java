@@ -1,43 +1,116 @@
 package com.swiftdrop.parcel_pricing_service.service;
+
 import com.swiftdrop.parcel_pricing_service.common.ApiException;
+import com.swiftdrop.parcel_pricing_service.dto.CancellationResultDto;
 import com.swiftdrop.parcel_pricing_service.entity.Parcel;
+import com.swiftdrop.parcel_pricing_service.event.ParcelEventPublisher;
 import com.swiftdrop.parcel_pricing_service.repository.ParcelRepository;
-import com.swiftdrop.parcel_pricing_service.client.PaymentSettlementClient;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.HttpStatus;
-import java.util.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+
 import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+
 class BookingCancellationServiceTest {
-    private final ParcelRepository repo=mock(ParcelRepository.class);
-    private final BookingCancellationService service=new BookingCancellationService(repo);
-    private Jwt jwt(UUID id) { return Jwt.withTokenValue("test").header("alg","RS256").subject(id.toString()).build(); }
-    private Parcel parcel() { var p=new Parcel(); p.setCustomerId(UUID.randomUUID()); when(repo.findById(p.getId())).thenReturn(Optional.of(p)); return p; }
-    @Test void unauthenticatedIsRejectedBeforeLookup() {
-        assertEquals(HttpStatus.UNAUTHORIZED,assertThrows(ApiException.class,()->service.eligibility(UUID.randomUUID(),null)).getStatus());
+
+    private final ParcelRepository repo = mock(ParcelRepository.class);
+    private final ParcelEventPublisher events = mock(ParcelEventPublisher.class);
+    private final BookingCancellationService service = new BookingCancellationService(repo, events, BigDecimal.ZERO);
+
+    private Jwt jwt(UUID id) {
+        return Jwt.withTokenValue("test").header("alg", "RS256").subject(id.toString()).build();
+    }
+
+    private Parcel parcel(String status, String method) {
+        Parcel p = new Parcel();
+        p.setCustomerId(UUID.randomUUID());
+        p.setStatus(status);
+        p.setPaymentMethod(method);
+        p.setPaymentStatus("ONLINE".equals(method) ? "PAID" : "PENDING");
+        p.setEstimatedFee(new BigDecimal("550.00"));
+        when(repo.findById(p.getId())).thenReturn(Optional.of(p));
+        when(repo.lockById(p.getId())).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    @Test
+    void unauthenticatedIsRejectedBeforeLookup() {
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                assertThrows(ApiException.class, () -> service.eligibility(UUID.randomUUID(), null)).getStatus());
         verifyNoInteractions(repo);
     }
-    @Test void anotherCustomerIsRejected() {
-        var p=parcel(); assertEquals(HttpStatus.FORBIDDEN,assertThrows(ApiException.class,()->service.eligibility(p.getId(),jwt(UUID.randomUUID()))).getStatus());
+
+    @Test
+    void anotherCustomerIsRejected() {
+        Parcel p = parcel("BOOKED", "COD");
+        assertEquals(HttpStatus.FORBIDDEN,
+                assertThrows(ApiException.class, () -> service.eligibility(p.getId(), jwt(UUID.randomUUID()))).getStatus());
     }
-    @Test void unknownPickupAndJourneyCannotAuthorizeOrCharge() {
-        var p=parcel(); var result=service.eligibility(p.getId(),jwt(p.getCustomerId()));
-        assertFalse(result.eligible()); assertNull(result.refundableAmount()); assertNull(result.scheduledPickupTime());
-        assertThrows(ApiException.class,()->service.initiate(p.getId(),jwt(p.getCustomerId())));
-        assertEquals("BOOKED",p.getStatus()); verify(repo,never()).save(any());
+
+    @Test
+    void bookedParcelWithoutCourierCanBeCancelled() {
+        Parcel p = parcel("BOOKED", "COD");
+        assertTrue(service.eligibility(p.getId(), jwt(p.getCustomerId())).eligible());
+
+        CancellationResultDto result = service.initiate(p.getId(), jwt(p.getCustomerId()));
+        assertTrue(result.completed());
+        assertEquals("CANCELLED", p.getStatus());
+        assertEquals("COMPLETED", p.getCancellationStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(p.getRefundAmount()));
+        verify(events).bookingCancelled(p);
     }
-    @Test void assignedDoesNotProveJourneyHasNotStarted() {
-        var p=parcel(); p.setStatus("ASSIGNED"); assertFalse(service.eligibility(p.getId(),jwt(p.getCustomerId())).eligible());
+
+    @Test
+    void paidOnlineBookingIsRefundedInFullByDefault() {
+        Parcel p = parcel("BOOKED", "ONLINE");
+        var eligibility = service.eligibility(p.getId(), jwt(p.getCustomerId()));
+        assertEquals(0, new BigDecimal("550.00").compareTo(eligibility.refundableAmount()));
+
+        service.initiate(p.getId(), jwt(p.getCustomerId()));
+        assertEquals("REFUND_PENDING", p.getCancellationStatus());
+        assertEquals(0, new BigDecimal("550.00").compareTo(p.getRefundAmount()));
     }
-    @Test void cancelledCannotBeReactivated() {
-        var p=new Parcel(); p.setStatus("CANCELLED"); assertThrows(IllegalStateException.class,()->p.setStatus("BOOKED"));
-        assertEquals("CANCELLED",p.getStatus());
+
+    @Test
+    void configuredFeeIsDeductedFromTheRefund() {
+        var withFee = new BookingCancellationService(repo, events, new BigDecimal("100.00"));
+        Parcel p = parcel("BOOKED", "ONLINE");
+        withFee.initiate(p.getId(), jwt(p.getCustomerId()));
+        assertEquals(0, new BigDecimal("450.00").compareTo(p.getRefundAmount()));
+        assertEquals(0, new BigDecimal("100.00").compareTo(p.getCancellationFee()));
     }
-    @Test void legacyPaymentAdapterCannotReportFalseSuccess() {
-        var client=new PaymentSettlementClient();
-        assertThrows(UnsupportedOperationException.class,()->client.initiatePayment(UUID.randomUUID(),BigDecimal.ONE));
-        assertThrows(UnsupportedOperationException.class,()->client.deductFee(UUID.randomUUID(),BigDecimal.ONE));
+
+    @Test
+    void scheduledParcelCannotBeCancelled() {
+        for (String status : new String[]{"ASSIGNED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED"}) {
+            Parcel p = parcel(status, "COD");
+            assertFalse(service.eligibility(p.getId(), jwt(p.getCustomerId())).eligible(), status);
+            ApiException ex = assertThrows(ApiException.class, () -> service.initiate(p.getId(), jwt(p.getCustomerId())));
+            assertEquals("CANCELLATION_NOT_ALLOWED", ex.getCode());
+            assertEquals(status, p.getStatus());
+        }
+        verify(events, never()).bookingCancelled(any());
+    }
+
+    @Test
+    void cancellingTwiceReturnsTheSameResult() {
+        Parcel p = parcel("BOOKED", "COD");
+        service.initiate(p.getId(), jwt(p.getCustomerId()));
+        CancellationResultDto again = service.initiate(p.getId(), jwt(p.getCustomerId()));
+        assertTrue(again.completed());
+        verify(events, times(1)).bookingCancelled(any());
+    }
+
+    @Test
+    void cancelledCannotBeReactivated() {
+        Parcel p = new Parcel();
+        p.setStatus("CANCELLED");
+        assertThrows(IllegalStateException.class, () -> p.setStatus("BOOKED"));
     }
 }

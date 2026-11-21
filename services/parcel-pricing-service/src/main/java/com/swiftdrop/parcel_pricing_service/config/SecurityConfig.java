@@ -40,12 +40,10 @@ public class SecurityConfig {
                 // Delivery Zones
                 .requestMatchers(HttpMethod.GET, "/api/zones", "/api/zones/**").permitAll()
                 .requestMatchers("/api/zones", "/api/zones/**").hasAnyRole("DISPATCHER", "ADMIN")
-                // Payment context requires authenticated JWT from caller (Payment Service / Customer)
-                .requestMatchers("/api/v1/bookings/*/payment-context").authenticated()
-                .requestMatchers("/api/v1/bookings/*/cancel", "/api/v1/bookings/*/cancellation-eligibility", "/api/v1/bookings/*/cancellation-status", "/api/v1/bookings/*/cancellation-receipt").authenticated()
-                // Customer Bookings
+                // Customer bookings, payment context (called by Payment with the customer's token),
+                // cancellation and profile: always a signed-in user; ownership is checked per booking.
                 .requestMatchers("/api/v1/bookings/**").authenticated()
-                .requestMatchers("/api/v1/customer/**").permitAll()
+                .requestMatchers("/api/v1/customer/**").authenticated()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

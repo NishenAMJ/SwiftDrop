@@ -38,6 +38,10 @@ export class ConfirmDialog {
   readonly title = input.required<string>();
   readonly confirmLabel = input.required<string>();
   readonly cancelLabel = input('Cancel');
+  /** Hide the footer Cancel button when the top-right close button is enough. */
+  readonly showCancel = input(true);
+  /** Hide the footer confirm button, for example while the dialog only shows progress. */
+  readonly showConfirm = input(true);
   readonly confirmDisabled = input(false);
   readonly wide = input(false);
   readonly tone = input<'primary' | 'danger'>('primary');

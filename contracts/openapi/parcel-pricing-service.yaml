@@ -1,0 +1,1264 @@
+openapi: 3.1.0
+
+info:
+  title: SwiftDrop Parcel & Pricing Service
+  version: 0.1.0
+  summary: Customer bookings, urgent tags, receipts, delivery pricing, zones and merchant orders.
+  description: |
+    Owns the `parcel_pricing` schema.
+
+    * **Customer bookings (Member 3)**: create a booking with pickup and delivery addresses,
+      recipient, weight, description and a NORMAL or URGENT tag; a unique tracking number such as
+      `SWD-2026-000125`; online payment through Payment & Settlement; receipts; booking history;
+      cancellation before a courier is scheduled.
+    * **Pricing and zones (Member 4)**: `Base fee + Weight charge + Zone charge (+ Urgent surcharge
+      when the rule enables it)`, with pricing rules and delivery zones managed by dispatchers.
+    * **Merchant orders (Member 4)**: orders from the merchant dashboard or an external API.
+
+    ## Online booking flow
+    1. `POST /api/v1/bookings` with `paymentMethod: ONLINE` saves an unpaid `CHECKOUT_DRAFT`.
+       Drafts are hidden from history, have no receipt and are not announced to other services.
+    2. The client calls Payment & Settlement `POST /api/v1/payments` with the booking id. Payment
+       reads the amount from `GET /api/v1/bookings/{id}/payment-context` using the customer's token.
+    3. After PayHere, the booking is confirmed by either `POST /api/v1/bookings/{id}/confirm-payment`
+       (the browser) or the `payment.succeeded` event, whichever arrives first. Both are idempotent.
+    4. Only then does the booking become `BOOKED`, get a receipt and publish `parcel.booked`.
+    Unpaid drafts become `EXPIRED` after 24 hours. A payment that still succeeds later is honoured.
+
+    COD bookings are `BOOKED` immediately and are paid in cash to the courier.
+
+    ## Booking status
+    `BOOKED` → `ASSIGNED` (courier scheduled) → `PICKED_UP` → `AT_WAREHOUSE` → `IN_TRANSIT` →
+    `OUT_FOR_DELIVERY` → `DELIVERED`, or `DELIVERY_FAILED` (may be retried). Updates come from
+    Delivery Operations events. `CANCELLED` is set by the customer while the status is `BOOKED`.
+
+    ## Events
+    Published to `swiftdrop.parcel-pricing`: `parcel.booked`, `parcel.cancelled`
+    (see `contracts/events/parcel-pricing`). Published to `swiftdrop.parcel`:
+    `parcel.status-changed` (see `contracts/events/parcel`). Consumed: `delivery.*` and warehouse
+    `parcel.*` from `swiftdrop.delivery-operations`, `payment.*` from `swiftdrop.payment`.
+
+    ## Errors
+    Booking, profile and pricing endpoints return
+    `{timestamp, status, error, code, message, fieldErrors?}` (see `ApiError`). Zone and merchant
+    order endpoints return `{timestamp, status, error, message, path, fieldErrors?}`
+    (see `ZoneApiError`). These predate the RFC 9457 convention in `contracts/README.md`;
+    moving to Problem Details is a planned breaking change. Status codes are always meaningful:
+    Payment & Settlement relies on 401/403/404/409 from the payment context.
+
+servers:
+  - url: http://localhost:8082
+    description: Service running locally
+  - url: http://localhost:8080
+    description: Through the API gateway
+
+tags:
+  - name: Bookings
+    description: Customer bookings, receipts and history (Member 3)
+  - name: Booking payment
+    description: Online payment integration with Payment & Settlement
+  - name: Cancellation
+  - name: Customer profile
+  - name: Pricing
+    description: Fee calculation and pricing rules (Member 4)
+  - name: Zones
+    description: Delivery zones (Member 4)
+  - name: Merchant orders
+    description: Merchant dashboard and external API orders (Member 4)
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ------------------------------------------------------------------ bookings
+  /api/v1/bookings:
+    post:
+      tags: [Bookings]
+      operationId: createBooking
+      summary: Create a customer booking
+      description: |
+        Requires the `CUSTOMER` role (every registered account has it). The fee is calculated by
+        the pricing module from the weight, the delivery zone and the urgency. The customer's name,
+        email and phone are copied from Identity for the receipt and payer details.
+
+        * `COD`: returns `201` with status `BOOKED`, payment status `PENDING` and a receipt number.
+        * `ONLINE`: returns `201` with status `CHECKOUT_DRAFT`, payment status `UNPAID` and no receipt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookingRequest' }
+            example:
+              description: Documents
+              weightKg: 2.0
+              urgency: URGENT
+              paymentMethod: ONLINE
+              pickupAddress:
+                contactName: Nimal Perera
+                contactPhone: '0771234567'
+                streetAddress: 12 Main Street
+                city: Colombo
+                postalCode: '00100'
+                zoneCode: COLOMBO
+              deliveryAddress:
+                contactName: Kamala Silva
+                contactPhone: '+94777654321'
+                streetAddress: 45 Lake Road
+                city: Kandy
+                zoneCode: KANDY
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '400':
+          description: |
+            Validation failed (`VALIDATION_FAILED` with `fieldErrors`), or `ZONE_REQUIRED`,
+            `INVALID_ZONE`, `INACTIVE_ZONE`, `INVALID_URGENCY`, `INVALID_PAYMENT_METHOD`,
+            `WEIGHT_BELOW_MINIMUM`, `WEIGHT_EXCEEDS_MAXIMUM`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503':
+          description: '`REFERENCE_UNAVAILABLE`: a tracking number could not be generated.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/bookings/my:
+    get:
+      tags: [Bookings]
+      operationId: getMyBookings
+      summary: Booking history of the signed-in customer, newest first
+      description: Unpaid, expired and discarded online checkouts are not included.
+      responses:
+        '200':
+          description: The customer's bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BookingSummary' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/v1/bookings/{id}:
+    get:
+      tags: [Bookings]
+      operationId: getBooking
+      summary: One of the signed-in customer's bookings
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Booking details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/InvalidParameter' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+
+  /api/v1/bookings/track/{trackingNumber}:
+    get:
+      tags: [Bookings]
+      operationId: getMyBookingByTrackingNumber
+      summary: Find one of your own bookings by tracking number
+      description: |
+        Returns full details only to the customer who made the booking. Any other tracking number,
+        including one that exists but belongs to someone else, answers `404`, so references cannot
+        be probed. Receivers and the public use Tracking & Reporting
+        `GET /api/v1/public/tracking/{trackingNumber}`, which never shows personal data.
+      parameters:
+        - $ref: '#/components/parameters/TrackingNumber'
+      responses:
+        '200':
+          description: Booking details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+
+  /api/v1/bookings/{id}/receipt:
+    get:
+      tags: [Bookings]
+      operationId: getBookingReceipt
+      summary: The booking receipt
+      description: Available for COD bookings and for online bookings whose payment was verified.
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Receipt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingReceipt' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+        '409':
+          description: '`PAYMENT_REQUIRED`: the online payment has not been verified yet.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  # ------------------------------------------------------------------ payment
+  /api/v1/bookings/{id}/payment-context:
+    get:
+      tags: [Booking payment]
+      operationId: getBookingPaymentContext
+      summary: Authoritative amount and payer for Payment & Settlement
+      description: |
+        Called by Payment & Settlement with the customer's forwarded token. The owner (customer,
+        or merchant for merchant bookings) or a `DISPATCHER` may read it. `payable` is true only for
+        an unpaid, unexpired online `CHECKOUT_DRAFT`. Payer details are real data from the
+        customer's Identity account and the pickup address; nothing is invented.
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Payment context
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentContext' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+        '409':
+          description: '`PAYER_DETAILS_MISSING`: the account has no email or contact details.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/bookings/{id}/confirm-payment:
+    post:
+      tags: [Booking payment]
+      operationId: confirmBookingPayment
+      summary: Confirm an online booking after payment
+      description: |
+        Verifies the payment with Payment & Settlement `GET /api/v1/payments/{paymentId}`. The
+        payment must be `SUCCESS`, for this booking, in LKR and for the exact booking amount.
+        Repeating the call after success returns the same confirmed booking without a second receipt.
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentId]
+              properties:
+                paymentId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Booking confirmed (status `BOOKED`, with `receiptNumber`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '400':
+          description: '`PAYMENT_REQUIRED`: `paymentId` is missing.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+        '409':
+          description: |
+            `PAYMENT_NOT_VERIFIED` (not paid yet, failed, or wrong amount) or
+            `INVALID_BOOKING_STATE` (for example the booking was cancelled).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '503':
+          description: '`PAYMENT_UNAVAILABLE`: Payment & Settlement could not be reached.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/bookings/{id}/discard:
+    post:
+      tags: [Booking payment]
+      operationId: discardCheckout
+      summary: Leave an unpaid online checkout
+      description: Marks a `CHECKOUT_DRAFT` or `EXPIRED` draft as `ABANDONED`. A payment that still succeeds later confirms it.
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '204': { description: Discarded }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+        '409':
+          description: '`NOT_A_DRAFT`: the booking is already confirmed.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  # ------------------------------------------------------------------ cancellation
+  /api/v1/bookings/{id}/cancellation-eligibility:
+    get:
+      tags: [Cancellation]
+      operationId: getCancellationEligibility
+      summary: Whether the booking can be cancelled, and the refund
+      description: |
+        A booking can be cancelled while its status is `BOOKED`, meaning no courier has been
+        scheduled yet. COD bookings cost nothing to cancel. Online bookings are refunded minus the
+        configured cancellation fee (LKR 0 by default, `SWIFTDROP_CANCELLATION_FEE`).
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Eligibility and amounts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancellationEligibility' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+
+  /api/v1/bookings/{id}/cancel:
+    post:
+      tags: [Cancellation]
+      operationId: cancelBooking
+      summary: Cancel a booking before courier scheduling
+      description: |
+        Idempotent: cancelling an already cancelled booking returns the same result. Publishes
+        `parcel.cancelled`; Payment & Settlement performs the refund for online bookings.
+        The frontend sends an `Idempotency-Key` header; the server does not require it.
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancellationResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+        '409':
+          description: '`CANCELLATION_NOT_ALLOWED`: a courier is already scheduled, or the booking was never confirmed.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/bookings/{id}/cancellation-status:
+    get:
+      tags: [Cancellation]
+      operationId: getCancellationStatus
+      summary: Current cancellation and refund state
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Cancellation state (`cancellationStatus` is `NONE` when not cancelled)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancellationResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+
+  /api/v1/bookings/{id}/cancellation-receipt:
+    get:
+      tags: [Cancellation]
+      operationId: getCancellationReceipt
+      summary: Cancellation receipt
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Cancellation receipt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancellationResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/NotOwner' }
+        '404': { $ref: '#/components/responses/BookingNotFound' }
+        '409':
+          description: '`NOT_CANCELLED`: the booking has not been cancelled.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  # ------------------------------------------------------------------ profile
+  /api/v1/customer/profile:
+    get:
+      tags: [Customer profile]
+      operationId: getCustomerProfile
+      summary: The signed-in customer's profile
+      description: |
+        Name, email and phone come from Identity (`GET /api/v1/users/me`); the default pickup
+        address and photo are stored here. If Identity is unreachable the last saved copy is returned.
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerProfile' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    put:
+      tags: [Customer profile]
+      operationId: updateCustomerProfile
+      summary: Update the profile
+      description: |
+        Name and phone are saved to Identity (`PATCH /api/v1/users/me`); local phone numbers such
+        as `0771234567` are converted to `+94771234567`. Email cannot be changed here and is ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerProfile' }
+        '400':
+          description: '`VALIDATION_FAILED`, or `INVALID_PROFILE` when Identity rejects the name or phone.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '503':
+          description: '`IDENTITY_UNAVAILABLE`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  # ------------------------------------------------------------------ pricing
+  /api/pricing/calculate:
+    post:
+      tags: [Pricing]
+      operationId: calculateFee
+      summary: Calculate a delivery fee
+      description: |
+        Public. The same calculation is used when a booking is saved, so a quote matches the charge.
+        Without `zoneCode` the rule's default zone charge is used. Without `ruleCode` the default
+        active rule is used.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PricingRequest' }
+            example: { weightKg: 2.0, zoneCode: KANDY, isUrgent: false }
+      responses:
+        '200':
+          description: Fee breakdown
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PricingResponse' }
+        '400':
+          description: '`VALIDATION_FAILED`, `INVALID_WEIGHT`, `WEIGHT_BELOW_MINIMUM`, `WEIGHT_EXCEEDS_MAXIMUM`, `INVALID_ZONE`, `INACTIVE_ZONE`, `INACTIVE_PRICING_RULE`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '404':
+          description: Unknown `ruleCode`, or no active pricing rule configured.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/pricing/rules:
+    get:
+      tags: [Pricing]
+      operationId: listPricingRules
+      summary: List pricing rules (newest first)
+      description: Requires the `DISPATCHER` role.
+      responses:
+        '200':
+          description: Pricing rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PricingRule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Pricing]
+      operationId: createPricingRule
+      summary: Create a pricing rule
+      description: Requires the `DISPATCHER` role. Setting `isDefault` clears it on every other rule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PricingRuleRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PricingRule' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`DUPLICATE_RULE_CODE`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/pricing/rules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      tags: [Pricing]
+      operationId: getPricingRule
+      summary: Get a pricing rule
+      description: Requires the `DISPATCHER` role.
+      responses:
+        '200':
+          description: Pricing rule
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PricingRule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+    put:
+      tags: [Pricing]
+      operationId: updatePricingRule
+      summary: Update a pricing rule
+      description: Requires the `DISPATCHER` role. Existing bookings keep the price they were charged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PricingRuleRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PricingRule' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '409':
+          description: '`DUPLICATE_RULE_CODE`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  # ------------------------------------------------------------------ zones
+  /api/zones:
+    get:
+      tags: [Zones]
+      operationId: listZones
+      summary: List delivery zones (by name)
+      security: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Only zones with this status. The booking form uses `ACTIVE`.
+          schema: { $ref: '#/components/schemas/ZoneStatus' }
+      responses:
+        '200':
+          description: Zones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Zone' }
+        '400': { $ref: '#/components/responses/ZoneBadRequest' }
+    post:
+      tags: [Zones]
+      operationId: createZone
+      summary: Create a delivery zone
+      description: Requires the `DISPATCHER` role. New zones are `ACTIVE`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ZoneRequest' }
+      responses:
+        '201':
+          description: Created (with `Location` header)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Zone' }
+        '400': { $ref: '#/components/responses/ZoneBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/ZoneConflict' }
+
+  /api/zones/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+    get:
+      tags: [Zones]
+      operationId: getZone
+      summary: Get a delivery zone
+      security: []
+      responses:
+        '200':
+          description: Zone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Zone' }
+        '404': { $ref: '#/components/responses/ZoneNotFound' }
+    put:
+      tags: [Zones]
+      operationId: updateZone
+      summary: Update a delivery zone
+      description: Requires the `DISPATCHER` role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ZoneRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Zone' }
+        '400': { $ref: '#/components/responses/ZoneBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ZoneNotFound' }
+        '409': { $ref: '#/components/responses/ZoneConflict' }
+
+  /api/zones/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/ZoneId'
+    patch:
+      tags: [Zones]
+      operationId: updateZoneStatus
+      summary: Activate or deactivate a zone
+      description: Requires the `DISPATCHER` role. Inactive zones cannot be booked or priced.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/ZoneStatus' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Zone' }
+        '400': { $ref: '#/components/responses/ZoneBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ZoneNotFound' }
+
+  # ------------------------------------------------------------------ merchant orders
+  /api/merchant/orders:
+    post:
+      tags: [Merchant orders]
+      operationId: createMerchantOrder
+      summary: Create an order from the merchant dashboard
+      description: |
+        **Status: interim (Member 4).** The merchant is resolved by `MerchantIdentityResolver`. Only
+        the `dev` profile has an implementation (the `X-Merchant-Id` header); in every other profile
+        these endpoints answer `401`. Merchant orders are stored separately from customer bookings and
+        do not yet receive an SWD tracking number, payment or tracking.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MerchantOrderRequest' }
+      responses:
+        '201':
+          description: Created (with `Location` header)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantOrder' }
+        '400': { $ref: '#/components/responses/ZoneBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409':
+          description: Duplicate `merchantReference`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneApiError' }
+    get:
+      tags: [Merchant orders]
+      operationId: listMerchantOrders
+      summary: The merchant's orders
+      description: The total count is returned in the `X-Total-Count` header.
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20 } }
+      responses:
+        '200':
+          description: Orders
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MerchantOrder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/merchant/orders/{id}:
+    get:
+      tags: [Merchant orders]
+      operationId: getMerchantOrder
+      summary: One of the merchant's orders
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantOrder' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403':
+          description: The order belongs to another merchant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneApiError' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneApiError' }
+
+  /api/integrations/merchant/orders:
+    post:
+      tags: [Merchant orders]
+      operationId: createMerchantOrderViaApi
+      summary: Create an order from a merchant's own system
+      description: |
+        **Status: interim (Member 4).** Authenticated with the merchant's API key in `X-API-Key`.
+        Only the `dev` profile can verify keys; otherwise the answer is `503`.
+        **Known issue:** the security configuration currently also requires a bearer token on this
+        path, so an external system with only an API key is rejected with `401`.
+      security:
+        - merchantApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MerchantOrderRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantOrder' }
+        '400': { $ref: '#/components/responses/ZoneBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409':
+          description: Duplicate `merchantReference`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneApiError' }
+        '503':
+          description: API key verification is unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneApiError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token from identity-merchant-service. Audience `swiftdrop-api`; the `sub` claim is the
+        user id and `roles` holds `CUSTOMER`, `MERCHANT`, `COURIER` or `DISPATCHER`.
+    merchantApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    BookingId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TrackingNumber:
+      name: trackingNumber
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/TrackingNumber' }
+    ZoneId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+
+  responses:
+    Unauthenticated:
+      description: Missing or invalid access token (`UNAUTHORIZED`)
+    Forbidden:
+      description: The caller's role may not do this (`FORBIDDEN`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotOwner:
+      description: The booking belongs to another customer (`FORBIDDEN`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    BookingNotFound:
+      description: No such booking (`NOT_FOUND`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    InvalidParameter:
+      description: A path value is not valid, for example not a UUID (`INVALID_PARAMETER`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ValidationFailed:
+      description: '`VALIDATION_FAILED` with `fieldErrors`, or `MALFORMED_REQUEST` for unreadable JSON'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ZoneBadRequest:
+      description: Validation failed or the request is not readable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ZoneApiError' }
+    ZoneNotFound:
+      description: No such zone
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ZoneApiError' }
+    ZoneConflict:
+      description: Another zone already has this name or code
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ZoneApiError' }
+
+  schemas:
+    # ------------------------------------------------------------ shared
+    TrackingNumber:
+      type: string
+      pattern: '^SWD-[0-9]{4}-[0-9]{6,}$'
+      example: SWD-2026-000125
+    Money:
+      type: number
+      multipleOf: 0.01
+      description: Amount in LKR with two decimal places
+      example: 700.00
+    Urgency:
+      type: string
+      enum: [NORMAL, URGENT]
+    PaymentMethod:
+      type: string
+      enum: [ONLINE, COD]
+    BookingStatus:
+      type: string
+      enum: [CHECKOUT_DRAFT, EXPIRED, ABANDONED, BOOKED, ASSIGNED, PICKED_UP, AT_WAREHOUSE,
+             IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED, CANCELLED]
+    PaymentStatus:
+      type: string
+      description: |
+        `UNPAID`, `FAILED` (online draft), `PAID` (online), `PENDING` (COD, cash due),
+        `NOT_REQUIRED` (cancelled COD), `REFUNDED`, `PARTIALLY_REFUNDED`.
+      enum: [UNPAID, FAILED, PAID, PENDING, NOT_REQUIRED, REFUNDED, PARTIALLY_REFUNDED]
+    ApiError:
+      type: object
+      required: [timestamp, status, error, code, message]
+      properties:
+        timestamp: { type: string, format: date-time }
+        status: { type: integer, example: 409 }
+        error: { type: string, example: Conflict }
+        code: { type: string, example: PAYMENT_NOT_VERIFIED }
+        message:
+          type: string
+          description: Customer-safe text. Never contains SQL, stack traces or internal details.
+        fieldErrors:
+          type: object
+          additionalProperties: { type: string }
+          example: { 'deliveryAddress.contactPhone': Enter a valid phone number, for example 0771234567 or +94771234567 }
+    ZoneApiError:
+      type: object
+      required: [timestamp, status, error, message]
+      properties:
+        timestamp: { type: string, format: date-time }
+        status: { type: integer }
+        error: { type: string }
+        message: { type: string }
+        path: { type: string }
+        fieldErrors:
+          type: object
+          additionalProperties: { type: string }
+
+    # ------------------------------------------------------------ bookings
+    Address:
+      type: object
+      required: [contactName, contactPhone, streetAddress, city]
+      properties:
+        contactName: { type: string, maxLength: 100 }
+        contactPhone:
+          type: string
+          maxLength: 25
+          pattern: '^\+?[0-9][0-9 ()-]{8,23}$'
+          example: '0771234567'
+        streetAddress: { type: string, maxLength: 255 }
+        city: { type: string, maxLength: 100 }
+        postalCode: { type: string, maxLength: 20, pattern: '^[A-Za-z0-9 -]*$' }
+        zoneCode:
+          type: string
+          maxLength: 20
+          description: A zone code from `GET /api/zones`. Required for the delivery address, optional for pickup.
+    CreateBookingRequest:
+      type: object
+      required: [weightKg, pickupAddress, deliveryAddress]
+      properties:
+        description: { type: string, maxLength: 255 }
+        weightKg:
+          type: number
+          minimum: 0.01
+          maximum: 1000
+          multipleOf: 0.01
+          description: The active pricing rule's own limits (default 0.01 to 50 kg) also apply.
+        urgency:
+          allOf: [{ $ref: '#/components/schemas/Urgency' }]
+          default: NORMAL
+        paymentMethod:
+          allOf: [{ $ref: '#/components/schemas/PaymentMethod' }]
+          default: ONLINE
+        pickupAddress: { $ref: '#/components/schemas/Address' }
+        deliveryAddress: { $ref: '#/components/schemas/Address' }
+    FeeBreakdown:
+      type: object
+      description: How the fee was calculated when the booking was made. Fields are null for older bookings.
+      properties:
+        baseFee: { $ref: '#/components/schemas/Money' }
+        weightCharge: { $ref: '#/components/schemas/Money' }
+        zoneCharge: { $ref: '#/components/schemas/Money' }
+        zoneCode: { type: string }
+        urgentSurcharge: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        pricingRuleCode: { type: string }
+    Booking:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trackingNumber: { $ref: '#/components/schemas/TrackingNumber' }
+        customerId: { type: string, format: uuid }
+        description: { type: string }
+        weightKg: { type: number }
+        urgency: { $ref: '#/components/schemas/Urgency' }
+        status: { $ref: '#/components/schemas/BookingStatus' }
+        estimatedFee: { $ref: '#/components/schemas/Money' }
+        createdAt: { type: string, format: date-time }
+        receiptNumber:
+          type: string
+          example: RCP-2026-000125
+          description: Present once the booking is confirmed.
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        paymentStatus: { $ref: '#/components/schemas/PaymentStatus' }
+        pricingExpiresAt:
+          type: string
+          format: date-time
+          description: Until when an unpaid online checkout can be paid.
+        statusUpdatedAt: { type: string, format: date-time }
+        feeBreakdown: { $ref: '#/components/schemas/FeeBreakdown' }
+        pickupAddress: { $ref: '#/components/schemas/Address' }
+        deliveryAddress: { $ref: '#/components/schemas/Address' }
+    BookingSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trackingNumber: { $ref: '#/components/schemas/TrackingNumber' }
+        description: { type: string }
+        weightKg: { type: number }
+        urgency: { $ref: '#/components/schemas/Urgency' }
+        status: { $ref: '#/components/schemas/BookingStatus' }
+        estimatedFee: { $ref: '#/components/schemas/Money' }
+        createdAt: { type: string, format: date-time }
+        recipientName: { type: string }
+        destinationCity: { type: string }
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        paymentStatus: { $ref: '#/components/schemas/PaymentStatus' }
+        cancellable:
+          type: boolean
+          description: True while no courier is scheduled (status `BOOKED`).
+    BookingReceipt:
+      type: object
+      properties:
+        receiptNumber: { type: string, example: RCP-2026-000125 }
+        parcelId: { type: string, format: uuid }
+        trackingNumber: { $ref: '#/components/schemas/TrackingNumber' }
+        bookingDate: { type: string, format: date-time }
+        issuedAt: { type: string, format: date-time }
+        customer:
+          type: object
+          description: The account that made the booking, as known to Identity at booking time.
+          properties:
+            name: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string }
+        totalAmount: { $ref: '#/components/schemas/Money' }
+        currency: { type: string, const: LKR }
+        feeBreakdown: { $ref: '#/components/schemas/FeeBreakdown' }
+        description: { type: string }
+        weightKg: { type: number }
+        urgency: { $ref: '#/components/schemas/Urgency' }
+        status: { $ref: '#/components/schemas/BookingStatus' }
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        paymentStatus: { $ref: '#/components/schemas/PaymentStatus' }
+        paidAt: { type: string, format: date-time }
+        pickupAddress: { $ref: '#/components/schemas/Address' }
+        deliveryAddress: { $ref: '#/components/schemas/Address' }
+    PaymentContext:
+      type: object
+      required: [bookingId, channel, customerId, payable, pricingSnapshotId, amount, currency, payer]
+      properties:
+        bookingId: { type: string, description: The booking UUID as a string }
+        channel: { type: string, enum: [DIRECT_WEBSITE, MERCHANT_API] }
+        customerId: { type: string, format: uuid }
+        merchantId: { type: [string, 'null'], format: uuid }
+        payable: { type: boolean }
+        pricingSnapshotId: { type: string, maxLength: 64 }
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { type: string, const: LKR }
+        payer:
+          type: object
+          required: [firstName, lastName, email, phone, address, city, country]
+          properties:
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string }
+            address: { type: string }
+            city: { type: string }
+            country: { type: string, example: Sri Lanka }
+    CancellationEligibility:
+      type: object
+      properties:
+        eligible: { type: boolean }
+        reason: { type: string, description: Customer-facing explanation }
+        cancellationFee: { $ref: '#/components/schemas/Money' }
+        bookingId: { type: string, format: uuid }
+        currentBookingStatus: { $ref: '#/components/schemas/BookingStatus' }
+        originalPaidAmount:
+          description: Only for paid online bookings.
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+        refundableAmount:
+          description: Only for paid online bookings.
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        paymentStatus: { $ref: '#/components/schemas/PaymentStatus' }
+        booking: { $ref: '#/components/schemas/Booking' }
+    CancellationResult:
+      type: object
+      properties:
+        bookingId: { type: string, format: uuid }
+        trackingNumber: { $ref: '#/components/schemas/TrackingNumber' }
+        bookingStatus: { $ref: '#/components/schemas/BookingStatus' }
+        cancellationStatus:
+          type: string
+          enum: [NONE, COMPLETED, REFUND_PENDING, REFUNDED]
+          description: '`COMPLETED` = nothing to refund; `REFUND_PENDING` = refund requested from Payment.'
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        paymentStatus: { $ref: '#/components/schemas/PaymentStatus' }
+        originalAmount: { $ref: '#/components/schemas/Money' }
+        cancellationFee: { $ref: '#/components/schemas/Money' }
+        refundAmount: { $ref: '#/components/schemas/Money' }
+        cancelledAt: { type: string, format: date-time }
+        completed: { type: boolean, description: True when the booking is cancelled }
+
+    # ------------------------------------------------------------ profile
+    CustomerProfile:
+      type: object
+      properties:
+        customerId: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        phoneNumber: { type: string }
+        streetAddress: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
+        avatarBase64: { type: string, description: 'data:image/...;base64,... URL' }
+        updatedAt: { type: string, format: date-time }
+    UpdateProfileRequest:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, maxLength: 100 }
+        email: { type: string, description: Ignored; email is changed in Identity only. }
+        phoneNumber: { type: string, maxLength: 25 }
+        streetAddress: { type: string, maxLength: 255 }
+        city: { type: string, maxLength: 100 }
+        postalCode: { type: string, maxLength: 20 }
+        avatarBase64:
+          type: string
+          maxLength: 700000
+          pattern: '^$|^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$'
+          description: About 500 KB at most. An empty string removes the photo.
+
+    # ------------------------------------------------------------ pricing
+    PricingRequest:
+      type: object
+      required: [weightKg]
+      properties:
+        weightKg: { type: number, minimum: 0.01 }
+        zoneCode: { type: [string, 'null'] }
+        ruleCode: { type: [string, 'null'] }
+        isUrgent: { type: [boolean, 'null'], default: false }
+        customZoneCharge:
+          type: [number, 'null']
+          minimum: 0
+          description: Overrides the zone charge.
+    PricingResponse:
+      type: object
+      properties:
+        totalDeliveryFee: { $ref: '#/components/schemas/Money' }
+        baseFee: { $ref: '#/components/schemas/Money' }
+        weightCharge: { $ref: '#/components/schemas/Money' }
+        weightKg: { type: number }
+        ratePerKg: { $ref: '#/components/schemas/Money' }
+        zoneCharge: { $ref: '#/components/schemas/Money' }
+        zoneCode: { type: string, example: KANDY }
+        urgentSurcharge: { $ref: '#/components/schemas/Money' }
+        urgentSurchargeApplied: { type: boolean }
+        currency: { type: string, const: LKR }
+        appliedRuleCode: { type: string, example: STANDARD_DEFAULT }
+        breakdownDescription: { type: string }
+    PricingRuleRequest:
+      type: object
+      required: [ruleName, ruleCode, baseFee, ratePerKg, defaultZoneCharge]
+      properties:
+        ruleName: { type: string, maxLength: 100 }
+        ruleCode: { type: string, maxLength: 50 }
+        description: { type: string, maxLength: 255 }
+        baseFee: { type: number, minimum: 0 }
+        ratePerKg: { type: number, minimum: 0 }
+        defaultZoneCharge: { type: number, minimum: 0 }
+        urgentSurcharge: { type: number, minimum: 0, default: 200.00 }
+        urgentSurchargeEnabled: { type: boolean, default: false }
+        minWeightKg: { type: number, minimum: 0.01, default: 0.01 }
+        maxWeightKg: { type: [number, 'null'], minimum: 0.01 }
+        active: { type: boolean, default: true }
+        isDefault: { type: boolean, default: false }
+    PricingRule:
+      allOf:
+        - $ref: '#/components/schemas/PricingRuleRequest'
+        - type: object
+          properties:
+            id: { type: integer, format: int64 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    # ------------------------------------------------------------ zones
+    ZoneStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    ZoneType:
+      type: string
+      enum: [GENERAL, DISTRICT, POSTAL_CODE]
+    ZoneRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        code:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{1,19}$'
+          description: Stored in upper case.
+        description: { type: string, maxLength: 500 }
+        zoneType:
+          allOf: [{ $ref: '#/components/schemas/ZoneType' }]
+          default: GENERAL
+    Zone:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, example: Kandy District }
+        code: { type: string, example: KANDY }
+        description: { type: string }
+        zoneType: { $ref: '#/components/schemas/ZoneType' }
+        status: { $ref: '#/components/schemas/ZoneStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # ------------------------------------------------------------ merchant orders
+    OrderContact:
+      type: object
+      required: [name, phone]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        phone: { type: string, pattern: '^\+?[0-9][0-9 ()-]{6,19}$' }
+        email: { type: string, format: email, maxLength: 254 }
+    OrderAddress:
+      type: object
+      required: [addressLine1, city]
+      properties:
+        addressLine1: { type: string, maxLength: 150 }
+        addressLine2: { type: string, maxLength: 150 }
+        city: { type: string, maxLength: 100 }
+        district: { type: string, maxLength: 100 }
+        postalCode: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$' }
+    MerchantOrderRequest:
+      type: object
+      required: [sender, receiver, pickupAddress, deliveryAddress, parcelDescription, weightKg, deliveryType, paymentMethod]
+      properties:
+        merchantReference: { type: string, maxLength: 100, pattern: '^[A-Za-z0-9._/-]*$' }
+        sender: { $ref: '#/components/schemas/OrderContact' }
+        receiver: { $ref: '#/components/schemas/OrderContact' }
+        pickupAddress: { $ref: '#/components/schemas/OrderAddress' }
+        deliveryAddress: { $ref: '#/components/schemas/OrderAddress' }
+        parcelDescription: { type: string, maxLength: 500 }
+        weightKg: { type: number, minimum: 0.01, maximum: 50, multipleOf: 0.01 }
+        deliveryType: { $ref: '#/components/schemas/Urgency' }
+        urgentNote: { type: string, maxLength: 255 }
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        codAmount:
+          type: number
+          minimum: 0.01
+          description: Amount to collect from the receiver for COD orders.
+    MerchantOrder:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        orderNumber: { type: string }
+        merchantId:
+          type: integer
+          format: int64
+          description: '**Known issue:** Identity merchant ids are UUIDs.'
+        merchantReference: { type: string }
+        sender: { $ref: '#/components/schemas/OrderContact' }
+        receiver: { $ref: '#/components/schemas/OrderContact' }
+        pickupAddress: { $ref: '#/components/schemas/OrderAddress' }
+        deliveryAddress: { $ref: '#/components/schemas/OrderAddress' }
+        parcelDescription: { type: string }
+        weightKg: { type: number }
+        deliveryType: { $ref: '#/components/schemas/Urgency' }
+        urgentNote: { type: string }
+        paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }
+        codAmount: { type: number }
+        deliveryFee: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [CREATED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED] }
+        source: { type: string, enum: [DASHBOARD, EXTERNAL_API] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

@@ -69,6 +69,42 @@ public class Parcel {
     @Column(name = "payment_status")
     private String paymentStatus;
 
+    @Column(name = "base_fee", precision = 10, scale = 2)
+    private BigDecimal baseFee;
+
+    @Column(name = "weight_charge", precision = 10, scale = 2)
+    private BigDecimal weightCharge;
+
+    @Column(name = "zone_charge", precision = 10, scale = 2)
+    private BigDecimal zoneCharge;
+
+    @Column(name = "urgent_surcharge", precision = 10, scale = 2)
+    private BigDecimal urgentSurcharge;
+
+    @Column(name = "pricing_rule_code", length = 50)
+    private String pricingRuleCode;
+
+    @Column(name = "pricing_zone_code", length = 50)
+    private String pricingZoneCode;
+
+    @Column(name = "customer_name", length = 100)
+    private String customerName;
+
+    @Column(name = "customer_email", length = 150)
+    private String customerEmail;
+
+    @Column(name = "customer_phone", length = 25)
+    private String customerPhone;
+
+    @Column(name = "payment_id")
+    private UUID paymentId;
+
+    @Column(name = "paid_at")
+    private OffsetDateTime paidAt;
+
+    @Column(name = "status_updated_at")
+    private OffsetDateTime statusUpdatedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -236,5 +272,46 @@ public class Parcel {
     public void setCancellationTransactionRef(String cancellationTransactionRef) { this.cancellationTransactionRef = cancellationTransactionRef; }
     public String getPaymentStatus() { return paymentStatus; }
     public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
+
+    // Pricing breakdown captured from PricingService at booking time
+    public BigDecimal getBaseFee() { return baseFee; }
+    public void setBaseFee(BigDecimal baseFee) { this.baseFee = baseFee; }
+    public BigDecimal getWeightCharge() { return weightCharge; }
+    public void setWeightCharge(BigDecimal weightCharge) { this.weightCharge = weightCharge; }
+    public BigDecimal getZoneCharge() { return zoneCharge; }
+    public void setZoneCharge(BigDecimal zoneCharge) { this.zoneCharge = zoneCharge; }
+    public BigDecimal getUrgentSurcharge() { return urgentSurcharge; }
+    public void setUrgentSurcharge(BigDecimal urgentSurcharge) { this.urgentSurcharge = urgentSurcharge; }
+    public String getPricingRuleCode() { return pricingRuleCode; }
+    public void setPricingRuleCode(String pricingRuleCode) { this.pricingRuleCode = pricingRuleCode; }
+    public String getPricingZoneCode() { return pricingZoneCode; }
+    public void setPricingZoneCode(String pricingZoneCode) { this.pricingZoneCode = pricingZoneCode; }
+
+    // Customer details from Identity at booking time
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
+    public String getCustomerEmail() { return customerEmail; }
+    public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
+    public String getCustomerPhone() { return customerPhone; }
+    public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+
+    // Payment link and lifecycle
+    public UUID getPaymentId() { return paymentId; }
+    public void setPaymentId(UUID paymentId) { this.paymentId = paymentId; }
+    public OffsetDateTime getPaidAt() { return paidAt; }
+    public void setPaidAt(OffsetDateTime paidAt) { this.paidAt = paidAt; }
+    public OffsetDateTime getStatusUpdatedAt() { return statusUpdatedAt; }
+    public void setStatusUpdatedAt(OffsetDateTime statusUpdatedAt) { this.statusUpdatedAt = statusUpdatedAt; }
+
+    public ParcelAddress getPickupAddress() { return findAddress("PICKUP"); }
+    public ParcelAddress getDeliveryAddress() { return findAddress("DELIVERY"); }
+
+    private ParcelAddress findAddress(String type) {
+        if (addresses == null) return null;
+        for (ParcelAddress address : addresses) {
+            if (type.equalsIgnoreCase(address.getAddressType())) return address;
+        }
+        return null;
+    }
 }
 

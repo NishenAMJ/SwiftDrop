@@ -75,8 +75,16 @@ services:
       PARCEL_DB_USER: parcel_pricing_user
       PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
       IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+      SWIFTDROP_IDENTITY_BASE_URL: http://identity-merchant-service:8081
+      SWIFTDROP_PAYMENT_BASE_URL: ${SWIFTDROP_PAYMENT_BASE_URL:-http://payment-settlement-service:8085}
+      SWIFTDROP_CANCELLATION_FEE: ${SWIFTDROP_CANCELLATION_FEE:-0.00}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       identity-merchant-service:
         condition: service_healthy
