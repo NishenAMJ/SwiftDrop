@@ -1,15 +1,26 @@
 package com.swiftdrop.parcel_pricing_service.service;
 
+import com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment;
+import com.swiftdrop.parcel_pricing_service.client.IdentityClient;
+import com.swiftdrop.parcel_pricing_service.client.IdentityClient.IdentityUser;
+import com.swiftdrop.parcel_pricing_service.common.ApiException;
 import com.swiftdrop.parcel_pricing_service.dto.*;
 import com.swiftdrop.parcel_pricing_service.entity.*;
+import com.swiftdrop.parcel_pricing_service.event.ParcelEventPublisher;
 import com.swiftdrop.parcel_pricing_service.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,167 +30,307 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class BookingServiceTest {
 
-    @Mock
-    private ParcelRepository parcelRepository;
-
-    @Mock
-    private BookingReceiptRepository receiptRepository;
-
-    @Mock
-    private ReferenceGenerator referenceGenerator;
+    @Mock private ParcelRepository parcelRepository;
+    @Mock private BookingReceiptRepository receiptRepository;
+    @Mock private ReferenceGenerator referenceGenerator;
+    @Mock private PricingService pricingService;
+    @Mock private ZoneRepository zoneRepository;
+    @Mock private IdentityClient identityClient;
+    @Mock private ParcelEventPublisher events;
 
     private BookingService bookingService;
+    private final UUID customerId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        bookingService = new BookingService(parcelRepository, receiptRepository, referenceGenerator);
-    }
-
-    @Test
-    void createBooking_normalUrgency_calculatesCorrectFee() {
-        UUID customerId = UUID.randomUUID();
+        bookingService = new BookingService(parcelRepository, receiptRepository, referenceGenerator,
+                pricingService, zoneRepository, identityClient, events);
         when(referenceGenerator.generateTrackingNumber()).thenReturn("SWD-2026-000001");
         when(referenceGenerator.generateReceiptNumber("SWD-2026-000001")).thenReturn("RCP-2026-000001");
+        when(parcelRepository.save(any(Parcel.class))).thenAnswer(i -> i.getArgument(0));
+        when(receiptRepository.save(any(BookingReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(receiptRepository.findByParcelId(any())).thenReturn(Optional.empty());
+        when(identityClient.currentUser(any())).thenReturn(Optional.of(
+                new IdentityUser(customerId, "nimal@example.com", "Nimal Perera", "+94771234567")));
+        when(pricingService.calculateFee(any())).thenReturn(quote(false));
+    }
 
-        when(parcelRepository.save(any(Parcel.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(receiptRepository.save(any(BookingReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    private Jwt jwt(UUID subject) {
+        return Jwt.withTokenValue("token").header("alg", "RS256").subject(subject.toString())
+                .claim("roles", List.of("CUSTOMER")).build();
+    }
 
-        AddressDto pickup = new AddressDto("John Sender", "0771234567", "12 Main St", "Colombo", "00100", "Z-COL-1");
-        AddressDto delivery = new AddressDto("Jane Recipient", "0777654321", "45 Lake Rd", "Kandy", "20000", "Z-KAN-1");
-        CreateBookingRequest request = new CreateBookingRequest(
-            "Electronics Package",
-            new BigDecimal("2.00"), // 2 kg
-            "NORMAL",
-            "COD",
-            pickup,
-            delivery
-        );
+    /** What PricingService returns for 2 kg to COLOMBO with the seeded STANDARD_DEFAULT rule. */
+    private static PricingResponse quote(boolean urgent) {
+        BigDecimal surcharge = urgent ? new BigDecimal("200.00") : new BigDecimal("0.00");
+        return new PricingResponse(new BigDecimal("550.00").add(surcharge), new BigDecimal("300.00"), new BigDecimal("100.00"),
+                new BigDecimal("2.00"), new BigDecimal("50.00"), new BigDecimal("150.00"), "COLOMBO",
+                surcharge, urgent, "LKR", "STANDARD_DEFAULT", "breakdown");
+    }
 
-        BookingResponseDto response = bookingService.createBooking(request, customerId);
+    private static CreateBookingRequest request(String urgency, String method, String deliveryZone) {
+        AddressDto pickup = new AddressDto("Nimal Sender", "0771234567", "12 Main St", "Colombo", "00100", null);
+        AddressDto delivery = new AddressDto("Kamala Receiver", "0777654321", "45 Lake Rd", "Colombo", "00500", deliveryZone);
+        return new CreateBookingRequest("Documents", new BigDecimal("2.00"), urgency, method, pickup, delivery);
+    }
 
-        assertNotNull(response);
-        assertEquals("SWD-2026-000001", response.trackingNumber());
-        assertEquals("NORMAL", response.urgency());
-        assertEquals("BOOKED", response.status());
-        // Fee = 350 base + (2.00 * 150) = 650
-        assertEquals(new BigDecimal("650.00"), response.estimatedFee());
-        assertEquals("RCP-2026-000001", response.receiptNumber());
+    // ------------------------------------------------------------ pricing
 
-        verify(parcelRepository, times(1)).save(any(Parcel.class));
-        verify(receiptRepository, times(1)).save(any(BookingReceipt.class));
+    @Test
+    void feeComesFromThePricingModuleWithTheDeliveryZone() {
+        BookingResponseDto response = bookingService.createBooking(request("NORMAL", "COD", "colombo"), jwt(customerId));
+
+        ArgumentCaptor<PricingRequest> asked = ArgumentCaptor.forClass(PricingRequest.class);
+        verify(pricingService).calculateFee(asked.capture());
+        assertEquals("COLOMBO", asked.getValue().zoneCode());
+        assertEquals(Boolean.FALSE, asked.getValue().isUrgent());
+        assertEquals(new BigDecimal("550.00"), response.estimatedFee());
+        assertEquals(new BigDecimal("150.00"), response.feeBreakdown().zoneCharge());
+        assertEquals("STANDARD_DEFAULT", response.feeBreakdown().pricingRuleCode());
     }
 
     @Test
-    void createBooking_urgentPriority_addsUrgentSurcharge() {
-        UUID customerId = UUID.randomUUID();
-        when(referenceGenerator.generateTrackingNumber()).thenReturn("SWD-2026-000002");
+    void urgentBookingAsksPricingForTheUrgentSurcharge() {
+        when(pricingService.calculateFee(any())).thenReturn(quote(true));
+        BookingResponseDto response = bookingService.createBooking(request("URGENT", "ONLINE", "COLOMBO"), jwt(customerId));
 
-
-        when(parcelRepository.save(any(Parcel.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-
-        AddressDto pickup = new AddressDto("John", "0771234567", "12 Main St", "Colombo", "00100", "Z-COL-1");
-        AddressDto delivery = new AddressDto("Jane", "0777654321", "45 Lake Rd", "Kandy", "20000", "Z-KAN-1");
-        CreateBookingRequest request = new CreateBookingRequest(
-            "Urgent Medical Supplies",
-            new BigDecimal("1.00"), // 1 kg
-            "URGENT",
-            pickup,
-            delivery
-        );
-
-        BookingResponseDto response = bookingService.createBooking(request, customerId);
-
-        assertNotNull(response);
+        ArgumentCaptor<PricingRequest> asked = ArgumentCaptor.forClass(PricingRequest.class);
+        verify(pricingService).calculateFee(asked.capture());
+        assertEquals(Boolean.TRUE, asked.getValue().isUrgent());
         assertEquals("URGENT", response.urgency());
-        assertEquals("CHECKOUT_DRAFT",response.status());
-        assertNull(response.receiptNumber());
-        verifyNoInteractions(receiptRepository);
-        // Fee = 350 base + (1.00 * 150) + 300 urgent surcharge = 800
-        assertEquals(new BigDecimal("800.00"), response.estimatedFee());
+        assertEquals(new BigDecimal("750.00"), response.estimatedFee());
     }
 
     @Test
-    void getCustomerBookings_returnsBookingSummaries() {
-        UUID customerId = UUID.randomUUID();
-        Parcel p = new Parcel();
-        p.setTrackingNumber("SWD-2026-000003");
-        p.setCustomerId(customerId);
-        p.setUrgency("NORMAL");
-        p.setStatus("BOOKED");
-        p.setPaymentStatus("PAID");
-        p.setWeightKg(new BigDecimal("3.50"));
-        p.setEstimatedFee(new BigDecimal("875.00"));
-
-        when(parcelRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)).thenReturn(List.of(p));
-
-        List<BookingSummaryDto> result = bookingService.getCustomerBookings(customerId);
-
-        assertEquals(1, result.size());
-        assertEquals("SWD-2026-000003", result.get(0).trackingNumber());
+    void deliveryZoneIsRequired() {
+        ApiException ex = assertThrows(ApiException.class,
+                () -> bookingService.createBooking(request("NORMAL", "COD", null), jwt(customerId)));
+        assertEquals("ZONE_REQUIRED", ex.getCode());
+        verifyNoInteractions(pricingService);
     }
+
+    @Test
+    void unknownUrgencyIsRejected() {
+        ApiException ex = assertThrows(ApiException.class,
+                () -> bookingService.createBooking(request("FAST", "COD", "COLOMBO"), jwt(customerId)));
+        assertEquals("INVALID_URGENCY", ex.getCode());
+    }
+
+    @Test
+    void unknownPickupZoneIsRejected() {
+        AddressDto pickup = new AddressDto("Nimal", "0771234567", "12 Main St", "Colombo", null, "MARS");
+        AddressDto delivery = new AddressDto("Kamala", "0777654321", "45 Lake Rd", "Colombo", null, "COLOMBO");
+        when(zoneRepository.findByCodeIgnoreCase("MARS")).thenReturn(Optional.empty());
+        ApiException ex = assertThrows(ApiException.class, () -> bookingService.createBooking(
+                new CreateBookingRequest("x", BigDecimal.ONE, "NORMAL", "COD", pickup, delivery), jwt(customerId)));
+        assertEquals("INVALID_ZONE", ex.getCode());
+    }
+
+    // ------------------------------------------------------------ COD and ONLINE creation
+
+    @Test
+    void codBookingIsConfirmedAtOnceWithReceiptAndEvents() {
+        BookingResponseDto response = bookingService.createBooking(request("NORMAL", "COD", "COLOMBO"), jwt(customerId));
+
+        assertEquals("BOOKED", response.status());
+        assertEquals("PENDING", response.paymentStatus());
+        assertEquals("RCP-2026-000001", response.receiptNumber());
+        verify(events).bookingConfirmed(any(Parcel.class));
+    }
+
+    @Test
+    void customerDetailsComeFromIdentityNotPlaceholders() {
+        ArgumentCaptor<Parcel> saved = ArgumentCaptor.forClass(Parcel.class);
+        bookingService.createBooking(request("NORMAL", "COD", "COLOMBO"), jwt(customerId));
+        verify(parcelRepository).save(saved.capture());
+        assertEquals("Nimal Perera", saved.getValue().getCustomerName());
+        assertEquals("nimal@example.com", saved.getValue().getCustomerEmail());
+    }
+
+    @Test
+    void onlineBookingStaysAnUnpaidDraftWithoutReceiptOrEvents() {
+        BookingResponseDto response = bookingService.createBooking(request("NORMAL", "ONLINE", "COLOMBO"), jwt(customerId));
+
+        assertEquals("CHECKOUT_DRAFT", response.status());
+        assertEquals("UNPAID", response.paymentStatus());
+        assertNull(response.receiptNumber());
+        assertNotNull(response.pricingExpiresAt());
+        verify(receiptRepository, never()).save(any());
+        verifyNoInteractions(events);
+    }
+
+    // ------------------------------------------------------------ payment confirmation
 
     private Parcel unpaidDraft() {
-        Parcel p=new Parcel(); p.setCustomerId(UUID.randomUUID()); p.setStatus("CHECKOUT_DRAFT");
-        p.setPaymentMethod("ONLINE"); p.setEstimatedFee(new BigDecimal("500.00"));
-        p.setTrackingNumber("SWD-TEST");
-        when(parcelRepository.lockById(p.getId())).thenReturn(Optional.of(p)); return p;
-    }
-    private com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment payment(Parcel p,String status) {
-        return new com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment(p.getId().toString(),p.getEstimatedFee(),"LKR",status,"123456");
-    }
-    @Test void pendingPaymentCannotConfirmBookingOrIssueReceipt() {
-        var p=unpaidDraft();
-        assertThrows(RuntimeException.class,()->bookingService.confirmPaid(p.getId(),p.getCustomerId(),payment(p,"PENDING")));
-        assertEquals("CHECKOUT_DRAFT",p.getStatus()); verifyNoInteractions(receiptRepository);
-    }
-    @Test void successfulMatchingPaymentConfirmsAndRetriesWithoutSecondReceipt() {
-        var p=unpaidDraft();
-        when(receiptRepository.findByParcelId(p.getId())).thenReturn(Optional.empty());
-        when(referenceGenerator.generateReceiptNumber("SWD-TEST")).thenReturn("RCP-TEST");
-        when(receiptRepository.save(any())).thenAnswer(i->i.getArgument(0));
-        var result=bookingService.confirmPaid(p.getId(),p.getCustomerId(),payment(p,"SUCCESS"));
-        assertEquals("BOOKED",result.status()); assertEquals("PAID",p.getPaymentStatus()); assertNotNull(result.receiptNumber());
-        when(receiptRepository.findByParcelId(p.getId())).thenReturn(Optional.of(new BookingReceipt("RCP-TEST",p,p.getEstimatedFee(),"LKR")));
-        bookingService.confirmPaid(p.getId(),p.getCustomerId(),payment(p,"SUCCESS"));
-        verify(receiptRepository,times(1)).save(any());
-    }
-    @Test void mismatchedPaymentCannotConfirm() {
-        var p=unpaidDraft();
-        var wrong=new com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment(UUID.randomUUID().toString(),p.getEstimatedFee(),"LKR","SUCCESS","123");
-        assertThrows(RuntimeException.class,()->bookingService.confirmPaid(p.getId(),p.getCustomerId(),wrong));
-        verifyNoInteractions(receiptRepository);
-    }
-    @Test void draftHasNoReceiptEvenWhenAccessedDirectly() {
-        var p=new Parcel(); when(parcelRepository.findById(p.getId())).thenReturn(Optional.of(p));
-        assertThrows(RuntimeException.class,()->bookingService.getReceiptByParcelId(p.getId()));
-        verifyNoInteractions(receiptRepository);
+        Parcel p = new Parcel();
+        p.setCustomerId(customerId);
+        p.setStatus("CHECKOUT_DRAFT");
+        p.setPaymentMethod("ONLINE");
+        p.setPaymentStatus("UNPAID");
+        p.setEstimatedFee(new BigDecimal("550.00"));
+        p.setTrackingNumber("SWD-2026-000001");
+        when(parcelRepository.lockById(p.getId())).thenReturn(Optional.of(p));
+        return p;
     }
 
-    @Test void failedPaymentCannotConfirm() {
-        var p=unpaidDraft();
-        assertThrows(RuntimeException.class,()->bookingService.confirmPaid(p.getId(),p.getCustomerId(),payment(p,"FAILED")));
-        assertEquals("CHECKOUT_DRAFT",p.getStatus()); verifyNoInteractions(receiptRepository);
+    private static VerifiedPayment payment(Parcel p, String status) {
+        return new VerifiedPayment(p.getId().toString(), p.getEstimatedFee(), "LKR", status, "PAYHERE-123");
     }
-    @Test void incorrectAmountCannotConfirm() {
-        var p=unpaidDraft();
-        var wrong=new com.swiftdrop.parcel_pricing_service.client.BookingPaymentVerifier.VerifiedPayment(p.getId().toString(),BigDecimal.ONE,"LKR","SUCCESS","123");
-        assertThrows(RuntimeException.class,()->bookingService.confirmPaid(p.getId(),p.getCustomerId(),wrong));
-        verifyNoInteractions(receiptRepository);
+
+    @Test
+    void successfulMatchingPaymentConfirmsOnceAndIssuesOneReceipt() {
+        Parcel p = unpaidDraft();
+        UUID paymentId = UUID.randomUUID();
+
+        BookingResponseDto result = bookingService.confirmPaid(p.getId(), customerId, paymentId, payment(p, "SUCCESS"));
+        assertEquals("BOOKED", result.status());
+        assertEquals("PAID", p.getPaymentStatus());
+        assertEquals(paymentId, p.getPaymentId());
+        assertNotNull(result.receiptNumber());
+        verify(events).bookingConfirmed(p);
+
+        // A repeat (browser retry or the payment.succeeded event) changes nothing.
+        when(receiptRepository.findByParcelId(p.getId())).thenReturn(Optional.of(new BookingReceipt("RCP-2026-000001", p, p.getEstimatedFee(), "LKR")));
+        bookingService.confirmPaid(p.getId(), customerId, paymentId, payment(p, "SUCCESS"));
+        bookingService.confirmPaidFromEvent(p.getId().toString(), paymentId, p.getEstimatedFee(), "LKR");
+        verify(receiptRepository, times(1)).save(any());
+        verify(events, times(1)).bookingConfirmed(any());
     }
-    @Test void anotherCustomerCannotConfirm() {
-        var p=unpaidDraft();
-        assertThrows(RuntimeException.class,()->bookingService.confirmPaid(p.getId(),UUID.randomUUID(),payment(p,"SUCCESS")));
-        verifyNoInteractions(receiptRepository);
+
+    @Test
+    void paymentEventConfirmsBookingWithoutTheBrowser() {
+        Parcel p = unpaidDraft();
+        bookingService.confirmPaidFromEvent(p.getId().toString(), UUID.randomUUID(), new BigDecimal("550.00"), "LKR");
+        assertEquals("BOOKED", p.getStatus());
+        verify(events).bookingConfirmed(p);
     }
-    @Test void unpaidOnlineAndCheckoutDraftsAreExcludedFromHistory() {
-        var customer=UUID.randomUUID();
-        var draft=new Parcel(); draft.setCustomerId(customer); draft.setStatus("CHECKOUT_DRAFT");
-        var legacyUnpaid=new Parcel(); legacyUnpaid.setCustomerId(customer); legacyUnpaid.setStatus("BOOKED");
-        when(parcelRepository.findByCustomerIdOrderByCreatedAtDesc(customer)).thenReturn(List.of(draft,legacyUnpaid));
-        assertTrue(bookingService.getCustomerBookings(customer).isEmpty());
+
+    @Test
+    void latePaymentStillConfirmsAnExpiredCheckout() {
+        Parcel p = unpaidDraft();
+        p.setStatus("EXPIRED");
+        bookingService.confirmPaidFromEvent(p.getId().toString(), UUID.randomUUID(), new BigDecimal("550.00"), "LKR");
+        assertEquals("BOOKED", p.getStatus());
+    }
+
+    @Test
+    void pendingFailedOrMismatchedPaymentsCannotConfirm() {
+        Parcel p = unpaidDraft();
+        assertThrows(ApiException.class, () -> bookingService.confirmPaid(p.getId(), customerId, UUID.randomUUID(), payment(p, "PENDING")));
+        assertThrows(ApiException.class, () -> bookingService.confirmPaid(p.getId(), customerId, UUID.randomUUID(), payment(p, "FAILED")));
+        VerifiedPayment otherBooking = new VerifiedPayment(UUID.randomUUID().toString(), p.getEstimatedFee(), "LKR", "SUCCESS", "X");
+        assertThrows(ApiException.class, () -> bookingService.confirmPaid(p.getId(), customerId, UUID.randomUUID(), otherBooking));
+        VerifiedPayment wrongAmount = new VerifiedPayment(p.getId().toString(), BigDecimal.ONE, "LKR", "SUCCESS", "X");
+        assertThrows(ApiException.class, () -> bookingService.confirmPaid(p.getId(), customerId, UUID.randomUUID(), wrongAmount));
+        assertEquals("CHECKOUT_DRAFT", p.getStatus());
+        verify(receiptRepository, never()).save(any());
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void anotherCustomerCannotConfirm() {
+        Parcel p = unpaidDraft();
+        ApiException ex = assertThrows(ApiException.class,
+                () -> bookingService.confirmPaid(p.getId(), UUID.randomUUID(), UUID.randomUUID(), payment(p, "SUCCESS")));
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
+    void failedPaymentEventKeepsTheDraftForRetry() {
+        Parcel p = unpaidDraft();
+        bookingService.markPaymentFailed(p.getId().toString());
+        assertEquals("CHECKOUT_DRAFT", p.getStatus());
+        assertEquals("FAILED", p.getPaymentStatus());
+    }
+
+    @Test
+    void customerCanDiscardOnlyAnUnpaidDraft() {
+        Parcel p = unpaidDraft();
+        bookingService.discardDraft(p.getId(), customerId);
+        assertEquals("ABANDONED", p.getStatus());
+        assertThrows(ApiException.class, () -> bookingService.discardDraft(p.getId(), customerId));
+    }
+
+    // ------------------------------------------------------------ reads
+
+    @Test
+    void historyHidesUnpaidDraftsAndShowsConfirmedBookings() {
+        Parcel draft = new Parcel(); draft.setCustomerId(customerId); draft.setStatus("CHECKOUT_DRAFT");
+        Parcel expired = new Parcel(); expired.setCustomerId(customerId); expired.setStatus("EXPIRED");
+        Parcel unpaidLegacy = new Parcel(); unpaidLegacy.setCustomerId(customerId); unpaidLegacy.setStatus("BOOKED");
+        Parcel paid = new Parcel(); paid.setCustomerId(customerId); paid.setStatus("IN_TRANSIT"); paid.setPaymentStatus("PAID");
+        Parcel cod = new Parcel(); cod.setCustomerId(customerId); cod.setStatus("BOOKED"); cod.setPaymentMethod("COD");
+        when(parcelRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)).thenReturn(List.of(draft, expired, unpaidLegacy, paid, cod));
+
+        List<BookingSummaryDto> history = bookingService.getCustomerBookings(customerId);
+        assertEquals(2, history.size());
+        assertFalse(history.get(0).cancellable());
+        assertTrue(history.get(1).cancellable());
+    }
+
+    @Test
+    void trackingByReferenceOnlyFindsYourOwnBooking() {
+        Parcel p = new Parcel(); p.setCustomerId(UUID.randomUUID()); p.setStatus("BOOKED"); p.setPaymentMethod("COD");
+        p.setTrackingNumber("SWD-2026-000009");
+        when(parcelRepository.findByTrackingNumber("SWD-2026-000009")).thenReturn(Optional.of(p));
+        ApiException ex = assertThrows(ApiException.class,
+                () -> bookingService.getOwnedBookingByTrackingNumber("swd-2026-000009", customerId));
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+    }
+
+    @Test
+    void draftHasNoReceipt() {
+        Parcel p = unpaidDraft();
+        when(parcelRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        ApiException ex = assertThrows(ApiException.class, () -> bookingService.getReceipt(p.getId(), customerId));
+        assertEquals("PAYMENT_REQUIRED", ex.getCode());
+    }
+
+    // ------------------------------------------------------------ payment context
+
+    @Test
+    void paymentContextUsesTheRealCustomerAndPickupAddress() {
+        Parcel p = unpaidDraft();
+        p.setCustomerName("Nimal Perera");
+        p.setCustomerEmail("nimal@example.com");
+        p.setCustomerPhone("+94771234567");
+        p.setPricingExpiresAt(OffsetDateTime.now().plusHours(1));
+        p.addAddress(new ParcelAddress("PICKUP", "Nimal", "0771234567", "12 Main St", "Colombo", null, null));
+        when(parcelRepository.findById(p.getId())).thenReturn(Optional.of(p));
+
+        PaymentContextResponse context = bookingService.getPaymentContext(p.getId(), jwt(customerId));
+        assertTrue(context.payable());
+        assertEquals("Nimal", context.payer().firstName());
+        assertEquals("Perera", context.payer().lastName());
+        assertEquals("nimal@example.com", context.payer().email());
+        assertEquals("12 Main St", context.payer().address());
+    }
+
+    @Test
+    void paymentContextNeverInventsAnEmail() {
+        Parcel p = unpaidDraft();
+        p.addAddress(new ParcelAddress("PICKUP", "Nimal", "0771234567", "12 Main St", "Colombo", null, null));
+        when(parcelRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(identityClient.currentUser(any())).thenReturn(Optional.empty());
+
+        ApiException ex = assertThrows(ApiException.class, () -> bookingService.getPaymentContext(p.getId(), jwt(customerId)));
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+        assertEquals("PAYER_DETAILS_MISSING", ex.getCode());
+    }
+
+    @Test
+    void paymentContextErrorsKeepTheirStatusForPaymentService() {
+        UUID missing = UUID.randomUUID();
+        when(parcelRepository.findById(missing)).thenReturn(Optional.empty());
+        assertEquals(HttpStatus.NOT_FOUND, assertThrows(ApiException.class,
+                () -> bookingService.getPaymentContext(missing, jwt(customerId))).getStatus());
+
+        Parcel p = unpaidDraft();
+        when(parcelRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ApiException.class,
+                () -> bookingService.getPaymentContext(p.getId(), jwt(UUID.randomUUID()))).getStatus());
     }
 }
-

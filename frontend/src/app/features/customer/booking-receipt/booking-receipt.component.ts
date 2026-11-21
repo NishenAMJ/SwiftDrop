@@ -1,7 +1,12 @@
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { BookingReceiptDto, BookingResponseDto } from '../models/customer-booking.models';
+import {
+  BookingReceiptDto,
+  BookingResponseDto,
+  paymentStatusLabel,
+  statusLabel,
+} from '../models/customer-booking.models';
 import { CustomerBookingService } from '../services/customer-booking.service';
 
 @Component({
@@ -25,6 +30,14 @@ export class BookingReceiptComponent implements OnInit {
   readonly copiedRef = signal<boolean>(false);
   readonly isInitiatingPayment = signal<boolean>(false);
   readonly paymentMessage = signal<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  readonly statusLabel = statusLabel;
+  readonly paymentStatusLabel = paymentStatusLabel;
+
+  /** The same receipt page serves customers (/customer/receipt) and merchants (/merchant/receipt). */
+  readonly isMerchantView = this.router.url.startsWith('/merchant/');
+  readonly bookingsLink = this.isMerchantView ? '/merchant/bookings' : '/customer/bookings';
+  readonly newBookingLink = this.isMerchantView ? '/merchant/create-order' : '/customer/book';
 
   ngOnInit(): void {
     const nav = this.router.getCurrentNavigation();

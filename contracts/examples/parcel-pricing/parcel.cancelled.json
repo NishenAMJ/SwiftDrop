@@ -1,0 +1,19 @@
+{
+  "eventId": "6f1c2a40-3b7e-4d2a-9c11-2b8f0e5a7d01",
+  "eventType": "parcel.cancelled",
+  "version": 1,
+  "occurredAt": "2026-11-21T09:15:30Z",
+  "producer": "parcel-pricing-service",
+  "data": {
+    "parcelId": "3f6b8e2c-1d4a-4b9e-8c7f-5a2d9e0b1c34",
+    "trackingNumber": "SWD-2026-000125",
+    "deliveryStatus": "CANCELLED",
+    "publicDescription": "Booking cancelled by the sender.",
+    "customerUserId": "8a1d2c3b-4e5f-4a6b-9c8d-7e6f5a4b3c2d",
+    "paymentMethod": "ONLINE",
+    "paymentId": "c2b7a9e1-5d4f-4e3a-8b2c-1a0f9e8d7c6b",
+    "cancellationFee": 0.00,
+    "refundAmount": 700.00,
+    "cancelledAt": "2026-11-21T09:15:30Z"
+  }
+}

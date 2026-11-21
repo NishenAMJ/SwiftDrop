@@ -118,12 +118,17 @@ export class MerchantDashboardComponent implements OnInit {
     });
   }
 
+  /** Real estimate from the backend pricing module (no local formula). */
   updateEstimate(): void {
-    const fee = this.bookingService.calculateFee(
-      this.estimateWeight() ?? 0,
-      this.estimateUrgency(),
-    );
-    this.feeBreakdown.set(fee);
+    const weight = Number(this.estimateWeight()) || 0;
+    if (weight <= 0) {
+      this.feeBreakdown.set({ baseFee: 0, weightFee: 0, urgencySurcharge: 0, totalFee: 0 });
+      return;
+    }
+    this.bookingService.getFeeQuote(weight, this.estimateUrgency()).subscribe({
+      next: (fee) => this.feeBreakdown.set(fee),
+      error: () => this.feeBreakdown.set({ baseFee: 0, weightFee: 0, urgencySurcharge: 0, totalFee: 0 }),
+    });
   }
 
   setEstimateUrgency(val: UrgencyType): void {
