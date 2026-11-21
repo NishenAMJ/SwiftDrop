@@ -2,13 +2,15 @@ package com.swiftdrop.parcel_pricing_service.service;
 
 import com.swiftdrop.parcel_pricing_service.exception.InvalidApiKeyException;
 import com.swiftdrop.parcel_pricing_service.security.MerchantApiKeyVerifier;
+import com.swiftdrop.parcel_pricing_service.security.MerchantPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Authenticates external merchant API calls by delegating to {@link MerchantApiKeyVerifier}
- * (Member 2's work). The key itself is never logged or placed in an exception message.
+ * Authenticates external merchant API calls that send {@code X-API-Key} by delegating to
+ * {@link MerchantApiKeyVerifier} (Identity). The key itself is never logged or placed in an
+ * exception message.
  */
 @Service
 public class MerchantApiAuthService {
@@ -23,10 +25,10 @@ public class MerchantApiAuthService {
     }
 
     /**
-     * @return the id of the merchant that owns the key
+     * @return the merchant that owns the key
      * @throws InvalidApiKeyException if the key is missing, malformed or unknown
      */
-    public Long authenticate(String apiKey) {
+    public MerchantPrincipal authenticate(String apiKey) {
         if (apiKey == null || apiKey.isBlank() || apiKey.length() > MAX_KEY_LENGTH) {
             log.warn("External API request rejected: missing or malformed credentials");
             throw new InvalidApiKeyException();

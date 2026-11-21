@@ -44,6 +44,11 @@ public class SecurityConfig {
                 // cancellation and profile: always a signed-in user; ownership is checked per booking.
                 .requestMatchers("/api/v1/bookings/**").authenticated()
                 .requestMatchers("/api/v1/customer/**").authenticated()
+                // Merchant dashboard orders: a MERCHANT token from Identity (merchant_id claim).
+                .requestMatchers("/api/merchant/orders", "/api/merchant/orders/**").hasRole("MERCHANT")
+                // External merchant API: a MERCHANT bearer token, or X-API-Key verified with Identity
+                // inside the controller. A request with neither is answered 401 by the controller.
+                .requestMatchers(HttpMethod.POST, "/api/integrations/merchant/orders").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

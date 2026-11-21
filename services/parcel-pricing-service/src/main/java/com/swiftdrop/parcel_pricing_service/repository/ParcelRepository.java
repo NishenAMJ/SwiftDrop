@@ -2,6 +2,8 @@ package com.swiftdrop.parcel_pricing_service.repository;
 
 import com.swiftdrop.parcel_pricing_service.entity.Parcel;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -30,6 +32,14 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
     List<Parcel> findByCustomerIdOrderByCreatedAtDesc(UUID customerId);
 
     Optional<Parcel> findByIdAndCustomerId(UUID id, UUID customerId);
+
+    // ---- merchant orders (parcels with merchant_id set). Always queried through the owning merchant.
+
+    Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);
+
+    Optional<Parcel> findByIdAndMerchantId(UUID id, UUID merchantId);
+
+    boolean existsByMerchantIdAndMerchantReference(UUID merchantId, String merchantReference);
 
     /** Unpaid checkouts whose price validity has passed. They stay in the table for payment audit. */
     @Modifying
