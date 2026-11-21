@@ -70,6 +70,8 @@ export class AppLayout {
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
+          { label: 'Delivery zones', path: '/dispatcher/delivery-zones' },
+          { label: 'Pricing rules', path: '/dispatcher/pricing-rules' },
           { label: 'Payments and refunds', path: '/dispatcher/payments' },
           { label: 'Tracking reports', path: '/tracking/reports' },
           { label: 'Failed webhooks', path: '/webhooks/failed' },
@@ -81,8 +83,11 @@ export class AppLayout {
         heading: 'Merchant',
         items: [
           { label: 'API keys', path: '/merchant/api-keys' },
+          { label: 'Merchant dashboard', path: '/merchant/dashboard' },
+          { label: 'Create order', path: '/merchant/create-order' },
+          { label: 'Orders', path: '/merchant/orders' },
           { label: 'Webhooks', path: '/webhooks' },
-          { label: 'Payment history', path: '/account/merchant/payments' },
+          { label: 'Payment history', path: '/merchant/payments' },
           { label: 'Merchant account', path: '/merchant/application' },
         ],
       });

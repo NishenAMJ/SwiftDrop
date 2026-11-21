@@ -46,6 +46,9 @@ describe('AppLayout', () => {
       .nativeElement as HTMLElement;
     expect(links(page)).toEqual([
       'API keys',
+      'Merchant dashboard',
+      'Create order',
+      'Orders',
       'Webhooks',
       'Payment history',
       'Merchant account',
@@ -68,6 +71,8 @@ describe('AppLayout', () => {
       'Merchant applications',
       'Courier applications',
       'Users',
+      'Delivery zones',
+      'Pricing rules',
       'Payments and refunds',
       'Tracking reports',
       'Failed webhooks',

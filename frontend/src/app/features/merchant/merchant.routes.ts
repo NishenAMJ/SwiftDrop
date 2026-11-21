@@ -1,4 +1,3 @@
-import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 
 import { roleGuard } from '../../core/auth/auth.guards';
@@ -12,7 +11,7 @@ export const MERCHANT_ROUTES: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    // Approved merchants start at their keys; everyone else at the application.
+    // Keep the application/status page as the default entry point.
     redirectTo: 'application',
   },
   {
@@ -30,6 +29,24 @@ export const MERCHANT_ROUTES: Routes = [
     title: 'API keys | SwiftDrop',
     canActivate: [roleGuard('MERCHANT')],
     loadComponent: () => import('./api-keys-page/api-keys-page').then((m) => m.ApiKeysPage),
+  },
+  {
+    path: 'dashboard',
+    title: 'Merchant dashboard | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () => import('./merchant-dashboard/merchant-dashboard.component').then((m) => m.MerchantDashboardComponent),
+  },
+  {
+    path: 'create-order',
+    title: 'Create order | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () => import('./create-order/create-order.component').then((m) => m.CreateOrderComponent),
+  },
+  {
+    path: 'orders',
+    title: 'Merchant orders | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () => import('./orders/merchant-orders.component').then((m) => m.MerchantOrdersComponent),
   },
   {
     path: 'payments',
