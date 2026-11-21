@@ -30,6 +30,10 @@ public class DeliveryAssignment {
     @Column(name = "parcel_id", nullable = false, updatable = false)
     private UUID parcelId;
 
+    /** The customer who booked the parcel; null when the booking has no registered customer. */
+    @Column(name = "customer_id", updatable = false)
+    private UUID customerId;
+
     @Column(name = "parcel_reference", nullable = false, length = 50)
     private String parcelReference;
 
@@ -68,9 +72,10 @@ public class DeliveryAssignment {
     protected DeliveryAssignment() {
     }
 
-    public DeliveryAssignment(UUID parcelId, String parcelReference, Courier courier, String assignedBy, String notes,
-                              Instant assignedAt) {
+    public DeliveryAssignment(UUID parcelId, UUID customerId, String parcelReference, Courier courier,
+                              String assignedBy, String notes, Instant assignedAt) {
         this.parcelId = parcelId;
+        this.customerId = customerId;
         this.parcelReference = parcelReference;
         this.courier = courier;
         this.assignedBy = assignedBy;
@@ -106,6 +111,7 @@ public class DeliveryAssignment {
 
     public UUID getId() { return id; }
     public UUID getParcelId() { return parcelId; }
+    public UUID getCustomerId() { return customerId; }
     public String getParcelReference() { return parcelReference; }
     public Courier getCourier() { return courier; }
     public String getAssignedBy() { return assignedBy; }

@@ -34,18 +34,33 @@ class HttpParcelLookupTest {
     @Test
     void readsTheParcelIdAndForwardsTheCallersToken() {
         var id = UUID.randomUUID();
+        var customer = UUID.randomUUID();
         server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-000125"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("Authorization", "Bearer dispatcher-token"))
                 .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000125\","
-                        + "\"status\":\"CONFIRMED\",\"customerId\":\"" + UUID.randomUUID() + "\"}",
+                        + "\"status\":\"CONFIRMED\",\"customerId\":\"" + customer + "\"}",
                         MediaType.APPLICATION_JSON));
 
         var parcel = lookup.find("SWD-2026-000125", "dispatcher-token");
 
         assertThat(parcel.parcelId()).isEqualTo(id);
         assertThat(parcel.trackingNumber()).isEqualTo("SWD-2026-000125");
+        assertThat(parcel.customerId()).isEqualTo(customer);
         server.verify();
+    }
+
+    @Test
+    void aBookingWithoutACustomerStillResolves() {
+        var id = UUID.randomUUID();
+        server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-000126"))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000126\","
+                        + "\"customerId\":null}", MediaType.APPLICATION_JSON));
+
+        var parcel = lookup.find("SWD-2026-000126", "token");
+
+        assertThat(parcel.parcelId()).isEqualTo(id);
+        assertThat(parcel.customerId()).isNull();
     }
 
     @Test

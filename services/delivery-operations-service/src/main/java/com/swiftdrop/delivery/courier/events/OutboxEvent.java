@@ -16,6 +16,10 @@ public class OutboxEvent {
     @Id
     private UUID id;
 
+    /** The exchange this event is published to. */
+    @Column(nullable = false, length = 100)
+    private String exchange;
+
     @Column(name = "routing_key", nullable = false, length = 100)
     private String routingKey;
 
@@ -37,8 +41,9 @@ public class OutboxEvent {
     protected OutboxEvent() {
     }
 
-    public OutboxEvent(UUID id, String routingKey, String payload, Instant createdAt) {
+    public OutboxEvent(UUID id, String exchange, String routingKey, String payload, Instant createdAt) {
         this.id = id;
+        this.exchange = exchange;
         this.routingKey = routingKey;
         this.payload = payload;
         this.createdAt = createdAt;
@@ -46,6 +51,7 @@ public class OutboxEvent {
     }
 
     public UUID getId() { return id; }
+    public String getExchange() { return exchange; }
     public String getRoutingKey() { return routingKey; }
     public String getPayload() { return payload; }
     public int getAttempts() { return attempts; }

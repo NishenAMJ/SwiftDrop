@@ -49,18 +49,18 @@ public class OutboxPublisher {
         // Rows stay locked for the whole batch, so two instances never publish the same row.
         transaction.executeWithoutResult(status -> {
             var due = jdbc.queryForList(
-                    "SELECT id, routing_key, payload, attempts FROM " + table
+                    "SELECT id, exchange, routing_key, payload, attempts FROM " + table
                             + " WHERE published_at IS NULL AND next_attempt_at <= ?"
                             + " ORDER BY created_at LIMIT " + BATCH_SIZE + " FOR UPDATE SKIP LOCKED",
                     Timestamp.from(Instant.now()));
             for (var row : due) {
-                publish(row.get("id"), (String) row.get("routing_key"), (String) row.get("payload"),
-                        ((Number) row.get("attempts")).intValue());
+                publish(row.get("id"), (String) row.get("exchange"), (String) row.get("routing_key"),
+                        (String) row.get("payload"), ((Number) row.get("attempts")).intValue());
             }
         });
     }
 
-    private void publish(Object rawId, String routingKey, String payload, int attempts) {
+    private void publish(Object rawId, String exchange, String routingKey, String payload, int attempts) {
         var id = rawId instanceof UUID uuid ? uuid : UUID.fromString(rawId.toString());
         try {
             var properties = new MessageProperties();
@@ -68,7 +68,7 @@ public class OutboxPublisher {
             properties.setMessageId(id.toString());
             properties.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
             var correlation = new CorrelationData(id.toString());
-            rabbit.send(DeliveryEventsConfig.DELIVERY_EXCHANGE, routingKey,
+            rabbit.send(exchange, routingKey,
                     new Message(payload.getBytes(StandardCharsets.UTF_8), properties), correlation);
             var confirm = correlation.getFuture().get(5, TimeUnit.SECONDS);
             if (!confirm.ack()) {

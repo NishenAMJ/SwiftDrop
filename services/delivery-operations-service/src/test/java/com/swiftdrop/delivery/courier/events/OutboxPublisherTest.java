@@ -46,7 +46,8 @@ class OutboxPublisherTest {
     @Test
     void confirmedEventsAreSentToTheDeliveryExchangeAndMarkedPublished() {
         var id = UUID.randomUUID();
-        outbox.save(new OutboxEvent(id, "delivery.delivered", "{\"eventType\":\"delivery.delivered\"}", Instant.now()));
+        outbox.save(new OutboxEvent(id, "swiftdrop.delivery-operations", "delivery.delivered",
+                "{\"eventType\":\"delivery.delivered\"}", Instant.now()));
         brokerAnswers(true);
 
         publisher.publishPending();
@@ -63,7 +64,7 @@ class OutboxPublisherTest {
     @Test
     void anUnconfirmedEventIsKeptAndRetriedLater() {
         var id = UUID.randomUUID();
-        outbox.save(new OutboxEvent(id, "delivery.failed", "{}", Instant.now()));
+        outbox.save(new OutboxEvent(id, "swiftdrop.delivery-operations", "delivery.failed", "{}", Instant.now()));
         brokerAnswers(false);
 
         publisher.publishPending();
@@ -79,8 +80,21 @@ class OutboxPublisherTest {
     }
 
     @Test
+    void eachEventGoesToTheExchangeItWasWrittenFor() {
+        outbox.save(new OutboxEvent(UUID.randomUUID(), "swiftdrop.delivery", "parcel.status-changed", "{}",
+                Instant.now()));
+        brokerAnswers(true);
+
+        publisher.publishPending();
+
+        verify(rabbit).send(eq("swiftdrop.delivery"), eq("parcel.status-changed"), any(Message.class),
+                any(CorrelationData.class));
+    }
+
+    @Test
     void publishedEventsAreNotSentAgain() {
-        outbox.save(new OutboxEvent(UUID.randomUUID(), "delivery.assigned", "{}", Instant.now()));
+        outbox.save(new OutboxEvent(UUID.randomUUID(), "swiftdrop.delivery-operations", "delivery.assigned", "{}",
+                Instant.now()));
         brokerAnswers(true);
         publisher.publishPending();
 

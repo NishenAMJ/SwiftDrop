@@ -18,6 +18,7 @@ public class StubParcelLookup implements ParcelLookup {
     @Override
     public ParcelRef find(String trackingNumber, String bearerToken) {
         var number = trackingNumber.trim().toUpperCase(Locale.ROOT);
-        return new ParcelRef(UUID.nameUUIDFromBytes(number.getBytes(StandardCharsets.UTF_8)), number);
+        return new ParcelRef(UUID.nameUUIDFromBytes(number.getBytes(StandardCharsets.UTF_8)), number,
+                UUID.nameUUIDFromBytes(("customer:" + number).getBytes(StandardCharsets.UTF_8)));
     }
 }
