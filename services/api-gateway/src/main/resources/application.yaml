@@ -27,7 +27,7 @@ spring:
             - id: delivery-operations-service
               uri: ${DELIVERY_SERVICE_URI:http://localhost:8083}
               predicates:
-                - Path=/api/v1/sorting-records/**,/api/v1/transfers/**,/api/v1/warehouses/**,/api/v1/warehouse-parcels/**
+                - Path=/api/v1/sorting-records/**,/api/v1/transfers/**,/api/v1/warehouses/**,/api/v1/warehouse-parcels/**,/api/v1/courier-categories/**,/api/v1/courier-profiles/**,/api/v1/assignments/**,/api/v1/delivery-issues/**
             - id: tracking-reporting-service
               uri: ${TRACKING_SERVICE_URI:http://localhost:8084}
               predicates:

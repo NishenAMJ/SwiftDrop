@@ -1,0 +1,194 @@
+<div class="page page--wide">
+  <header class="page__header">
+    <h1 class="page__title">Delivery issues</h1>
+    <p class="page__intro">
+      Review problems reported by couriers. Issue notes are internal and are never shown in public
+      tracking.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="issue-list-title">
+    <h2 id="issue-list-title" class="page__section-title">Reported issues</h2>
+
+    <form class="issue-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+      <div class="sd-field">
+        <label class="sd-label" for="issue-filter-status">Status</label>
+        <select id="issue-filter-status" class="sd-input" formControlName="status">
+          <option value="">All statuses</option>
+          @for (status of filterStatuses; track status) {
+            <option [value]="status">{{ statusLabels[status] }}</option>
+          }
+        </select>
+      </div>
+      <div class="issue-filters__actions">
+        <button class="sd-button sd-button--primary" type="submit">Apply filter</button>
+      </div>
+    </form>
+
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading issues…
+      </p>
+    } @else if (issues().empty) {
+      <p class="page__muted">No issues match this filter.</p>
+    } @else {
+      <div class="sd-table-wrap" role="region" aria-labelledby="issue-list-title" tabindex="0">
+        <table class="sd-table">
+          <thead>
+            <tr>
+              <th scope="col">Reported</th>
+              <th scope="col">Courier</th>
+              <th scope="col">Parcel</th>
+              <th scope="col">Issue</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (issue of issues().content; track issue.id) {
+              <tr>
+                <td>{{ issue.reportedAt | colomboDate }}</td>
+                <td>{{ issue.courierName }}</td>
+                <td class="issue-reference">{{ issue.parcelReference ?? '—' }}</td>
+                <td>
+                  <strong>{{ typeLabels[issue.issueType] }}</strong>
+                  <br />{{ issue.description }}
+                  @if (issue.resolutionNotes) {
+                    <br /><span class="page__muted">
+                      Outcome note by {{ issue.reviewedBy }}: {{ issue.resolutionNotes }}
+                    </span>
+                  }
+                </td>
+                <td>
+                  <span class="sd-badge" [class]="statusClass(issue.status)">
+                    {{ statusLabels[issue.status] }}
+                  </span>
+                </td>
+                <td>
+                  @if (issue.status === 'OPEN' || issue.status === 'UNDER_REVIEW') {
+                    <button
+                      class="sd-button sd-button--secondary"
+                      type="button"
+                      (click)="beginReview(issue)"
+                      [attr.aria-expanded]="reviewingId() === issue.id"
+                    >
+                      Review
+                      <span class="sd-visually-hidden">issue from {{ issue.courierName }}</span>
+                    </button>
+                  } @else {
+                    <span class="page__muted">Closed</span>
+                  }
+                </td>
+              </tr>
+              @if (reviewingId() === issue.id) {
+                <tr class="issue-panel-row">
+                  <td colspan="6">
+                    <form
+                      class="form issue-review"
+                      [formGroup]="reviewForm"
+                      (ngSubmit)="saveReview(issue)"
+                      novalidate
+                    >
+                      <h3>Review this issue</h3>
+                      <div class="form__grid">
+                        <div class="sd-field">
+                          @let statusError = reviewError('status');
+                          <label class="sd-label" [for]="'review-status-' + issue.id">Outcome *</label>
+                          <select
+                            [id]="'review-status-' + issue.id"
+                            class="sd-input"
+                            formControlName="status"
+                            [attr.aria-invalid]="!!statusError"
+                            [attr.aria-describedby]="statusError ? 'review-status-error-' + issue.id : null"
+                          >
+                            <option value="">Select an outcome</option>
+                            @for (decision of decisionsFor(issue); track decision) {
+                              <option [value]="decision">{{ statusLabels[decision] }}</option>
+                            }
+                          </select>
+                          @if (statusError) {
+                            <p [id]="'review-status-error-' + issue.id" class="sd-error">
+                              {{ statusError }}
+                            </p>
+                          }
+                        </div>
+                        <div class="sd-field form__full">
+                          @let notesError = reviewError('resolutionNotes');
+                          <label class="sd-label" [for]="'review-notes-' + issue.id">
+                            Internal notes <span class="sd-label__optional">Optional</span>
+                          </label>
+                          <textarea
+                            [id]="'review-notes-' + issue.id"
+                            class="sd-input"
+                            formControlName="resolutionNotes"
+                            maxlength="1000"
+                            [attr.aria-invalid]="!!notesError"
+                            [attr.aria-describedby]="notesError ? 'review-notes-error-' + issue.id : null"
+                          ></textarea>
+                          @if (notesError) {
+                            <p [id]="'review-notes-error-' + issue.id" class="sd-error">
+                              {{ notesError }}
+                            </p>
+                          }
+                        </div>
+                      </div>
+                      <div class="page__actions">
+                        <button
+                          class="sd-button sd-button--primary"
+                          type="submit"
+                          [disabled]="saving()"
+                          [attr.aria-busy]="saving()"
+                        >
+                          @if (saving()) {
+                            <span class="sd-spinner" aria-hidden="true"></span> Saving…
+                          } @else {
+                            Save outcome
+                          }
+                        </button>
+                        <button class="sd-button sd-button--secondary" type="button" (click)="closeReview()">
+                          Close
+                        </button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="issue-pagination" aria-label="Issue pages">
+        <p>
+          Page {{ issues().number + 1 }} of {{ issues().totalPages }} ·
+          {{ issues().totalElements }} issues
+        </p>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="previousPage()"
+            [disabled]="issues().first"
+          >
+            Previous
+          </button>
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="nextPage()"
+            [disabled]="issues().last"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+</div>

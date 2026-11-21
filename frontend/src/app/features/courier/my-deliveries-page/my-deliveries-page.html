@@ -1,0 +1,281 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">My deliveries</h1>
+    @if (profile(); as courier) {
+      <p class="page__intro">
+        {{ courier.fullName }} · {{ courier.categoryName }}. Move each parcel forward as you go.
+      </p>
+    }
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  @if (loading()) {
+    <p class="page__loading" role="status">
+      <span class="sd-spinner" aria-hidden="true"></span> Loading your deliveries…
+    </p>
+  } @else if (notSetUp()) {
+    <section class="sd-card page__section">
+      <h2 class="page__section-title">Your delivery profile is not set up yet</h2>
+      <p class="page__muted">
+        A dispatcher needs to add you to the delivery team before parcels can be assigned to you.
+        Please contact your dispatcher.
+      </p>
+    </section>
+  } @else {
+    <section class="page__section" aria-labelledby="active-title">
+      <h2 id="active-title" class="page__section-title">To deliver ({{ active().length }})</h2>
+
+      @if (active().length === 0) {
+        <div class="sd-card">
+          <p class="page__muted">You have no parcels to deliver right now.</p>
+        </div>
+      }
+
+      @for (assignment of active(); track assignment.id) {
+        <article class="sd-card delivery" [attr.aria-labelledby]="'parcel-' + assignment.id">
+          <header class="delivery__head">
+            <h3 [id]="'parcel-' + assignment.id" class="delivery__reference">
+              {{ assignment.parcelReference }}
+            </h3>
+            <span class="sd-badge" [class]="statusClass(assignment.status)">
+              {{ statusLabels[assignment.status] }}
+            </span>
+          </header>
+          <p class="page__muted">Assigned {{ assignment.assignedAt | colomboDate }}</p>
+          @if (assignment.notes) {
+            <p class="delivery__notes"><strong>Note from dispatcher:</strong> {{ assignment.notes }}</p>
+          }
+
+          <div class="delivery__actions">
+            @if (step(assignment); as next) {
+              <button
+                class="sd-button sd-button--primary delivery__main"
+                type="button"
+                (click)="advance(assignment)"
+                [disabled]="busyId() === assignment.id"
+                [attr.aria-busy]="busyId() === assignment.id"
+              >
+                @if (busyId() === assignment.id) {
+                  <span class="sd-spinner" aria-hidden="true"></span> Updating…
+                } @else {
+                  {{ next.label }}
+                }
+              </button>
+            }
+            @if (assignment.status === 'OUT_FOR_DELIVERY') {
+              <div class="delivery__outcome" role="group" aria-label="Delivery outcome">
+                <button
+                  class="sd-button sd-button--primary delivery__main"
+                  type="button"
+                  (click)="openPanel(assignment, 'delivered')"
+                  [attr.aria-expanded]="isPanelOpen(assignment, 'delivered')"
+                >
+                  Delivered
+                </button>
+                <button
+                  class="sd-button sd-button--danger-outline delivery__main"
+                  type="button"
+                  (click)="openPanel(assignment, 'failed')"
+                  [attr.aria-expanded]="isPanelOpen(assignment, 'failed')"
+                >
+                  Delivery failed
+                </button>
+              </div>
+            }
+            <button
+              class="sd-button sd-button--secondary"
+              type="button"
+              (click)="openPanel(assignment, 'issue')"
+              [attr.aria-expanded]="isPanelOpen(assignment, 'issue')"
+            >
+              Report a problem
+            </button>
+          </div>
+
+          @if (isPanelOpen(assignment, 'delivered')) {
+            <form
+              class="form delivery__panel"
+              [formGroup]="proofForm"
+              (ngSubmit)="submitDelivered(assignment)"
+              novalidate
+            >
+              <h4>Confirm delivery</h4>
+              <p class="form__note">This marks the parcel as delivered and cannot be undone.</p>
+              <div class="sd-field">
+                @let nameError = fieldError('proof', 'recipientName');
+                <label class="sd-label" [for]="'proof-name-' + assignment.id">Received by *</label>
+                <input
+                  [id]="'proof-name-' + assignment.id"
+                  class="sd-input"
+                  formControlName="recipientName"
+                  maxlength="120"
+                  autocomplete="off"
+                  [attr.aria-invalid]="!!nameError"
+                  [attr.aria-describedby]="nameError ? 'proof-name-error-' + assignment.id : null"
+                />
+                @if (nameError) {
+                  <p [id]="'proof-name-error-' + assignment.id" class="sd-error">{{ nameError }}</p>
+                }
+              </div>
+              <div class="sd-field">
+                @let proofNotesError = fieldError('proof', 'notes');
+                <label class="sd-label" [for]="'proof-notes-' + assignment.id">
+                  Notes <span class="sd-label__optional">Optional</span>
+                </label>
+                <textarea
+                  [id]="'proof-notes-' + assignment.id"
+                  class="sd-input"
+                  formControlName="notes"
+                  maxlength="500"
+                  [attr.aria-invalid]="!!proofNotesError"
+                  [attr.aria-describedby]="proofNotesError ? 'proof-notes-error-' + assignment.id : null"
+                ></textarea>
+                @if (proofNotesError) {
+                  <p [id]="'proof-notes-error-' + assignment.id" class="sd-error">{{ proofNotesError }}</p>
+                }
+              </div>
+              <div class="page__actions">
+                <button class="sd-button sd-button--primary" type="submit" [disabled]="busyId() === assignment.id">
+                  Confirm delivered
+                </button>
+                <button class="sd-button sd-button--secondary" type="button" (click)="closePanel()">Cancel</button>
+              </div>
+            </form>
+          }
+
+          @if (isPanelOpen(assignment, 'failed')) {
+            <form
+              class="form delivery__panel delivery__panel--danger"
+              [formGroup]="failedForm"
+              (ngSubmit)="submitFailed(assignment)"
+              novalidate
+            >
+              <h4>Record a failed delivery</h4>
+              <p class="form__note">
+                This ends the current assignment. A dispatcher will arrange another attempt.
+              </p>
+              <div class="sd-field">
+                @let reasonError = fieldError('failed', 'reason');
+                <label class="sd-label" [for]="'failed-reason-' + assignment.id">Reason *</label>
+                <select
+                  [id]="'failed-reason-' + assignment.id"
+                  class="sd-input"
+                  formControlName="reason"
+                  [attr.aria-invalid]="!!reasonError"
+                  [attr.aria-describedby]="reasonError ? 'failed-reason-error-' + assignment.id : null"
+                >
+                  <option value="">Select a reason</option>
+                  @for (reason of failureReasons; track reason) {
+                    <option [value]="reason">{{ failureLabels[reason] }}</option>
+                  }
+                </select>
+                @if (reasonError) {
+                  <p [id]="'failed-reason-error-' + assignment.id" class="sd-error">{{ reasonError }}</p>
+                }
+              </div>
+              <div class="sd-field">
+                @let failedNotesError = fieldError('failed', 'notes');
+                <label class="sd-label" [for]="'failed-notes-' + assignment.id">
+                  Notes <span class="sd-label__optional">Optional</span>
+                </label>
+                <textarea
+                  [id]="'failed-notes-' + assignment.id"
+                  class="sd-input"
+                  formControlName="notes"
+                  maxlength="500"
+                  [attr.aria-invalid]="!!failedNotesError"
+                  [attr.aria-describedby]="failedNotesError ? 'failed-notes-error-' + assignment.id : null"
+                ></textarea>
+                @if (failedNotesError) {
+                  <p [id]="'failed-notes-error-' + assignment.id" class="sd-error">{{ failedNotesError }}</p>
+                }
+              </div>
+              <div class="page__actions">
+                <button class="sd-button sd-button--danger" type="submit" [disabled]="busyId() === assignment.id">
+                  Confirm delivery failed
+                </button>
+                <button class="sd-button sd-button--secondary" type="button" (click)="closePanel()">Cancel</button>
+              </div>
+            </form>
+          }
+
+          @if (isPanelOpen(assignment, 'issue')) {
+            <form
+              class="form delivery__panel"
+              [formGroup]="issueForm"
+              (ngSubmit)="submitIssue(assignment)"
+              novalidate
+            >
+              <h4>Report a problem</h4>
+              <div class="sd-field">
+                @let typeError = fieldError('issue', 'issueType');
+                <label class="sd-label" [for]="'issue-type-' + assignment.id">What happened? *</label>
+                <select
+                  [id]="'issue-type-' + assignment.id"
+                  class="sd-input"
+                  formControlName="issueType"
+                  [attr.aria-invalid]="!!typeError"
+                  [attr.aria-describedby]="typeError ? 'issue-type-error-' + assignment.id : null"
+                >
+                  <option value="">Select a type</option>
+                  @for (type of issueTypes; track type) {
+                    <option [value]="type">{{ issueLabels[type] }}</option>
+                  }
+                </select>
+                @if (typeError) {
+                  <p [id]="'issue-type-error-' + assignment.id" class="sd-error">{{ typeError }}</p>
+                }
+              </div>
+              <div class="sd-field">
+                @let descriptionError = fieldError('issue', 'description');
+                <label class="sd-label" [for]="'issue-description-' + assignment.id">Details *</label>
+                <textarea
+                  [id]="'issue-description-' + assignment.id"
+                  class="sd-input"
+                  formControlName="description"
+                  maxlength="1000"
+                  [attr.aria-invalid]="!!descriptionError"
+                  [attr.aria-describedby]="descriptionError ? 'issue-description-error-' + assignment.id : null"
+                ></textarea>
+                @if (descriptionError) {
+                  <p [id]="'issue-description-error-' + assignment.id" class="sd-error">{{ descriptionError }}</p>
+                }
+              </div>
+              <div class="page__actions">
+                <button class="sd-button sd-button--primary" type="submit" [disabled]="busyId() === assignment.id">
+                  Send report
+                </button>
+                <button class="sd-button sd-button--secondary" type="button" (click)="closePanel()">Cancel</button>
+              </div>
+            </form>
+          }
+        </article>
+      }
+    </section>
+
+    @if (finished().length > 0) {
+      <section class="page__section" aria-labelledby="finished-title">
+        <h2 id="finished-title" class="page__section-title">Recently finished</h2>
+        <div class="sd-card">
+          <ul class="finished">
+            @for (assignment of finished(); track assignment.id) {
+              <li class="finished__item">
+                <span class="delivery__reference">{{ assignment.parcelReference }}</span>
+                <span class="sd-badge" [class]="statusClass(assignment.status)">
+                  {{ statusLabels[assignment.status] }}
+                </span>
+                <span class="page__muted">{{ assignment.completedAt | colomboDate }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      </section>
+    }
+  }
+</div>

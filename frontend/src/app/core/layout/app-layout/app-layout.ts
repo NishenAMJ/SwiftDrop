@@ -69,6 +69,10 @@ export class AppLayout {
           { label: 'Parcel intake', path: '/warehouse/intake' },
           { label: 'Parcel sorting', path: '/warehouse/sorting' },
           { label: 'Parcel transfers', path: '/warehouse/transfers' },
+          { label: 'Courier categories', path: '/dispatcher/courier-categories' },
+          { label: 'Couriers', path: '/dispatcher/courier-fleet' },
+          { label: 'Courier assignments', path: '/dispatcher/assignments' },
+          { label: 'Delivery issues', path: '/dispatcher/delivery-issues' },
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
@@ -97,7 +101,10 @@ export class AppLayout {
     if (has('COURIER')) {
       groups.push({
         heading: 'Courier',
-        items: [{ label: 'Courier account', path: '/courier/application' }],
+        items: [
+          { label: 'My deliveries', path: '/courier/deliveries' },
+          { label: 'Courier account', path: '/courier/application' },
+        ],
       });
     }
     if (has('CUSTOMER')) {

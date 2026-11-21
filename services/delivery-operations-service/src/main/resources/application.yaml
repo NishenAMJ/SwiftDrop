@@ -26,10 +26,33 @@ spring:
       - delivery_operations
     create-schemas: false
     locations: classpath:db/migration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: swiftdrop-identity
+          jwk-set-uri: ${IDENTITY_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+          audiences: swiftdrop-api
   rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:swiftdrop}
+    password: ${RABBITMQ_PASSWORD:}
+    connection-timeout: 3s
+    publisher-confirm-type: correlated
     listener:
       simple:
         auto-startup: false
+
+delivery:
+  parcel:
+    # Parcel & Pricing, used to turn a tracking number into the parcel id that events must carry.
+    base-url: ${DELIVERY_PARCEL_BASE_URL:http://localhost:8082}
+    stub-enabled: ${DELIVERY_PARCEL_STUB_ENABLED:false}
+  outbox:
+    enabled: ${DELIVERY_OUTBOX_ENABLED:true}
+    delay-ms: 2000
+    table: delivery_operations.outbox_events
 
 management:
   health:

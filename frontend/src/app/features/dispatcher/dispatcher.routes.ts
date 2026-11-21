@@ -30,6 +30,32 @@ export const DISPATCHER_ROUTES: Routes = [
           import('./pricing-rules/pricing-rules.component').then((m) => m.PricingRulesComponent),
       },
       {
+        path: 'courier-categories',
+        title: 'Courier categories | SwiftDrop',
+        loadComponent: () =>
+          import('./courier-categories-page/courier-categories-page').then(
+            (m) => m.CourierCategoriesPage,
+          ),
+      },
+      {
+        path: 'courier-fleet',
+        title: 'Couriers | SwiftDrop',
+        loadComponent: () =>
+          import('./courier-fleet-page/courier-fleet-page').then((m) => m.CourierFleetPage),
+      },
+      {
+        path: 'assignments',
+        title: 'Courier assignments | SwiftDrop',
+        loadComponent: () =>
+          import('./assignments-page/assignments-page').then((m) => m.AssignmentsPage),
+      },
+      {
+        path: 'delivery-issues',
+        title: 'Delivery issues | SwiftDrop',
+        loadComponent: () =>
+          import('./delivery-issues-page/delivery-issues-page').then((m) => m.DeliveryIssuesPage),
+      },
+      {
         path: 'merchants',
         title: 'Merchant applications | SwiftDrop',
         loadComponent: () =>

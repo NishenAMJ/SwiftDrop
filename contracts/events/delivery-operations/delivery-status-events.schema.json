@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://swiftdrop.dev/contracts/events/delivery-operations/delivery-status-events.schema.json",
   "title": "Delivery status events",
-  "description": "Proposal for team review. Published to the swiftdrop.delivery-operations topic exchange for courier assignment and delivery progress. Tracking & Reporting binds delivery.*.",
+  "description": "Published by delivery-operations-service to the swiftdrop.delivery-operations topic exchange for courier assignment and delivery progress, one event per step, through a transactional outbox (at least once; consumers skip repeated eventIds). Tracking & Reporting binds delivery.*. parcelId is Parcel & Pricing's id, resolved from the tracking number when the parcel is assigned. failureCode is the customer-safe failure category; the courier's free-text notes are never included. Examples are in contracts/examples/delivery-operations.",
   "allOf": [
     { "$ref": "../envelope.schema.json" },
     {

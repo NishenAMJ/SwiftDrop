@@ -1,21 +1,25 @@
 # Delivery Operations Service
 
-Spring Boot service for SwiftDrop delivery operations. The current module implements Member 5's warehouse, sorting, and parcel-transfer responsibilities. Member 6 should extend this same application for courier and delivery-execution features.
+Spring Boot service for SwiftDrop delivery operations. It covers two areas in one application:
+
+- **Warehouse operations** (Member 5): warehouses, parcel arrivals, sorting and transfers. Code is in `com.swiftdrop.delivery.{api,domain,repository,service}`.
+- **Courier delivery** (Member 6): courier categories, courier profiles, assignments, status updates, delivery attempts, proof of delivery and delivery issues. Code is in `com.swiftdrop.delivery.courier.*`, so the two areas do not share folders.
 
 ## Technology
 
 - Java 21 and Spring Boot 4.1
 - Spring MVC, Validation, and Data JPA
 - PostgreSQL with Flyway migrations
-- RabbitMQ client dependency for future agreed event contracts
+- Spring Security as an OAuth2 resource server (tokens from identity-merchant-service)
+- RabbitMQ, with a transactional outbox for published events
 - Actuator health checks
 
 ## Development
 
-Create a root `.env` from `.env.example`, set `DELIVERY_DB_PASSWORD`, and start PostgreSQL from the repository root:
+Create a root `.env` from `.env.example`, set `DELIVERY_DB_PASSWORD` and `RABBITMQ_PASSWORD`, and start the dependencies from the repository root:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres rabbitmq
 ```
 
 Run and test the application:
@@ -33,8 +37,16 @@ Environment variables:
 | `DELIVERY_DB_URL` | `jdbc:postgresql://localhost:5432/swiftdrop` |
 | `DELIVERY_DB_USER` | `delivery_user` |
 | `DELIVERY_DB_PASSWORD` | Required; loaded from the root `.env` for local runs |
+| `IDENTITY_JWKS_URI` | `http://localhost:8081/.well-known/jwks.json`; where access-token keys are fetched |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT` | `localhost`, `5672` |
+| `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | `swiftdrop`, empty; the password is required in practice |
+| `DELIVERY_PARCEL_BASE_URL` | `http://localhost:8082`; Parcel & Pricing, used to look up parcels by tracking number |
+| `DELIVERY_PARCEL_STUB_ENABLED` | `false`; when `true`, every tracking number is accepted and given a derived parcel id (for local work without Parcel & Pricing) |
+| `DELIVERY_OUTBOX_ENABLED` | `true`; set `false` to stop publishing events |
 
 ## API groups
+
+Warehouse operations (dispatchers only):
 
 - `/api/v1/warehouses` — create, list, view, update, and change warehouse status
 - `/api/v1/warehouse-parcels/arrivals` — record parcel arrivals
@@ -42,6 +54,40 @@ Environment variables:
 - `/api/v1/transfers` — create, dispatch, receive, and list parcel transfers
 - `/api/v1/warehouses/{warehouseId}/dashboard` — warehouse operational summary
 
-The shared OpenAPI contract is at `../../contracts/openapi/delivery-operations-service.yaml`.
+Courier delivery:
 
-Authentication and RabbitMQ publication are intentionally not hard-coded yet. The team must first agree on JWT claims, endpoint roles, exchange names, routing keys, and event payloads.
+- `/api/v1/courier-categories` — vehicle categories such as motorcycle, three-wheeler and van
+- `/api/v1/courier-profiles` — set up approved couriers for delivery, and control their availability. This is deliberately not `/api/v1/couriers`, which belongs to identity-merchant-service
+- `/api/v1/assignments` — assign a parcel to a courier, move it along, record a failed attempt or proof of delivery
+- `/api/v1/delivery-issues` — couriers report problems, dispatchers review them
+
+The shared OpenAPI contract is at `../../contracts/openapi/delivery-operations-service.yaml`; it lists the roles allowed on each operation.
+
+## Access rules
+
+Roles come from the `roles` claim of the access token. Role rules are in `config/SecurityConfig.java`; ownership rules (a courier sees and changes only their own assignments and issues) are in `courier/security/CourierAccess.java`.
+
+| Who | Can do |
+| --- | --- |
+| Dispatcher | Everything in warehouse operations; manage categories and courier profiles; assign parcels; review issues; read all assignments, attempts and proofs |
+| Courier | Read categories; look up their own profile; read, move along, and finish their own assignments; report issues |
+
+The service never reads Identity's tables. A courier profile only stores the identity user id (the token `sub`).
+
+## Assignment flow and events
+
+```
+ASSIGNED -> PICKED_UP -> IN_TRANSIT (optional) -> OUT_FOR_DELIVERY -> DELIVERED
+                                                                  \-> DELIVERY_FAILED
+```
+
+- The status endpoint accepts only the steps up to `OUT_FOR_DELIVERY`. `DELIVERED` happens when proof of delivery is recorded, and `DELIVERY_FAILED` when a failed attempt is recorded, so those details are never skipped.
+- A failed assignment is finished. To try again, a dispatcher creates a new assignment for the same parcel.
+- Assigning a parcel looks it up in Parcel & Pricing with the dispatcher's own token, so the parcel must exist. The Parcel & Pricing id is stored and sent in events.
+
+Each step writes an event to the `outbox_events` table in the same transaction as the change. A scheduled publisher sends them to the topic exchange `swiftdrop.delivery-operations` and marks a row published only after the broker confirms it (at least once; consumers skip repeated `eventId`s). Routing keys: `delivery.assigned`, `delivery.picked-up`, `delivery.in-transit`, `delivery.out-for-delivery`, `delivery.delivered`, `delivery.failed`. The payloads are described in `../../contracts/events/delivery-operations/delivery-status-events.schema.json`, with examples in `../../contracts/examples/delivery-operations/`. Courier notes are never published; a failed delivery carries only a customer-safe `failureCode`.
+
+## Not done yet
+
+- `parcel.status-changed` (used by notification-webhook-service) and `delivery.cod-collected` (used by payment-settlement-service) are not published. They need data this service does not have yet, and the consumers' exchange names and contracts still have to be agreed.
+- Proof of delivery stores an optional media URL but does not upload files.

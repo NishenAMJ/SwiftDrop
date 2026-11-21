@@ -1,0 +1,11 @@
+@use '../../../shared/styles/page';
+
+.fleet-vehicle {
+  font-family: var(--sd-font-mono);
+}
+
+.fleet-status {
+  display: block;
+  margin-top: var(--sd-space-2);
+  min-width: 10rem;
+}
