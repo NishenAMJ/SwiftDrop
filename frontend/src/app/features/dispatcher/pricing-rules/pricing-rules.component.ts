@@ -1,7 +1,6 @@
 import { Component, ChangeDetectionStrategy, signal, computed, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { PricingService, PricingRule, PricingRuleRequest } from '../services/pricing.service';
 
 /**
@@ -12,7 +11,7 @@ import { PricingService, PricingRule, PricingRuleRequest } from '../services/pri
 @Component({
   selector: 'app-pricing-rules',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, DecimalPipe],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, DecimalPipe],
   templateUrl: './pricing-rules.component.html',
   styleUrl: './pricing-rules.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

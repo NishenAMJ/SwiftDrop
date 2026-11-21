@@ -1,7 +1,6 @@
 import { Component, signal, computed, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormControl } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { DeliveryZoneService, Zone } from '../services/delivery-zone.service';
 
 /**
@@ -12,7 +11,7 @@ import { DeliveryZoneService, Zone } from '../services/delivery-zone.service';
 @Component({
   selector: 'app-delivery-zones',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './delivery-zones.component.html',
   styleUrls: ['./delivery-zones.component.scss'],
 })

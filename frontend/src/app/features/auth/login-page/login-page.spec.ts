@@ -78,6 +78,16 @@ describe('LoginPage', () => {
     expect(navigate).toHaveBeenCalledWith('/dispatcher');
   });
 
+  it('sends a merchant to the merchant dashboard', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    fill('merchant@example.com', 'Secret-pass-1');
+    await submit();
+
+    http.expectOne('/api/v1/auth/login').flush(tokenResponse({ ...exampleUser, roles: ['CUSTOMER', 'MERCHANT'] }));
+
+    expect(navigate).toHaveBeenCalledWith('/merchant/dashboard');
+  });
+
   it('explains a wrong password in its own words and keeps what was typed', async () => {
     fill('nimal@example.com', 'Wrong-pass-1');
     await submit();

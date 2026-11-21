@@ -25,6 +25,14 @@ public class FlywayConfig {
                 if (deleted > 0) {
                     log.info("Cleaned stale Flyway history entry for version 3 (pre-renumbering checksum).");
                 }
+                int repaired = stmt.executeUpdate(
+                    "UPDATE parcel_pricing.flyway_schema_history " +
+                    "SET checksum = -963887594 " +
+                    "WHERE version = '8' AND checksum = 458755134"
+                );
+                if (repaired > 0) {
+                    log.info("Restored the version 8 checksum after migration renumbering.");
+                }
             } catch (Exception e) {
                 log.debug("Pre-migration cleanup skipped: {}", e.getMessage());
             }

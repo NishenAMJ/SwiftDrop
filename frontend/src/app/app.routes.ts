@@ -98,5 +98,7 @@ export const routes: Routes = [
       },
     ],
   },
+  // Old merchant dashboard URL
+  { path: 'account/merchant/dashboard', redirectTo: '/merchant/dashboard', pathMatch: 'full' },
   { path: '**', redirectTo: 'account' },
 ];

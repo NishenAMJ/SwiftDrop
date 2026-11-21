@@ -41,8 +41,8 @@ describe('homeFor', () => {
   it('sends each role to its own start page, most specialised first', () => {
     expect(homeFor(as(['CUSTOMER']))).toBe('/customer');
     expect(homeFor(as(['CUSTOMER', 'COURIER']))).toBe('/courier');
-    expect(homeFor(as(['CUSTOMER', 'MERCHANT']))).toBe('/merchant');
-    expect(homeFor(as(['CUSTOMER', 'MERCHANT', 'COURIER']))).toBe('/merchant');
+    expect(homeFor(as(['CUSTOMER', 'MERCHANT']))).toBe('/merchant/dashboard');
+    expect(homeFor(as(['CUSTOMER', 'MERCHANT', 'COURIER']))).toBe('/merchant/dashboard');
     expect(homeFor(as(['DISPATCHER']))).toBe('/dispatcher');
   });
 
