@@ -22,6 +22,7 @@ import com.swiftdrop.delivery.courier.repository.DeliveryAssignmentRepository;
 import com.swiftdrop.delivery.courier.repository.DeliveryAttemptRepository;
 import com.swiftdrop.delivery.courier.repository.ProofOfDeliveryRepository;
 import com.swiftdrop.delivery.courier.security.CurrentActor;
+import com.swiftdrop.delivery.exception.AssignmentRuleException;
 import com.swiftdrop.delivery.exception.ConflictException;
 import com.swiftdrop.delivery.exception.InvalidOperationException;
 import com.swiftdrop.delivery.exception.ResourceNotFoundException;
@@ -66,6 +67,22 @@ public class DeliveryAssignmentService {
         this.actor = actor;
     }
 
+    /**
+     * The booking was cancelled in Parcel & Pricing: end any open assignment for it. Safe to repeat. Nothing is
+     * published, because Parcel & Pricing already announced the cancellation to everyone who needs it.
+     */
+    @Transactional
+    public int cancelForParcel(UUID parcelId) {
+        var open = assignmentRepository.findAllByParcelIdAndStatusIn(parcelId, AssignmentStatus.ACTIVE);
+        var now = Instant.now();
+        for (var assignment : open) {
+            var previous = assignment.getStatus();
+            assignment.moveTo(AssignmentStatus.CANCELLED, now);
+            audit(assignment, previous, AssignmentStatus.CANCELLED, now);
+        }
+        return open.size();
+    }
+
     /** The audit trail of an assignment, oldest first. */
     public List<StatusChangeResponse> history(UUID assignmentId) {
         requireAssignment(assignmentId);
@@ -94,6 +111,19 @@ public class DeliveryAssignmentService {
         // The parcel must exist in Parcel & Pricing; its id is what tracking and other services key on.
         var parcel = parcelLookup.find(normalizeReference(request.parcelReference()), bearerToken);
         var reference = normalizeReference(parcel.trackingNumber());
+        // A cancelled booking must never be scheduled, even if the cancellation came after it was looked up.
+        if (parcel.isCancelled()) {
+            throw new AssignmentRuleException(AssignmentRuleException.PARCEL_CANCELLED,
+                    "This parcel was cancelled and cannot be assigned: " + reference);
+        }
+        // The category's weight limit is a hard limit: a parcel over it cannot go with that courier.
+        var limit = courier.getCategory().getMaxWeightKg();
+        if (limit != null && parcel.weightKg() != null && parcel.weightKg().compareTo(limit) > 0) {
+            throw new AssignmentRuleException(AssignmentRuleException.PARCEL_TOO_HEAVY,
+                    "The parcel weighs " + parcel.weightKg().stripTrailingZeros().toPlainString() + " kg, over the "
+                            + limit.stripTrailingZeros().toPlainString() + " kg limit for category "
+                            + courier.getCategory().getCode());
+        }
         if (assignmentRepository.existsByParcelReferenceIgnoreCaseAndStatusIn(reference, AssignmentStatus.ACTIVE)) {
             throw new ConflictException("Parcel already has an active assignment: " + reference);
         }
@@ -149,6 +179,9 @@ public class DeliveryAssignmentService {
         }
         if (next == AssignmentStatus.DELIVERY_FAILED) {
             throw new InvalidOperationException("Record a failed delivery attempt to mark a parcel as DELIVERY_FAILED");
+        }
+        if (next == AssignmentStatus.CANCELLED) {
+            throw new InvalidOperationException("An assignment is cancelled only when its booking is cancelled");
         }
         var assignment = requireAssignment(assignmentId);
         var occurredAt = request.occurredAt() == null ? Instant.now() : request.occurredAt();

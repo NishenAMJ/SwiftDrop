@@ -166,7 +166,7 @@ public class DeliveryAssignment {
         switch (next) {
             case PICKED_UP -> pickedUpAt = at;
             case OUT_FOR_DELIVERY -> outForDeliveryAt = at;
-            case DELIVERED, DELIVERY_FAILED -> completedAt = at;
+            case DELIVERED, DELIVERY_FAILED, CANCELLED -> completedAt = at;
             default -> { }
         }
     }

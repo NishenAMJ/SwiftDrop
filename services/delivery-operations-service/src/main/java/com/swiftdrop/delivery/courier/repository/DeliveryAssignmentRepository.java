@@ -11,6 +11,7 @@ import java.util.UUID;
 
 public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssignment, UUID> {
     boolean existsByParcelReferenceIgnoreCaseAndStatusIn(String parcelReference, Collection<AssignmentStatus> statuses);
+    java.util.List<DeliveryAssignment> findAllByParcelIdAndStatusIn(UUID parcelId, Collection<AssignmentStatus> statuses);
     Page<DeliveryAssignment> findAllByParcelReferenceIgnoreCase(String parcelReference, Pageable pageable);
     Page<DeliveryAssignment> findAllByCourier_IdAndParcelReferenceIgnoreCase(UUID courierId, String parcelReference,
                                                                             Pageable pageable);

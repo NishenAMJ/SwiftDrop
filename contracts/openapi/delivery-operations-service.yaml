@@ -360,6 +360,9 @@ paths:
         Role DISPATCHER. The parcel is looked up in Parcel & Pricing by tracking number, using the
         dispatcher's own token, so it must exist. The courier must be AVAILABLE in an ACTIVE category,
         and the parcel must not already have an active assignment. Publishes delivery.assigned.
+        Refused with 422 and a code in the problem body: PARCEL_CANCELLED (the booking was cancelled)
+        or PARCEL_TOO_HEAVY (the parcel's weight is over the courier category's maxWeightKg; a category
+        with no limit, or a parcel with no known weight, is not checked).
       requestBody:
         required: true
         content:
@@ -667,7 +670,8 @@ components:
       enum: [AVAILABLE, OFF_DUTY, INACTIVE]
     AssignmentStatus:
       type: string
-      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED]
+      description: CANCELLED is set only when Parcel & Pricing cancels the booking (parcel.cancelled), never by a person, and publishes no delivery event.
+      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED, CANCELLED]
     FailureReason:
       type: string
       enum: [RECIPIENT_UNAVAILABLE, INCORRECT_ADDRESS, RECIPIENT_REFUSED, OTHER]

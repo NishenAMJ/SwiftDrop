@@ -193,6 +193,15 @@ describe('MyDeliveriesPage', () => {
     });
   });
 
+  it('lists a cancelled parcel as finished, with no actions to take on it', async () => {
+    const fixture = await create([assignment('CANCELLED')]);
+    const text = fixture.nativeElement.textContent;
+
+    expect(text).toContain('Cancelled');
+    expect(text).not.toContain('Mark as picked up');
+    expect(text).not.toContain('Delivery failed');
+  });
+
   describe('where to go', () => {
     const job = {
       ...assignment('ASSIGNED'),

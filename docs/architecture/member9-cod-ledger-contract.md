@@ -36,6 +36,23 @@ records a completed COD collection. The version 1 payload is defined in
 The producer and consumer owners must confirm the exchange, queue, DLQ and pricing
 lookup behavior before enabling the consumer outside isolated tests.
 
+### Verification (implemented)
+
+With `PAYMENT_COD_VERIFICATION_MODE=parcel`, Payment checks each event against Parcel & Pricing before
+anything is posted, using `GET /api/v1/internal/parcels/{bookingId}/cod-verification`. There is no user
+token on a queue message, so the call carries a shared key in `X-Internal-Key` (Payment:
+`PAYMENT_PARCEL_INTERNAL_KEY`; Parcel & Pricing: `PARCEL_INTERNAL_API_KEY`, the same value). With no key set
+that endpoint answers 404. It is not routed through the API gateway. This shared key is an interim choice
+until the team agrees a service-identity mechanism for all service-to-service calls.
+
+- Rejected for good (dead-lettered): unknown booking, not a COD booking, or a different tracking number,
+  merchant, pricing snapshot, currency or expected amount.
+- Retried (never dead-lettered): Parcel & Pricing unreachable, answering 5xx, or refusing the key.
+- `collectedAmount` may differ from `expectedAmount`; the collection is recorded as the courier's fact and
+  reconciliation flags the difference.
+- The exchange, queue, bindings and DLQ are declared even while the consumer is off, so events published
+  before it is enabled are kept (a topic exchange drops messages that have no bound queue).
+
 ## Handover and reconciliation workflow
 
 1. An authenticated `COURIER` submits a handover containing only that courier's

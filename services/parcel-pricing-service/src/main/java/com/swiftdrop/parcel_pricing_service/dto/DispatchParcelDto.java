@@ -7,7 +7,8 @@ import java.util.UUID;
 
 /**
  * What Delivery Operations needs to assign a parcel and to report a Cash on Delivery collection.
- * Includes the pickup and delivery contacts, which the assigned courier needs to do the job, and no fees.
+ * Includes the pickup and delivery contacts, which the assigned courier needs to do the job, the booking status
+ * (so a cancelled parcel is never scheduled) and the weight (for the courier category's limit). No fees.
  * Dispatcher-only: customers never reach this.
  */
 public record DispatchParcelDto(
@@ -20,7 +21,9 @@ public record DispatchParcelDto(
         String pricingSnapshotId,
         String currency,
         AddressDto pickupAddress,
-        AddressDto deliveryAddress
+        AddressDto deliveryAddress,
+        String status,
+        BigDecimal weightKg
 ) {
     public static DispatchParcelDto from(Parcel parcel) {
         return new DispatchParcelDto(
@@ -33,6 +36,8 @@ public record DispatchParcelDto(
                 parcel.getPricingSnapshotId(),
                 "LKR",
                 AddressDto.from(parcel.getPickupAddress()),
-                AddressDto.from(parcel.getDeliveryAddress()));
+                AddressDto.from(parcel.getDeliveryAddress()),
+                parcel.getStatus(),
+                parcel.getWeightKg());
     }
 }

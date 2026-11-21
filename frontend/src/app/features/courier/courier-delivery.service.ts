@@ -19,6 +19,7 @@ import {
   DeliveryPage,
   IssueFilters,
   ProofOfDelivery,
+  StatusChange,
   RecordAttemptRequest,
   RecordProofRequest,
   ReportIssueRequest,
@@ -118,6 +119,11 @@ export class CourierDeliveryService {
 
   listAttempts(assignmentId: string): Observable<DeliveryAttempt[]> {
     return this.http.get<DeliveryAttempt[]>(`${ASSIGNMENT_API}/${id(assignmentId)}/attempts`);
+  }
+
+  /** Who moved the assignment through each status, oldest first. Dispatchers only. */
+  listHistory(assignmentId: string): Observable<StatusChange[]> {
+    return this.http.get<StatusChange[]>(`${ASSIGNMENT_API}/${id(assignmentId)}/history`);
   }
 
   getProof(assignmentId: string): Observable<ProofOfDelivery> {
