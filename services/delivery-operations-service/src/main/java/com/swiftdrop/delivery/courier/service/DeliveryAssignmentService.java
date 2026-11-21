@@ -75,8 +75,17 @@ public class DeliveryAssignmentService {
             throw new ConflictException("Parcel already has an active assignment: " + reference);
         }
         var now = Instant.now();
-        var assignment = assignmentRepository.save(new DeliveryAssignment(parcel.parcelId(), parcel.customerId(),
-                reference, courier, request.assignedBy().trim(), cleanNullable(request.notes()), now));
+        var created = new DeliveryAssignment(parcel.parcelId(), parcel.customerId(),
+                reference, courier, request.assignedBy().trim(), cleanNullable(request.notes()), now);
+        // Before the first save: these columns are never updated afterwards.
+        created.recordContacts(parcel.pickup(), parcel.delivery());
+        if (parcel.merchantId() != null) {
+            created.forMerchant(parcel.merchantId());
+        }
+        if (parcel.collectsCash()) {
+            created.collectCash(parcel.codAmount(), parcel.pricingSnapshotId(), parcel.currency());
+        }
+        var assignment = assignmentRepository.save(created);
         events.progressed(assignment, null, now);
         return AssignmentResponse.from(assignment);
     }
@@ -149,12 +158,23 @@ public class DeliveryAssignmentService {
         if (proofRepository.findByAssignment_Id(assignmentId).isPresent()) {
             throw new ConflictException("Proof of delivery already recorded for assignment: " + assignmentId);
         }
+        // Cash is collected for Cash on Delivery parcels only, and the courier must say how much.
+        if (assignment.isCashOnDelivery() && request.collectedAmount() == null) {
+            throw new InvalidOperationException("Enter the cash collected: this parcel is Cash on Delivery");
+        }
+        if (!assignment.isCashOnDelivery() && request.collectedAmount() != null) {
+            throw new InvalidOperationException("This parcel is not Cash on Delivery, so no cash can be recorded");
+        }
         var deliveredAt = request.deliveredAt() == null ? Instant.now() : request.deliveredAt();
         assignment.moveTo(AssignmentStatus.DELIVERED, deliveredAt);
-        var proof = new ProofOfDelivery(assignment, request.recipientName().trim(), cleanNullable(request.notes()),
-                cleanNullable(request.mediaUrl()), deliveredAt);
+        var proof = proofRepository.save(new ProofOfDelivery(assignment, request.recipientName().trim(),
+                cleanNullable(request.notes()), cleanNullable(request.mediaUrl()), deliveredAt,
+                request.collectedAmount()));
         events.progressed(assignment, AssignmentStatus.OUT_FOR_DELIVERY, deliveredAt);
-        return ProofResponse.from(proofRepository.save(proof));
+        if (assignment.isCashOnDelivery()) {
+            events.cashCollected(assignment, proof, deliveredAt);
+        }
+        return ProofResponse.from(proof);
     }
 
     /** The courier an assignment belongs to; used by controllers for ownership checks. */

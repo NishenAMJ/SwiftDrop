@@ -233,6 +233,12 @@
                             <dt>Delivered</dt>
                             <dd>{{ received.deliveredAt | colomboDate }}</dd>
                           </div>
+                          @if (received.collectedAmount != null) {
+                            <div>
+                              <dt>Cash collected</dt>
+                              <dd>{{ assignment.currency }} {{ received.collectedAmount | number: '1.2-2' }}</dd>
+                            </div>
+                          }
                           @if (received.notes) {
                             <div class="details__full">
                               <dt>Courier's note (internal)</dt>

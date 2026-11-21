@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -40,11 +41,16 @@ public class ProofOfDelivery {
     @Column(name = "delivered_at", nullable = false)
     private Instant deliveredAt;
 
+    /** Cash collected on Cash on Delivery parcels; null otherwise. */
+    @Column(name = "collected_amount", precision = 12, scale = 2)
+    private BigDecimal collectedAmount;
+
     protected ProofOfDelivery() {
     }
 
     public ProofOfDelivery(DeliveryAssignment assignment, String recipientName, String notes, String mediaUrl,
-                           Instant deliveredAt) {
+                           Instant deliveredAt, BigDecimal collectedAmount) {
+        this.collectedAmount = collectedAmount;
         this.assignment = assignment;
         this.parcelReference = assignment.getParcelReference();
         this.recipientName = recipientName;
@@ -60,4 +66,5 @@ public class ProofOfDelivery {
     public String getNotes() { return notes; }
     public String getMediaUrl() { return mediaUrl; }
     public Instant getDeliveredAt() { return deliveredAt; }
+    public BigDecimal getCollectedAmount() { return collectedAmount; }
 }

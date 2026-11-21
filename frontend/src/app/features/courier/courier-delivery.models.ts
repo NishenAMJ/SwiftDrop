@@ -88,6 +88,13 @@ export interface CourierProfileFilters {
   size?: number;
 }
 
+/** Who to meet and where. Sent only to the assigned courier and dispatchers, and only while the job is open. */
+export interface ParcelContact {
+  name: string;
+  phone: string;
+  address: string;
+}
+
 export interface DeliveryAssignment {
   id: string;
   parcelReference: string;
@@ -97,6 +104,11 @@ export interface DeliveryAssignment {
   assignedBy: string;
   status: AssignmentStatus;
   notes: string | null;
+  /** Cash to collect at the door for a merchant Cash on Delivery order; null otherwise. */
+  codAmount: number | null;
+  currency: string | null;
+  pickup: ParcelContact | null;
+  delivery: ParcelContact | null;
   assignedAt: string;
   pickedUpAt: string | null;
   outForDeliveryAt: string | null;
@@ -141,6 +153,8 @@ export interface RecordProofRequest {
   notes: string | null;
   mediaUrl: string | null;
   deliveredAt: string | null;
+  /** Required for Cash on Delivery parcels, left out for all others. */
+  collectedAmount: number | null;
 }
 
 export interface ProofOfDelivery {
@@ -151,6 +165,7 @@ export interface ProofOfDelivery {
   notes: string | null;
   mediaUrl: string | null;
   deliveredAt: string;
+  collectedAmount: number | null;
 }
 
 export interface ReportIssueRequest {

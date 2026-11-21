@@ -44,6 +44,8 @@ public class SecurityConfig {
                 // cancellation and profile: always a signed-in user; ownership is checked per booking.
                 .requestMatchers("/api/v1/bookings/**").authenticated()
                 .requestMatchers("/api/v1/customer/**").authenticated()
+                // Parcel lookup for Delivery Operations when a dispatcher assigns a courier.
+                .requestMatchers("/api/v1/dispatch/**").hasAnyRole("DISPATCHER", "ADMIN")
                 // Merchant dashboard orders: a MERCHANT token from Identity (merchant_id claim).
                 .requestMatchers("/api/merchant/orders", "/api/merchant/orders/**").hasRole("MERCHANT")
                 // External merchant API: a MERCHANT bearer token, or X-API-Key verified with Identity

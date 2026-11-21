@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormGroup, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -33,7 +34,7 @@ const FINISHED: AssignmentStatus[] = ['DELIVERED', 'DELIVERY_FAILED'];
 /** A courier's own parcels: move each one forward, then record proof or a failed attempt. */
 @Component({
   selector: 'app-my-deliveries-page',
-  imports: [ColomboDatePipe, ReactiveFormsModule],
+  imports: [ColomboDatePipe, DecimalPipe, ReactiveFormsModule],
   templateUrl: './my-deliveries-page.html',
   styleUrl: './my-deliveries-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,6 +76,7 @@ export class MyDeliveriesPage implements OnInit {
   protected readonly proofForm = this.formBuilder.group({
     recipientName: ['', [Validators.required, Validators.maxLength(120)]],
     notes: ['', Validators.maxLength(500)],
+    collectedAmount: [null as number | null],
   });
 
   protected readonly failedForm = this.formBuilder.group({
@@ -138,6 +140,14 @@ export class MyDeliveriesPage implements OnInit {
     this.proofForm.reset();
     this.failedForm.reset();
     this.issueForm.reset();
+    // Cash on Delivery parcels need the amount handed over; no other parcel takes one.
+    const amount = this.proofForm.controls.collectedAmount;
+    if (kind === 'delivered' && assignment.codAmount != null) {
+      amount.setValidators([Validators.required, Validators.min(0.01), Validators.max(9999999999.99)]);
+    } else {
+      amount.clearValidators();
+    }
+    amount.updateValueAndValidity();
   }
 
   protected closePanel(): void {
@@ -160,6 +170,7 @@ export class MyDeliveriesPage implements OnInit {
         notes: value.notes.trim() || null,
         mediaUrl: null,
         deliveredAt: null,
+        collectedAmount: assignment.codAmount != null ? value.collectedAmount : null,
       }),
       `${assignment.parcelReference} marked as delivered.`,
     );
@@ -195,6 +206,15 @@ export class MyDeliveriesPage implements OnInit {
     );
   }
 
+  /** A phone number a handset can dial: digits and a leading plus only. */
+  protected telHref(phone: string): string {
+    return `tel:${phone.replace(/(?!^\+)[^\d]/g, '')}`;
+  }
+
+  protected mapsHref(address: string): string {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  }
+
   protected statusClass(status: AssignmentStatus): string {
     return assignmentStatusClass(status);
   }
@@ -207,6 +227,9 @@ export class MyDeliveriesPage implements OnInit {
       form === 'proof' ? this.proofForm : form === 'failed' ? this.failedForm : this.issueForm;
     const control = group.get(field);
     if (!control || !(control.touched || this.submitted()) || !control.errors) return null;
+    if (field === 'collectedAmount') {
+      return control.errors['required'] ? 'Enter the cash you collected.' : 'Enter an amount greater than zero.';
+    }
     if (control.errors['required']) {
       return field === 'reason' || field === 'issueType' ? 'Choose an option.' : 'This field is required.';
     }
