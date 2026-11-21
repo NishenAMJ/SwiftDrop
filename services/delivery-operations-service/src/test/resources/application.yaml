@@ -10,10 +10,24 @@ spring:
       ddl-auto: create-drop
   flyway:
     enabled: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Never contacted: tests present pre-built tokens through MockMvc.
+          jwk-set-uri: http://localhost:0/.well-known/jwks.json
   rabbitmq:
     listener:
       simple:
         auto-startup: false
+
+delivery:
+  parcel:
+    stub-enabled: true
+  outbox:
+    # The publisher is exercised directly in OutboxPublisherTest.
+    enabled: false
+    table: outbox_events
 
 management:
   health:
