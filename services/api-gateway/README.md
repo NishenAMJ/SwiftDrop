@@ -26,7 +26,7 @@ ownership decisions remain in each service.
 |---|---|
 | Identity auth, user, dispatcher, merchant, courier, OAuth and JWKS paths | Identity, `:8081` |
 | `/api/v1/bookings/**`, `/api/v1/customer/profile/**`, `/api/pricing/**`, `/api/zones/**`, merchant order paths | Parcel & Pricing, `:8082` |
-| `/api/v1/sorting-records/**`, `/api/v1/transfers/**`, `/api/v1/warehouses/**`, `/api/v1/warehouse-parcels/**` | Delivery Operations, `:8083` |
+| `/api/v1/sorting-records/**`, `/api/v1/transfers/**`, `/api/v1/warehouses/**`, `/api/v1/warehouse-parcels/**`, `/api/v1/courier-categories/**`, `/api/v1/courier-profiles/**`, `/api/v1/assignments/**`, `/api/v1/delivery-issues/**` | Delivery Operations, `:8083` |
 | `/api/v1/public/tracking/**`, `/api/v1/tracking/**`, `/api/v1/reports/**` | Tracking & Reporting, `:8084` |
 | `/api/v1/payments` and `/api/v1/payments/**` | Payment & Settlement, `:8085` |
 

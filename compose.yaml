@@ -161,8 +161,16 @@ services:
       DELIVERY_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
       DELIVERY_DB_USER: delivery_user
       DELIVERY_DB_PASSWORD: ${DELIVERY_DB_PASSWORD:?Set DELIVERY_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      # Access tokens are checked against identity's keys; parcels are looked up in Parcel & Pricing.
+      IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+      DELIVERY_PARCEL_BASE_URL: http://parcel-pricing-service:8082
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   api-gateway:
@@ -235,7 +243,7 @@ services:
   mailpit:
     image: axllent/mailpit
     ports:
-      - "127.0.0.1:1025:1025"     # SMTP: the service sends email here
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1026"     # SMTP host port (override if 1025 is blocked on Windows)
       - "127.0.0.1:8025:8025"     # web UI: http://localhost:8025 (see sent emails)
 
 volumes:
