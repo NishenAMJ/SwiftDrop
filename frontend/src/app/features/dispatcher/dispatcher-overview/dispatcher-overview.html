@@ -1,0 +1,261 @@
+<div class="page page--wide">
+  <header class="overview-header">
+    <div>
+      <p class="overview-eyebrow">Dispatcher operations</p>
+      <h1 class="page__title">Delivery overview</h1>
+      <p class="page__intro">
+        Monitor current-month delivery outcomes and recent completion trends across SwiftDrop.
+      </p>
+    </div>
+    <div class="overview-header__actions">
+      <span class="sd-badge sd-badge--info">Reporting period: {{ summaryPeriod }}</span>
+      <button
+        class="sd-button sd-button--secondary"
+        type="button"
+        (click)="retry()"
+        [disabled]="state() === 'loading'"
+        [attr.aria-busy]="state() === 'loading'"
+      >
+        @if (state() === 'loading') {
+          <span class="sd-spinner" aria-hidden="true"></span>
+          Refreshing…
+        } @else {
+          Refresh overview
+        }
+      </button>
+    </div>
+  </header>
+
+  <div class="overview-feedback" aria-live="polite">
+    @if (state() === 'loading') {
+      <section class="sd-card overview-loading" aria-label="Loading dispatcher overview">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        <div>
+          <h2>Loading delivery overview</h2>
+          <p>Calculating delivery totals and recent trends…</p>
+        </div>
+      </section>
+    } @else if (state() === 'error') {
+      <section class="sd-alert sd-alert--error overview-error" role="alert">
+        <div>
+          <h2>Overview could not be loaded</h2>
+          <p>{{ error() }}</p>
+        </div>
+        <button class="sd-button sd-button--secondary" type="button" (click)="retry()">
+          Try again
+        </button>
+      </section>
+    }
+  </div>
+
+  @if (state() === 'success' && data(); as overview) {
+    <section class="page__section" aria-labelledby="delivery-totals-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="delivery-totals-title" class="page__section-title">Delivery totals</h2>
+          <p class="page__muted">Parcels booked during the current UTC month.</p>
+        </div>
+        <a class="sd-link" routerLink="/tracking/reports">Open detailed reports</a>
+      </div>
+
+      <div class="overview-metrics">
+        <article class="sd-card metric-card">
+          <h3>Total parcels booked</h3>
+          <p class="metric-card__value sd-tabular">{{ overview.summary.totalParcelsBooked }}</p>
+        </article>
+        <article class="sd-card metric-card metric-card--info">
+          <h3>Currently in transit</h3>
+          <p class="metric-card__value sd-tabular">
+            {{ overview.summary.parcelsCurrentlyInTransit }}
+          </p>
+        </article>
+        <article class="sd-card metric-card metric-card--success">
+          <h3>Delivered</h3>
+          <p class="metric-card__value sd-tabular">{{ overview.summary.deliveredParcels }}</p>
+        </article>
+        <article class="sd-card metric-card metric-card--danger">
+          <h3>Failed deliveries</h3>
+          <p class="metric-card__value sd-tabular">{{ overview.summary.failedDeliveries }}</p>
+        </article>
+        <article class="sd-card metric-card metric-card--accent">
+          <h3>Delivery success rate</h3>
+          <p class="metric-card__value sd-tabular">
+            {{ overview.summary.deliverySuccessRate.toFixed(2) }}%
+          </p>
+          <p class="metric-card__note">Delivered parcels among terminal outcomes.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="sd-card page__section" aria-labelledby="status-breakdown-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="status-breakdown-title" class="page__section-title">Status breakdown</h2>
+          <p class="page__muted">Current status of parcels booked this month.</p>
+        </div>
+      </div>
+
+      @if (overview.statusBreakdown.statuses.length === 0) {
+        <div class="overview-empty" role="status">
+          <h3>No parcel statuses yet</h3>
+          <p>No parcels have been booked during this reporting period.</p>
+        </div>
+      } @else {
+        <div
+          class="sd-table-wrap"
+          role="region"
+          aria-labelledby="status-breakdown-title"
+          tabindex="0"
+        >
+          <table class="sd-table overview-table">
+            <caption class="sd-visually-hidden">
+              Current parcel status totals for the reporting period
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Delivery status</th>
+                <th scope="col" class="overview-table__number">Parcels</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of overview.statusBreakdown.statuses; track item.status) {
+                <tr>
+                  <td>
+                    <span class="sd-badge" [class]="statusClass(item.status)">
+                      {{ statusLabel(item.status) }}
+                    </span>
+                    <span class="status-bar" aria-hidden="true">
+                      <span [style.width.%]="statusWidth(item.total)"></span>
+                    </span>
+                  </td>
+                  <td class="overview-table__number sd-tabular">{{ item.total }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <div class="overview-trends">
+      <section class="sd-card page__section" aria-labelledby="daily-summary-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="daily-summary-title" class="page__section-title">Daily summary</h2>
+            <p class="page__muted">Distinct parcels delivered on each UTC day this month.</p>
+          </div>
+          <span class="sd-badge sd-badge--success">{{ dailyTotal() }} delivered</span>
+        </div>
+        @if (overview.dailyDeliveryCounts.counts.length === 0) {
+          <div class="overview-empty" role="status">
+            <h3>No daily completions</h3>
+            <p>No parcels have reached Delivered this month.</p>
+          </div>
+        } @else {
+          <div
+            class="sd-table-wrap"
+            role="region"
+            aria-labelledby="daily-summary-title"
+            tabindex="0"
+          >
+            <table class="sd-table overview-table">
+              <caption class="sd-visually-hidden">
+                Daily delivered parcel totals for the current month
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col" class="overview-table__number">Delivered parcels</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of overview.dailyDeliveryCounts.counts; track item.period) {
+                  <tr>
+                    <th scope="row" class="sd-tabular">{{ formatDailyPeriod(item.period) }}</th>
+                    <td class="overview-table__number sd-tabular">{{ item.deliveredParcels }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <section class="sd-card page__section" aria-labelledby="monthly-summary-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="monthly-summary-title" class="page__section-title">Monthly summary</h2>
+            <p class="page__muted">Distinct delivered parcels across the last 12 UTC months.</p>
+          </div>
+          <span class="sd-badge sd-badge--success">{{ monthlyTotal() }} delivered</span>
+        </div>
+        @if (overview.monthlyDeliveryCounts.counts.length === 0) {
+          <div class="overview-empty" role="status">
+            <h3>No monthly completions</h3>
+            <p>No delivered parcels were found in the last 12 months.</p>
+          </div>
+        } @else {
+          <div
+            class="sd-table-wrap"
+            role="region"
+            aria-labelledby="monthly-summary-title"
+            tabindex="0"
+          >
+            <table class="sd-table overview-table">
+              <caption class="sd-visually-hidden">
+                Monthly delivered parcel totals for the last 12 months
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Month</th>
+                  <th scope="col" class="overview-table__number">Delivered parcels</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of overview.monthlyDeliveryCounts.counts; track item.period) {
+                  <tr>
+                    <th scope="row" class="sd-tabular">{{ formatMonthlyPeriod(item.period) }}</th>
+                    <td class="overview-table__number sd-tabular">{{ item.deliveredParcels }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    </div>
+  }
+
+  <nav class="page__section" aria-labelledby="dispatcher-tools-title">
+    <div>
+      <h2 id="dispatcher-tools-title" class="page__section-title">Dispatcher tools</h2>
+      <p class="page__muted">Continue to a focused operational workspace.</p>
+    </div>
+    <div class="tool-grid">
+      <a class="sd-card tool-card" routerLink="/warehouse">
+        <strong>Warehouse operations</strong><span>Monitor intake, sorting, and transfers.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/dispatcher/merchants">
+        <strong>Merchant applications</strong><span>Review merchant access requests.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/dispatcher/couriers">
+        <strong>Courier applications</strong><span>Review courier onboarding requests.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/dispatcher/users">
+        <strong>User management</strong><span>Find users and manage dispatcher accounts.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/dispatcher/delivery-zones">
+        <strong>Delivery zones</strong><span>Manage supported operational areas.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/dispatcher/pricing-rules">
+        <strong>Pricing rules</strong><span>Review delivery pricing configuration.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/dispatcher/payments">
+        <strong>Payments and refunds</strong><span>Review payment activity and refunds.</span>
+      </a>
+      <a class="sd-card tool-card" routerLink="/tracking/reports">
+        <strong>Tracking reports</strong><span>Filter delivery reports by period.</span>
+      </a>
+    </div>
+  </nav>
+</div>

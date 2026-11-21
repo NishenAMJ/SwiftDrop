@@ -63,6 +63,7 @@ describe('AppLayout', () => {
     const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'] }))
       .nativeElement as HTMLElement;
     expect(links(page)).toEqual([
+      'Overview',
       'Warehouse overview',
       'Warehouses',
       'Parcel intake',

@@ -13,7 +13,9 @@ export const DISPATCHER_ROUTES: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'delivery-zones',
+        title: 'Dispatcher overview | SwiftDrop',
+        loadComponent: () =>
+          import('./dispatcher-overview/dispatcher-overview').then((m) => m.DispatcherOverview),
       },
       {
         path: 'delivery-zones',
@@ -30,12 +32,14 @@ export const DISPATCHER_ROUTES: Routes = [
       {
         path: 'merchants',
         title: 'Merchant applications | SwiftDrop',
-        loadComponent: () => import('./merchant-review-page/merchant-review-page').then((m) => m.MerchantReviewPage),
+        loadComponent: () =>
+          import('./merchant-review-page/merchant-review-page').then((m) => m.MerchantReviewPage),
       },
       {
         path: 'couriers',
         title: 'Courier applications | SwiftDrop',
-        loadComponent: () => import('./courier-review-page/courier-review-page').then((m) => m.CourierReviewPage),
+        loadComponent: () =>
+          import('./courier-review-page/courier-review-page').then((m) => m.CourierReviewPage),
       },
       {
         path: 'users',
@@ -45,7 +49,10 @@ export const DISPATCHER_ROUTES: Routes = [
       {
         path: 'payments',
         title: 'Payments and refunds | SwiftDrop',
-        loadComponent: () => import('../payments/payment-history-page/payment-history-page').then((m) => m.PaymentHistoryPage),
+        loadComponent: () =>
+          import('../payments/payment-history-page/payment-history-page').then(
+            (m) => m.PaymentHistoryPage,
+          ),
       },
     ],
   },
