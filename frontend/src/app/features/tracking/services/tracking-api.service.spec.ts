@@ -88,4 +88,54 @@ describe('TrackingApiService', () => {
         counts: [],
       });
   });
+
+  it('loads the dispatcher overview using distinct summary, daily and monthly periods', () => {
+    service
+      .getDispatcherOverview(
+        { startDate: '2026-11-01', endDate: '2026-11-21' },
+        { startDate: '2026-11-01', endDate: '2026-11-21' },
+        { startDate: '2025-12-01', endDate: '2026-11-21' },
+      )
+      .subscribe((overview) => expect(overview.monthlyDeliveryCounts.counts).toHaveLength(1));
+
+    const requests = http.match(
+      (request) => request.url.startsWith('/api/v1/reports/') && request.method === 'GET',
+    );
+    expect(requests.map((request) => request.request.url).sort()).toEqual([
+      '/api/v1/reports/deliveries/daily',
+      '/api/v1/reports/deliveries/monthly',
+      '/api/v1/reports/status-breakdown',
+      '/api/v1/reports/summary',
+    ]);
+
+    const monthly = requests.find((request) => request.request.url.endsWith('/monthly'))!;
+    expect(monthly.request.params.get('startDate')).toBe('2025-12-01');
+    const daily = requests.find((request) => request.request.url.endsWith('/daily'))!;
+    expect(daily.request.params.get('startDate')).toBe('2026-11-01');
+
+    requests
+      .find((request) => request.request.url.endsWith('/summary'))!
+      .flush({
+        startDate: '2026-11-01',
+        endDate: '2026-11-21',
+        totalParcelsBooked: 1,
+        parcelsCurrentlyInTransit: 0,
+        deliveredParcels: 1,
+        failedDeliveries: 0,
+        deliverySuccessRate: 100,
+      });
+    requests
+      .find((request) => request.request.url.endsWith('/status-breakdown'))!
+      .flush({
+        startDate: '2026-11-01',
+        endDate: '2026-11-21',
+        statuses: [],
+      });
+    daily.flush({ startDate: '2026-11-01', endDate: '2026-11-21', counts: [] });
+    monthly.flush({
+      startDate: '2025-12-01',
+      endDate: '2026-11-21',
+      counts: [{ period: '2026-11-01', deliveredParcels: 1 }],
+    });
+  });
 });

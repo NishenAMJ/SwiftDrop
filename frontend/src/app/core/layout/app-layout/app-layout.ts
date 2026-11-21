@@ -16,6 +16,7 @@ import { AuthService } from '../../auth/auth.service';
 interface NavItem {
   label: string;
   path: string;
+  exact?: boolean;
 }
 
 interface NavGroup {
@@ -62,6 +63,7 @@ export class AppLayout {
       groups.push({
         heading: 'Dispatcher',
         items: [
+          { label: 'Overview', path: '/dispatcher', exact: true },
           { label: 'Warehouse overview', path: '/warehouse' },
           { label: 'Warehouses', path: '/warehouse/warehouses' },
           { label: 'Parcel intake', path: '/warehouse/intake' },
