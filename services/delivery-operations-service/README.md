@@ -7,7 +7,7 @@ Spring Boot service for SwiftDrop delivery operations. It covers two areas in on
 
 ## Technology
 
-- Java 21 and Spring Boot 4.1
+- Java 25 and Spring Boot 4.1
 - Spring MVC, Validation, and Data JPA
 - PostgreSQL with Flyway migrations
 - Spring Security as an OAuth2 resource server (tokens from identity-merchant-service)

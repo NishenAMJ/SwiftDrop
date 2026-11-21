@@ -9,7 +9,7 @@ COPY src src
 RUN ./mvnw -B -DskipTests package
 
 # Run stage: only the JRE and the jar, running as a non-root user.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 RUN useradd --system --uid 10001 --no-create-home swiftdrop
 WORKDIR /app
 COPY --from=build /workspace/target/notification-webhook-service-*.jar app.jar

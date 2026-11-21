@@ -4,7 +4,7 @@ The Tracking and Reporting service maintains parcel tracking projections, delive
 
 ## Requirements
 
-- Java 21
+- Java 25
 - PostgreSQL 17
 - RabbitMQ
 - Access to the Identity service JWKS endpoint for JWT validation
@@ -34,7 +34,7 @@ From this directory:
 ./mvnw -DskipTests compile
 ```
 
-Confirm that `./mvnw --version` reports Java 21 before building.
+Confirm that `./mvnw --version` reports Java 25 before building.
 
 ## Run
 
