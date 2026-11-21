@@ -1,0 +1,211 @@
+<section class="finance-page" aria-labelledby="reconciliation-title">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Dispatcher tools</p>
+      <h1 id="reconciliation-title">Cash reconciliation</h1>
+      <p class="intro">
+        Count courier cash, confirm exact handovers, and preserve discrepancies for investigation.
+      </p>
+    </div>
+    <button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="load()"
+      [disabled]="loading()"
+    >
+      Refresh
+    </button>
+  </header>
+  @if (notice(); as message) {
+    <p class="sd-alert sd-alert--success" role="status">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="sd-alert sd-alert--error" role="alert">{{ message }}</p>
+  }
+
+  <form class="filter-row sd-card" [formGroup]="filters" (ngSubmit)="load()">
+    <div class="sd-field">
+      <label class="sd-label" for="courier-filter"
+        >Courier ID <span class="sd-label__optional">Optional</span></label
+      ><input id="courier-filter" class="sd-input mono" formControlName="courierId" />
+    </div>
+    <div class="sd-field">
+      <label class="sd-label" for="handover-status">Status</label
+      ><select id="handover-status" class="sd-input" formControlName="status">
+        <option value="">All statuses</option>
+        <option value="SUBMITTED">Submitted</option>
+        <option value="CONFIRMED">Confirmed</option>
+        <option value="FLAGGED">Flagged</option>
+      </select>
+    </div>
+    <button class="sd-button sd-button--primary" type="submit">Apply filters</button>
+  </form>
+
+  @if (loading()) {
+    <div class="sd-card state" role="status">
+      <span class="sd-spinner" aria-hidden="true"></span> Loading handovers…
+    </div>
+  } @else if (!result()?.content?.length) {
+    <div class="sd-card empty">
+      <h2>No matching handovers</h2>
+      <p>Change the filters or wait for a courier to submit cash.</p>
+    </div>
+  } @else {
+    <p class="count" aria-live="polite">{{ result()?.totalElements }} handovers</p>
+    <div class="record-list">
+      @for (item of result()?.content ?? []; track item.id) {
+        <article class="sd-card record">
+          <header class="card-header">
+            <div>
+              <h2 class="mono">{{ item.id }}</h2>
+              <p class="count">
+                Courier <span class="mono">{{ item.courierId }}</span> ·
+                {{ item.submittedAt | colomboDate }}
+              </p>
+            </div>
+            <span class="sd-badge" [class]="statusClass(item.status)">{{ item.status }}</span>
+          </header>
+          <dl class="facts">
+            <div>
+              <dt>Expected</dt>
+              <dd class="amount">
+                {{ item.currency }} {{ item.expectedAmount | number: '1.2-2' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Courier submitted</dt>
+              <dd class="amount">
+                {{ item.currency }} {{ item.submittedAmount | number: '1.2-2' }}
+              </dd>
+            </div>
+            <div>
+              <dt>Collections</dt>
+              <dd>{{ item.collectionIds.length }}</dd>
+            </div>
+          </dl>
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="select(item)"
+            [attr.aria-expanded]="selected()?.id === item.id"
+          >
+            {{
+              selected()?.id === item.id
+                ? 'Close'
+                : item.status === 'SUBMITTED'
+                  ? 'Reconcile handover'
+                  : 'View reconciliation'
+            }}
+          </button>
+          @if (selected()?.id === item.id) {
+            <div class="record__details">
+              @if (item.status === 'SUBMITTED') {
+                <form class="form-grid" [formGroup]="form" (ngSubmit)="confirm(item)" novalidate>
+                  <div class="sd-field">
+                    <label class="sd-label" [for]="'received-' + item.id"
+                      >Cash physically received ({{ item.currency }})</label
+                    ><input
+                      class="sd-input"
+                      [id]="'received-' + item.id"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputmode="decimal"
+                      formControlName="receivedAmount"
+                      [attr.aria-invalid]="
+                        form.controls.receivedAmount.invalid && form.controls.receivedAmount.touched
+                      "
+                    />
+                    @if (
+                      form.controls.receivedAmount.invalid && form.controls.receivedAmount.touched
+                    ) {
+                      <p class="sd-error">Enter a valid non-negative amount.</p>
+                    }
+                  </div>
+                  <div class="sd-field">
+                    <label class="sd-label" [for]="'note-' + item.id"
+                      >Investigation note
+                      <span class="sd-label__optional">Required for a difference</span></label
+                    ><textarea
+                      class="sd-input"
+                      [id]="'note-' + item.id"
+                      maxlength="500"
+                      formControlName="investigationNote"
+                      [attr.aria-invalid]="
+                        form.controls.investigationNote.invalid &&
+                        form.controls.investigationNote.touched
+                      "
+                    ></textarea>
+                    @if (form.controls.investigationNote.errors?.['requiredForDifference']) {
+                      <p class="sd-error">Explain the cash difference before confirming.</p>
+                    }
+                  </div>
+                  <div class="wide">
+                    <p class="sd-alert sd-alert--warning">
+                      Confirm only after physically counting the cash. A short or excess amount will
+                      be recorded as flagged.
+                    </p>
+                    <button
+                      class="sd-button sd-button--primary"
+                      type="submit"
+                      [disabled]="busy()"
+                      [attr.aria-busy]="busy()"
+                    >
+                      @if (busy()) {
+                        <span class="sd-spinner" aria-hidden="true"></span> Recording…
+                      } @else {
+                        Confirm reconciliation
+                      }
+                    </button>
+                  </div>
+                </form>
+              } @else if (item.reconciliation; as rec) {
+                <dl class="facts">
+                  <div>
+                    <dt>Outcome</dt>
+                    <dd>{{ rec.status }}</dd>
+                  </div>
+                  <div>
+                    <dt>Received</dt>
+                    <dd>{{ rec.currency }} {{ rec.receivedAmount | number: '1.2-2' }}</dd>
+                  </div>
+                  <div>
+                    <dt>Difference</dt>
+                    <dd>{{ rec.currency }} {{ rec.differenceAmount | number: '1.2-2' }}</dd>
+                  </div>
+                  <div>
+                    <dt>Confirmed</dt>
+                    <dd>{{ rec.confirmedAt | colomboDate }}</dd>
+                  </div>
+                </dl>
+                @if (rec.investigationNote) {
+                  <p class="muted">
+                    <strong>Investigation note:</strong> {{ rec.investigationNote }}
+                  </p>
+                }
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+    <nav class="pagination" aria-label="Cash handover pages">
+      <button
+        class="sd-button sd-button--secondary"
+        type="button"
+        (click)="load((result()?.page ?? 0) - 1)"
+        [disabled]="(result()?.page ?? 0) === 0"
+      >
+        Previous</button
+      ><span>Page {{ (result()?.page ?? 0) + 1 }} of {{ result()?.totalPages || 1 }}</span
+      ><button
+        class="sd-button sd-button--secondary"
+        type="button"
+        (click)="load((result()?.page ?? 0) + 1)"
+        [disabled]="(result()?.page ?? 0) + 1 >= (result()?.totalPages ?? 0)"
+      >
+        Next
+      </button>
+    </nav>
+  }
+</section>

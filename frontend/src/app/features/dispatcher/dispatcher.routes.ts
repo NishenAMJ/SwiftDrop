@@ -80,6 +80,22 @@ export const DISPATCHER_ROUTES: Routes = [
             (m) => m.PaymentHistoryPage,
           ),
       },
+      {
+        path: 'cash-reconciliation',
+        title: 'Cash reconciliation | SwiftDrop',
+        loadComponent: () =>
+          import('../payments/cash-reconciliation-page/cash-reconciliation-page').then(
+            (m) => m.CashReconciliationPage,
+          ),
+      },
+      {
+        path: 'merchant-finance',
+        title: 'Merchant finance operations | SwiftDrop',
+        loadComponent: () =>
+          import('../payments/settlement-operations-page/settlement-operations-page').then(
+            (m) => m.SettlementOperationsPage,
+          ),
+      },
     ],
   },
 ];

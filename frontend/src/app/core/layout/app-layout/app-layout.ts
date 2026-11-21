@@ -79,6 +79,8 @@ export class AppLayout {
           { label: 'Delivery zones', path: '/dispatcher/delivery-zones' },
           { label: 'Pricing rules', path: '/dispatcher/pricing-rules' },
           { label: 'Payments and refunds', path: '/dispatcher/payments' },
+          { label: 'Cash reconciliation', path: '/dispatcher/cash-reconciliation' },
+          { label: 'Merchant finance', path: '/dispatcher/merchant-finance' },
           { label: 'Tracking reports', path: '/tracking/reports' },
           { label: 'Failed webhooks', path: '/webhooks/failed' },
         ],
@@ -94,6 +96,7 @@ export class AppLayout {
           { label: 'Orders', path: '/merchant/orders' },
           { label: 'Webhooks', path: '/webhooks' },
           { label: 'Payment history', path: '/merchant/payments' },
+          { label: 'Ledger and settlements', path: '/merchant/finance' },
           { label: 'Merchant account', path: '/merchant/application' },
         ],
       });
@@ -103,6 +106,7 @@ export class AppLayout {
         heading: 'Courier',
         items: [
           { label: 'My deliveries', path: '/courier/deliveries' },
+          { label: 'COD cash handovers', path: '/courier/cash-handovers' },
           { label: 'Courier account', path: '/courier/application' },
         ],
       });

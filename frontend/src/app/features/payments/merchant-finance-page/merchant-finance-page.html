@@ -1,0 +1,192 @@
+<section class="finance-page" aria-labelledby="merchant-finance-title">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Merchant finance</p>
+      <h1 id="merchant-finance-title">Ledger and settlements</h1>
+      <p class="intro">Review COD credits, delivery charges, adjustments, and payout status.</p>
+    </div>
+    <button
+      class="sd-button sd-button--secondary"
+      type="button"
+      (click)="loadLedger()"
+      [disabled]="loading()"
+    >
+      Refresh ledger
+    </button>
+  </header>
+  @if (error(); as message) {
+    <p class="sd-alert sd-alert--error" role="alert">{{ message }}</p>
+  }
+
+  <section class="stack" aria-labelledby="ledger-title">
+    <div class="section-header">
+      <div>
+        <h2 id="ledger-title">Merchant ledger</h2>
+        <p class="count">
+          Positive amounts increase the amount payable to you; negative amounts reduce it.
+        </p>
+      </div>
+      <form class="actions" [formGroup]="currencyForm" (ngSubmit)="loadLedger()">
+        <div class="sd-field">
+          <label class="sd-label" for="merchant-currency">Currency</label
+          ><input
+            id="merchant-currency"
+            class="sd-input"
+            maxlength="3"
+            formControlName="currency"
+          />
+        </div>
+        <button class="sd-button sd-button--secondary" type="submit">View currency</button>
+      </form>
+    </div>
+    @if (ledger(); as result) {
+      <div class="sd-card summary">
+        <dl class="summary-grid">
+          <div>
+            <dt>Current payable balance</dt>
+            <dd class="amount">{{ result.currency }} {{ result.balance | number: '1.2-2' }}</dd>
+          </div>
+          <div>
+            <dt>Ledger entries</dt>
+            <dd>{{ result.totalElements }}</dd>
+          </div>
+          <div>
+            <dt>Viewing</dt>
+            <dd>{{ result.currency }}</dd>
+          </div>
+        </dl>
+      </div>
+    }
+    @if (loading()) {
+      <div class="sd-card state" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading ledger…
+      </div>
+    } @else if (!ledger()?.content?.length) {
+      <div class="sd-card empty">
+        <h3>No ledger entries</h3>
+        <p>COD collections and financial adjustments will appear here.</p>
+      </div>
+    } @else {
+      <div class="sd-table-wrap" tabindex="0" aria-labelledby="ledger-title">
+        <table class="sd-table">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Type</th>
+              <th scope="col">Reference</th>
+              <th scope="col">Reason</th>
+              <th scope="col">Settlement</th>
+              <th scope="col">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of ledger()?.content ?? []; track entry.id) {
+              <tr>
+                <td>{{ entry.createdAt | colomboDate }}</td>
+                <td>{{ entry.entryType.replaceAll('_', ' ') }}</td>
+                <td class="mono">{{ entry.sourceReference }}</td>
+                <td>{{ entry.reason || '—' }}</td>
+                <td class="mono">
+                  {{ entry.settlementId || (entry.settlementEligible ? 'Eligible' : '—') }}
+                </td>
+                <td class="amount">
+                  <span class="sd-badge" [class]="entryClass(entry.amount)"
+                    >{{ entry.amount > 0 ? '+' : '' }}{{ entry.currency }}
+                    {{ entry.amount | number: '1.2-2' }}</span
+                  >
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <nav class="pagination" aria-label="Ledger pages">
+        <button
+          class="sd-button sd-button--secondary"
+          type="button"
+          (click)="loadLedger((ledger()?.page ?? 0) - 1)"
+          [disabled]="(ledger()?.page ?? 0) === 0"
+        >
+          Previous</button
+        ><span>Page {{ (ledger()?.page ?? 0) + 1 }} of {{ ledger()?.totalPages || 1 }}</span
+        ><button
+          class="sd-button sd-button--secondary"
+          type="button"
+          (click)="loadLedger((ledger()?.page ?? 0) + 1)"
+          [disabled]="(ledger()?.page ?? 0) + 1 >= (ledger()?.totalPages ?? 0)"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  </section>
+
+  <section class="sd-card stack" aria-labelledby="settlement-title">
+    <div>
+      <h2 id="settlement-title">Settlement details</h2>
+      <p class="sd-help">
+        Enter the settlement ID shared by your dispatcher to check approval and payout status.
+      </p>
+    </div>
+    <form class="actions" [formGroup]="lookupForm" (ngSubmit)="findSettlement()">
+      <div class="sd-field lookup-grow">
+        <label class="sd-label" for="merchant-settlement-id">Settlement ID</label
+        ><input
+          id="merchant-settlement-id"
+          class="sd-input mono"
+          formControlName="settlementId"
+          autocomplete="off"
+          [attr.aria-invalid]="
+            lookupForm.controls.settlementId.invalid && lookupForm.controls.settlementId.touched
+          "
+        />
+        @if (lookupForm.controls.settlementId.invalid && lookupForm.controls.settlementId.touched) {
+          <p class="sd-error">Enter a valid settlement UUID.</p>
+        }
+      </div>
+      <button class="sd-button sd-button--primary" type="submit" [disabled]="lookupBusy()">
+        Find settlement
+      </button>
+    </form>
+    @if (settlementError(); as message) {
+      <p class="sd-alert sd-alert--error" role="alert">{{ message }}</p>
+    }
+    @if (settlement(); as item) {
+      <div class="record__details">
+        <header class="card-header">
+          <h3 class="mono">{{ item.id }}</h3>
+          <span class="sd-badge" [class]="settlementClass(item.status)">{{ item.status }}</span>
+        </header>
+        <dl class="facts">
+          <div>
+            <dt>Amount</dt>
+            <dd>{{ item.currency }} {{ item.amount | number: '1.2-2' }}</dd>
+          </div>
+          <div>
+            <dt>Calculated</dt>
+            <dd>{{ item.calculatedAt | colomboDate }}</dd>
+          </div>
+          <div>
+            <dt>Approved</dt>
+            <dd>{{ item.approvedAt ? (item.approvedAt | colomboDate) : 'Awaiting approval' }}</dd>
+          </div>
+          <div>
+            <dt>Paid</dt>
+            <dd>{{ item.paidAt ? (item.paidAt | colomboDate) : 'Not paid yet' }}</dd>
+          </div>
+          <div>
+            <dt>Payout reference</dt>
+            <dd class="mono">{{ item.externalPaymentReference || '—' }}</dd>
+          </div>
+          <div>
+            <dt>Ledger entries</dt>
+            <dd>{{ item.ledgerEntryIds.length }}</dd>
+          </div>
+        </dl>
+        @if (item.approvalNote) {
+          <p class="muted"><strong>Approval note:</strong> {{ item.approvalNote }}</p>
+        }
+      </div>
+    }
+  </section>
+</section>
