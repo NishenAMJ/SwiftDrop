@@ -34,13 +34,13 @@ npm install -g @angular/cli@22
 ```
 
 On macOS or Linux, use the installers from:
-- Java 25: https://adoptium.net
+- Java 21: https://adoptium.net
 - Node.js 24 LTS: https://nodejs.org
 - Docker Desktop: https://www.docker.com/products/docker-desktop
 
 ### Set `JAVA_HOME`
 
-Point `JAVA_HOME` at your JDK 25 folder (the one that contains `bin\java.exe`), then reopen the terminal:
+Point `JAVA_HOME` at your JDK 21 folder (the one that contains `bin\java.exe`), then reopen the terminal:
 
 ```powershell
 setx JAVA_HOME "C:\Program Files\Eclipse Adoptium\jdk-21..."

@@ -50,7 +50,7 @@ Implementation commits reported and inspected:
 
 ## Environment and next steps
 
-Use Java 25, Maven (`mvn`), Boot 4.1.2. Docker Desktop installation is
+Use Java 21, Maven (`mvn`), Boot 4.1.2. Docker Desktop installation is
 D:/DockerDesktop/Docker Desktop.exe. User's disposable test containers are named
 swiftdrop-payment-check-db (55485) and swiftdrop-payment-check-rabbit (56785, UI 15685).
 Check whether they exist before recreating them; names already in use are not faults.
