@@ -1,0 +1,278 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">Webhooks</h1>
+    <p class="page__intro">
+      Get a message on your own server, such as your online store, whenever one of your parcels
+      changes status. SwiftDrop signs every message so you can check it really came from us.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+
+  @if (newSecret(); as created) {
+    <section class="sd-card new-secret" aria-labelledby="new-secret-title">
+      <h2 #secretHeading id="new-secret-title" class="page__card-title new-secret__title" tabindex="-1">
+        Copy your signing secret
+      </h2>
+      <p class="page__muted">For <span class="webhook-url">{{ created.url }}</span></p>
+      <div class="sd-alert sd-alert--warning">
+        This is the only time the secret is shown. Your server uses it to check the
+        <code>X-SwiftDrop-Signature</code> header on each message. Store it in your server's secret
+        settings and never share it in email or chat. If you lose it, create a new one.
+      </div>
+      <div class="sd-field">
+        <label class="sd-label" for="new-secret-value">Signing secret</label>
+        <div class="new-secret__row">
+          <input
+            id="new-secret-value"
+            class="sd-input new-secret__value"
+            type="text"
+            [value]="created.secret"
+            readonly
+            spellcheck="false"
+            autocomplete="off"
+            (focus)="selectAll($event)"
+          />
+          <button class="sd-button sd-button--secondary" type="button" (click)="copySecret()">
+            Copy secret
+          </button>
+        </div>
+        <p class="sd-help" role="status">
+          @switch (copyStatus()) {
+            @case ('copied') {
+              Copied to the clipboard.
+            }
+            @case ('failed') {
+              Couldn't copy automatically. Select the secret and copy it yourself.
+            }
+          }
+        </p>
+      </div>
+      <div class="page__actions">
+        <button class="sd-button sd-button--primary" type="button" (click)="dismissSecret()">
+          I've saved the secret
+        </button>
+      </div>
+    </section>
+  }
+
+  <section class="sd-card" aria-labelledby="create-webhook-title">
+    <form class="form" [formGroup]="form" (ngSubmit)="create()" novalidate>
+      <h2 id="create-webhook-title" class="page__card-title">Add a webhook</h2>
+
+      @if (createError(); as message) {
+        <div #createAlert class="sd-alert sd-alert--error" role="alert" tabindex="-1">{{ message }}</div>
+      }
+
+      <div class="sd-field">
+        @let urlMessage = urlError();
+        <label class="sd-label" for="webhook-url">Your server address (URL)</label>
+        <input
+          id="webhook-url"
+          class="sd-input"
+          type="url"
+          inputmode="url"
+          formControlName="url"
+          maxlength="2048"
+          autocomplete="url"
+          spellcheck="false"
+          placeholder="https://shop.example.com/swiftdrop-webhook"
+          [attr.aria-invalid]="!!urlMessage"
+          [attr.aria-describedby]="'webhook-url-help' + (urlMessage ? ' webhook-url-error' : '')"
+        />
+        <p id="webhook-url-help" class="sd-help">
+          SwiftDrop sends a POST request with JSON to this address. Use HTTPS.
+        </p>
+        @if (urlMessage) {
+          <p id="webhook-url-error" class="sd-error">{{ urlMessage }}</p>
+        }
+      </div>
+
+      @let eventsMessage = eventsError();
+      <fieldset
+        class="form__fieldset"
+        formArrayName="events"
+        [attr.aria-invalid]="!!eventsMessage"
+        [attr.aria-describedby]="eventsMessage ? 'webhook-events-error' : null"
+      >
+        <legend class="sd-label">Events to send</legend>
+        @for (event of events; track event.value; let i = $index) {
+          <div class="check">
+            <input
+              class="check__box"
+              type="checkbox"
+              [id]="'event-' + i"
+              [formControlName]="i"
+              [attr.aria-describedby]="'event-' + i + '-help'"
+            />
+            <div>
+              <label class="check__label" [for]="'event-' + i">{{ event.label }}</label>
+              <p [id]="'event-' + i + '-help'" class="sd-help">{{ event.help }}</p>
+            </div>
+          </div>
+        }
+        @if (eventsMessage) {
+          <p id="webhook-events-error" class="sd-error">{{ eventsMessage }}</p>
+        }
+      </fieldset>
+
+      <div class="page__actions">
+        <button
+          class="sd-button sd-button--primary"
+          type="submit"
+          [disabled]="creating()"
+          [attr.aria-busy]="creating()"
+        >
+          @if (creating()) {
+            <span class="sd-spinner" aria-hidden="true"></span>
+            Adding…
+          } @else {
+            Add webhook
+          }
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="page__section" aria-labelledby="webhooks-title">
+    <h2 id="webhooks-title" class="page__section-title">Your webhooks</h2>
+
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span>
+        Loading webhooks…
+      </p>
+    } @else if (loadError(); as message) {
+      <div class="sd-alert sd-alert--error" role="alert">
+        {{ message }}
+        <button class="sd-button sd-button--secondary retry" type="button" (click)="load()">
+          Try again
+        </button>
+      </div>
+    } @else if (subscriptions().length === 0) {
+      <div class="sd-card">
+        <p class="page__muted">
+          You haven't added a webhook yet. Add one above to get parcel updates on your own server.
+        </p>
+      </div>
+    } @else {
+      @if (total() > subscriptions().length) {
+        <p class="form__note sd-tabular">
+          Showing the newest {{ subscriptions().length }} of {{ total() }} webhooks.
+        </p>
+      }
+      <ul class="webhook-list">
+        @for (sub of subscriptions(); track sub.id) {
+          @let state = badge(sub);
+          <li class="sd-card webhook">
+            <div class="webhook__head">
+              <h3 class="webhook__url webhook-url">{{ sub.url }}</h3>
+              <span [class]="state.badge">{{ state.label }}</span>
+            </div>
+
+            <dl class="details">
+              <div>
+                <dt>Events</dt>
+                <dd>
+                  @for (type of sub.eventTypes; track type; let last = $last) {
+                    {{ eventLabel(type) }}@if (!last) {, }
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>Added</dt>
+                <dd class="sd-tabular">{{ sub.createdAt | colomboDate }}</dd>
+              </div>
+              @if (!sub.active && sub.pausedReason) {
+                <div class="details__full">
+                  <dt>Why it's paused</dt>
+                  <dd>{{ sub.pausedReason }}</dd>
+                </div>
+              }
+            </dl>
+
+            @if (testedId() === sub.id) {
+              <div class="sd-alert sd-alert--info" role="status">
+                Test message queued. It usually arrives within a few seconds.
+                <a class="sd-link" [routerLink]="['/webhooks', sub.id]">See deliveries</a>
+              </div>
+            }
+            @if (rowError(); as failure) {
+              @if (failure.id === sub.id) {
+                <div class="sd-alert sd-alert--error" role="alert">{{ failure.message }}</div>
+              }
+            }
+
+            <div class="page__actions">
+              <a class="sd-button sd-button--secondary" [routerLink]="['/webhooks', sub.id]">
+                Deliveries<span class="sd-visually-hidden"> for {{ sub.url }}</span>
+              </a>
+              <button
+                class="sd-button sd-button--secondary"
+                type="button"
+                (click)="sendTest(sub)"
+                [disabled]="busyId() !== null || !sub.active"
+                [attr.aria-busy]="busyId() === sub.id"
+              >
+                Send test<span class="sd-visually-hidden"> to {{ sub.url }}</span>
+              </button>
+              @if (sub.active) {
+                <button
+                  class="sd-button sd-button--secondary"
+                  type="button"
+                  (click)="setActive(sub, false)"
+                  [disabled]="busyId() !== null"
+                >
+                  Pause<span class="sd-visually-hidden"> {{ sub.url }}</span>
+                </button>
+              } @else {
+                <button
+                  class="sd-button sd-button--secondary"
+                  type="button"
+                  (click)="setActive(sub, true)"
+                  [disabled]="busyId() !== null"
+                >
+                  Resume<span class="sd-visually-hidden"> {{ sub.url }}</span>
+                </button>
+              }
+              <button class="sd-button sd-button--secondary" type="button" (click)="ask('rotate', sub)">
+                New secret<span class="sd-visually-hidden"> for {{ sub.url }}</span>
+              </button>
+              <button class="sd-button sd-button--danger-outline" type="button" (click)="ask('delete', sub)">
+                Delete<span class="sd-visually-hidden"> {{ sub.url }}</span>
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>
+
+<app-confirm-dialog
+  [open]="pending() !== null"
+  [title]="dialogTitle()"
+  [confirmLabel]="pending()?.action === 'delete' ? 'Delete webhook' : 'Create new secret'"
+  [tone]="pending()?.action === 'delete' ? 'danger' : 'primary'"
+  [busy]="dialogBusy()"
+  [error]="dialogError()"
+  (confirmed)="confirmDialog()"
+  (cancelled)="cancelDialog()"
+>
+  @if (pending(); as p) {
+    @if (p.action === 'delete') {
+      <p>
+        SwiftDrop stops sending events to <span class="webhook-url">{{ p.subscription.url }}</span>
+        and its delivery history is removed. This can't be undone.
+      </p>
+    } @else {
+      <p>
+        The current secret for <span class="webhook-url">{{ p.subscription.url }}</span> stops
+        working straight away. Messages signed with the new secret will fail on your server until
+        you update it there.
+      </p>
+    }
+  }
+</app-confirm-dialog>

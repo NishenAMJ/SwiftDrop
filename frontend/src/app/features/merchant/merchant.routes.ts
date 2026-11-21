@@ -1,4 +1,3 @@
-import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 
 import { roleGuard } from '../../core/auth/auth.guards';
@@ -63,5 +62,18 @@ export const MERCHANT_ROUTES: Routes = [
     title: 'API keys | SwiftDrop',
     canActivate: [roleGuard('MERCHANT')],
     loadComponent: () => import('./api-keys-page/api-keys-page').then((m) => m.ApiKeysPage),
+  },
+  {
+    path: 'orders',
+    title: 'Merchant orders | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () => import('./orders/merchant-orders.component').then((m) => m.MerchantOrdersComponent),
+  },
+  {
+    path: 'payments',
+    title: 'Payment history | SwiftDrop',
+    canActivate: [roleGuard('MERCHANT')],
+    loadComponent: () =>
+      import('../payments/payment-history-page/payment-history-page').then((m) => m.PaymentHistoryPage),
   },
 ];

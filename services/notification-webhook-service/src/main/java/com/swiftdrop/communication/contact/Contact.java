@@ -107,4 +107,21 @@ public class Contact {
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    public boolean apply(UserEventData userData, Instant occurredAt, Instant now) {
+        if (occurredAt != null && this.lastEventOccurredAt != null && occurredAt.isBefore(this.lastEventOccurredAt)) {
+            return false;
+        }
+        this.email = userData.getEmail();
+        this.fullName = userData.getFullName();
+        this.phoneNumber = userData.getPhoneNumber();
+        this.status = userData.getStatus();
+        if (occurredAt != null) {
+            this.lastEventOccurredAt = occurredAt;
+        }
+        if (now != null) {
+            this.updatedAt = now;
+        }
+        return true;
+    }
 }

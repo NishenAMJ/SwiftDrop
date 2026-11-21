@@ -1,7 +1,8 @@
-# Payment & Settlement service — Member 8
+# Payment & Settlement service — Members 8 and 9
 
-Java 21 / Spring Boot 4.1.2, port **8085**. Online payments use PayHere; COD, ledger,
-cash reconciliation and merchant settlements remain Member 9 responsibilities.
+Java 21 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
+PayHere. Member 9 owns COD collection, courier cash reconciliation, the merchant
+ledger and merchant settlements.
 
 ## Current state and references
 
@@ -9,12 +10,14 @@ cash reconciliation and merchant settlements remain Member 9 responsibilities.
 - [Payment events](../../contracts/events/payment-settlement-service/README.md)
 - [Pricing integration proposal and provider notes](../../docs/architecture/payment-integrations.md)
 - [Authentication agreement](../../docs/architecture/authentication.md)
+- [Member 9 COD and ledger contract proposal](../../docs/architecture/member9-cod-ledger-contract.md)
 
-On 2026-11-15 `mvn -B clean test` against the isolated payment test database and
-RabbitMQ reported **32 tests, 0 failures, 0 errors, 0 skipped**, including Flyway
-migrations and simulated outbox recovery. This does not establish live PayHere,
-actual identity/pricing integration, gateway routing or Docker-image end-to-end
-readiness. The pricing endpoint is still a proposal.
+On 2026-11-15, before Member 9's implementation, `mvn -B clean test` against the
+isolated payment test database and RabbitMQ reported **32 tests, 0 failures, 0 errors,
+0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 21
+and isolated infrastructure. Historical results do not verify the new V5 migration,
+COD workflows, live PayHere, actual identity/pricing integration, gateway routing or
+Docker-image end-to-end readiness.
 
 ## Run locally (PowerShell)
 
@@ -43,7 +46,7 @@ The service imports the root `.env` when launched from either directory. Environ
 variables override file values. The PostgreSQL initialization scripts create the
 service role/schema only on an empty database volume; existing installations must
 already have `payment_settlement_user` and `payment_settlement`. Do not erase a
-development database to fix a missing schema. Flyway applies V1/V2; Hibernate validates.
+development database to fix a missing schema. Flyway applies V1 through V5; Hibernate validates.
 
 In another terminal:
 
@@ -74,6 +77,8 @@ routes are denied. Authentication is not implemented by this service.
 | PAYMENT_PAYHERE_NOTIFY_URL | Public callback URL ending /api/v1/payments/callbacks/payhere |
 | PAYMENT_PAYHERE_RETURN_URL / PAYMENT_PAYHERE_CANCEL_URL | localhost:4200/payments/return and /payments/cancel (frontend routes must be implemented) |
 | PAYMENT_WORKERS_ENABLED | true; disables outbox and recovery workers when false |
+| PAYMENT_COD_CONSUMER_ENABLED | false; enable only after COD producer and pricing verification contracts are approved |
+| PAYMENT_COD_VERIFICATION_MODE | pending; fail-closed placeholder that prevents enabling the consumer until an approved verifier is implemented |
 
 JWT issuer is `swiftdrop-identity`, audience `swiftdrop-api`. Role checks use `roles`,
 ownership uses `sub` and `merchant_id`. No locally fabricated JWT bypass exists.
@@ -147,6 +152,63 @@ Creation/replays return 201; non-pending replays omit checkout. Refund/replays r
 GET checkout allows a customer to complete a dispatcher-created payment; frontend
 checkout screens and the notification/handoff to the customer are still separate work.
 
+## Member 9 COD and settlement flow
+
+1. Delivery Operations publishes `delivery.cod-collected` with a stable eventId and
+   the approved COD data contract.
+2. `CodCollectionService` validates the event and an approved `CodAmountVerifier`
+   validates its pricing snapshot. Collection and positive `COD_COLLECTION` ledger
+   entry are stored in one transaction; duplicate eventIds have no additional effect.
+3. The courier submits their own unassigned collections in a cash handover.
+4. A dispatcher records received cash. Exact reconciliation confirms the handover and
+   makes its COD ledger entries settlement-eligible. Short/excess handovers are
+   flagged with an investigation note and remain ineligible.
+5. A dispatcher calculates a settlement from eligible, unsettled signed ledger entries,
+   approves the frozen result, then separately records an externally confirmed payout.
+6. Recording payment posts one negative `SETTLEMENT` ledger entry. The service never
+   claims to initiate or complete the external bank transfer.
+
+The ledger sign is from the merchant-payable perspective: COD is positive; delivery
+charges and paid settlements are negative; audited adjustments may use either sign.
+Posted financial fields and deletion are protected by a PostgreSQL trigger. Corrections
+must be new `ADJUSTMENT` entries.
+
+| Method / path | Access |
+|---|---|
+| POST `/api/v1/cod-handovers` | Courier; own collections only |
+| GET `/api/v1/cod-handovers`, GET `/api/v1/cod-handovers/{id}` | Owning courier or dispatcher |
+| POST `/api/v1/cod-handovers/{id}/confirm` | Dispatcher only |
+| GET `/api/v1/merchant-ledger/entries` | JWT merchant or dispatcher-selected merchant |
+| POST `/api/v1/merchant-ledger/adjustments` | Dispatcher only |
+| POST `/api/v1/merchant-settlements/calculate` | Dispatcher only |
+| GET `/api/v1/merchant-settlements/{id}` | Owning merchant or dispatcher |
+| POST `/api/v1/merchant-settlements/{id}/approve` | Dispatcher only |
+| POST `/api/v1/merchant-settlements/{id}/record-payment` | Dispatcher only; external evidence required |
+
+All Member 9 financial POST routes require `Idempotency-Key`. See the OpenAPI document
+for bodies, status values and error responses.
+
+### COD RabbitMQ boundary
+
+- Topic exchange: `swiftdrop.delivery-operations`
+- Routing key: `delivery.cod-collected`
+- Consumer queue: `payment-settlement-service.cod`
+- Dead-letter exchange/routing key: `swiftdrop.payment.dlx` / `cod.failed`
+- Dead-letter queue: `payment-settlement-service.cod.dlq`
+
+Manual acknowledgements occur only after the transactional service returns (and its
+database transaction has committed). Malformed, invalid and conflicting messages are
+dead-lettered. Transient failures are requeued. `PAYMENT_COD_CONSUMER_ENABLED` remains
+false, and pending verification mode fails startup if someone enables it. Implement
+and approve service-to-service pricing verification before enabling this consumer.
+
+### Member 9 persistence
+
+Flyway `V5__cod_reconciliation_and_merchant_ledger.sql` creates `cod_collections`,
+`cash_handovers`, `cash_handover_items`, `cash_reconciliations`,
+`merchant_ledger_entries`, `merchant_settlements` and `merchant_settlement_entries`.
+It follows V4 from Member 8; do not create another V5 or edit an already-applied V5.
+
 ## Recovery limits
 
 Uncertain refunds keep their reservation and are not blindly submitted again.
@@ -189,16 +251,17 @@ file. Override their URLs if the integration owner puts them on a shared network
 The payment image uses Dockerfile.payment. These commands are startup instructions,
 not evidence that the current image has completed end-to-end testing.
 
-The gateway owner should forward `/api/v1/payments` and `/api/v1/payments/**` unchanged
-to port 8085 and preserve Authorization and Idempotency-Key. Permit only the POST
-provider callback without a customer JWT. Preserve form encoding; do not retry
-payment/refund POST requests automatically. Keep payment logic in this service.
-No gateway configuration has been installed by this module.
+The gateway owner should forward `/api/v1/payments/**`, `/api/v1/cod-handovers/**`,
+`/api/v1/merchant-ledger/**` and `/api/v1/merchant-settlements/**` unchanged to port
+8085 and preserve Authorization and Idempotency-Key. Permit only the POST provider
+callback without a customer JWT. Preserve form encoding; do not automatically retry
+financial POST requests. Keep payment and settlement logic in this service. No gateway
+configuration has been installed by this module.
 
 ## Tests with isolated infrastructure
 
 Never point PAYMENT_TEST_DB_URL at a development/shared database: integration tests
-TRUNCATE payment tables. From the service directory, start these containers only if
+TRUNCATE all payment, COD, ledger and settlement tables. From the service directory, start these containers only if
 they do not already exist (`docker ps -a`); reuse healthy existing test containers.
 
 ```powershell
@@ -217,8 +280,9 @@ $env:PAYMENT_TEST_RABBIT = 'true'
 mvn clean test
 ```
 
-The current suite has 32 tests, including 15 PostgreSQL-backed integration tests.
-Without the database variable, those 15 tests skip; without
+The suite defines 53 tests, including 20 PostgreSQL-backed integration tests. These
+counts describe the source, not a successful run. Without the database variable, the
+20 integration tests skip; without
 `PAYMENT_TEST_RABBIT=true`, the broker recovery test skips. Provider/pricing
 dependencies are mocked in the database tests; no live money is moved. A retry
 warning is expected in the broker test because its first publication deliberately
@@ -227,6 +291,8 @@ fails.
 ```powershell
 # Only the RabbitMQ recovery test:
 mvn test '-Dtest=PaymentIntegrationTest#eventSurvivesPublishFailureThenReachesDurableQueue'
+# Member 9 unit/security/database tests (requires PAYMENT_TEST_DB_URL for the integration class):
+mvn test '-Dtest=CodCollectionServiceTest,CashHandoverServiceTest,MerchantLedgerServiceTest,MerchantSettlementServiceTest,Member9SecurityTest,Member9IntegrationTest'
 # After testing (only these disposable containers):
 Remove-Item Env:PAYMENT_TEST_DB_URL -ErrorAction SilentlyContinue
 Remove-Item Env:PAYMENT_TEST_RABBIT -ErrorAction SilentlyContinue

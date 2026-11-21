@@ -5,6 +5,7 @@ import { Observable, forkJoin } from 'rxjs';
 import {
   DeliveryCounts,
   DeliveryInterval,
+  DispatcherOverviewData,
   ReportDashboardData,
   ReportFilters,
   ReportSummary,
@@ -38,6 +39,27 @@ export class TrackingApiService {
       }),
       deliveryCounts: this.http.get<DeliveryCounts>(`${REPORTS_API}/deliveries/${interval}`, {
         params,
+      }),
+    });
+  }
+
+  getDispatcherOverview(
+    summaryFilters: ReportFilters,
+    dailyFilters: ReportFilters,
+    monthlyFilters: ReportFilters,
+  ): Observable<DispatcherOverviewData> {
+    return forkJoin({
+      summary: this.http.get<ReportSummary>(`${REPORTS_API}/summary`, {
+        params: this.reportParams(summaryFilters),
+      }),
+      statusBreakdown: this.http.get<StatusBreakdown>(`${REPORTS_API}/status-breakdown`, {
+        params: this.reportParams(summaryFilters),
+      }),
+      dailyDeliveryCounts: this.http.get<DeliveryCounts>(`${REPORTS_API}/deliveries/daily`, {
+        params: this.reportParams(dailyFilters),
+      }),
+      monthlyDeliveryCounts: this.http.get<DeliveryCounts>(`${REPORTS_API}/deliveries/monthly`, {
+        params: this.reportParams(monthlyFilters),
       }),
     });
   }

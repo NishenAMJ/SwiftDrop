@@ -44,6 +44,13 @@ public final class EmailTemplates {
                                 + "Best regards,\nThe SwiftDrop Team"
                 );
             }
+            case "merchant.reactivated" -> new EmailContent(
+                    "SwiftDrop Merchant Account Reactivated",
+                    "Hello,\n\n"
+                            + "We are pleased to inform you that your merchant account for '" + businessName + "' has been reactivated.\n"
+                            + "Your webhook subscriptions and services have been restored.\n\n"
+                            + "Best regards,\nThe SwiftDrop Team"
+            );
             default -> new EmailContent(
                     "SwiftDrop Merchant Notification",
                     "Hello,\n\n"

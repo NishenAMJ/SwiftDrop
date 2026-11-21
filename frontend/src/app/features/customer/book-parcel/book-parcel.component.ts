@@ -227,7 +227,7 @@ export class BookParcelComponent implements OnInit, OnDestroy {
     if(url.protocol!=='https:' || !['sandbox.payhere.lk','www.payhere.lk'].includes(url.hostname) || url.pathname!=='/pay/checkout') {
       this.paymentMessage.set('Secure checkout could not be opened. Contact support.'); return;
     }
-    const form=document.createElement('form'); form.method='POST'; form.action=url.href; form.target='_blank'; form.rel='noopener noreferrer';
+    const form=document.createElement('form'); form.method='POST'; form.action=url.href; form.target='_blank'; form.rel='noopener';
     for(const [name,value] of Object.entries(checkout.fields)) { const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input); }
     document.body.appendChild(form); form.submit(); form.remove();
   }

@@ -1,19 +1,21 @@
 import { Routes } from '@angular/router';
-import { DispatcherLayoutComponent } from '../../core/layout/dispatcher-layout/dispatcher-layout';
+import { AppLayout } from '../../core/layout/app-layout/app-layout';
 
 /**
  * Lazy‑loaded routes for the Dispatcher feature.
- * Uses the DispatcherLayoutComponent which provides a sidebar and a router outlet.
+ * Uses the shared role-aware navigation and router outlet.
  */
 export const DISPATCHER_ROUTES: Routes = [
   {
     path: '',
-    component: DispatcherLayoutComponent,
+    component: AppLayout,
     children: [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'delivery-zones',
+        title: 'Dispatcher overview | SwiftDrop',
+        loadComponent: () =>
+          import('./dispatcher-overview/dispatcher-overview').then((m) => m.DispatcherOverview),
       },
       {
         path: 'delivery-zones',
@@ -27,7 +29,31 @@ export const DISPATCHER_ROUTES: Routes = [
         loadComponent: () =>
           import('./pricing-rules/pricing-rules.component').then((m) => m.PricingRulesComponent),
       },
-      // Additional dispatcher pages can be added here.
+      {
+        path: 'merchants',
+        title: 'Merchant applications | SwiftDrop',
+        loadComponent: () =>
+          import('./merchant-review-page/merchant-review-page').then((m) => m.MerchantReviewPage),
+      },
+      {
+        path: 'couriers',
+        title: 'Courier applications | SwiftDrop',
+        loadComponent: () =>
+          import('./courier-review-page/courier-review-page').then((m) => m.CourierReviewPage),
+      },
+      {
+        path: 'users',
+        title: 'Users | SwiftDrop',
+        loadComponent: () => import('./users-page/users-page').then((m) => m.UsersPage),
+      },
+      {
+        path: 'payments',
+        title: 'Payments and refunds | SwiftDrop',
+        loadComponent: () =>
+          import('../payments/payment-history-page/payment-history-page').then(
+            (m) => m.PaymentHistoryPage,
+          ),
+      },
     ],
   },
 ];

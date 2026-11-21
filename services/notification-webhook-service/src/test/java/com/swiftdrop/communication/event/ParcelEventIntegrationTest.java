@@ -16,7 +16,6 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
 import com.swiftdrop.communication.common.PhoneMasker;
 import com.swiftdrop.communication.contact.Contact;
@@ -24,9 +23,9 @@ import com.swiftdrop.communication.contact.ContactRepository;
 import com.swiftdrop.communication.notification.Notification;
 import com.swiftdrop.communication.notification.NotificationRepository;
 import com.swiftdrop.communication.notification.NotificationStatus;
+import com.swiftdrop.communication.support.AbstractIntegrationTest;
 
-@SpringBootTest
-class ParcelEventIntegrationTest {
+class ParcelEventIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private ParcelEventListener listener;

@@ -40,7 +40,11 @@ class PaymentIntegrationTest {
     final Actor customer=new Actor(customerId,null,Set.of("CUSTOMER"),"test");
     final Actor admin=new Actor(UUID.fromString("a2249d4c-a134-4bc0-b9ed-ffea97ad8791"),null,Set.of("DISPATCHER"),"test");
     @BeforeEach void setup() {
-        db.execute("TRUNCATE payment_settlement.payment_callbacks,payment_settlement.payment_transactions,payment_settlement.payment_outbox,payment_settlement.payment_booking_claims,payment_settlement.payments CASCADE");
+        db.execute("TRUNCATE payment_settlement.merchant_settlement_entries,payment_settlement.cash_reconciliations,"+
+            "payment_settlement.cash_handover_items,payment_settlement.merchant_ledger_entries,"+
+            "payment_settlement.merchant_settlements,payment_settlement.cash_handovers,payment_settlement.cod_collections,"+
+            "payment_settlement.payment_callbacks,payment_settlement.payment_transactions,payment_settlement.payment_outbox,"+
+            "payment_settlement.payment_booking_claims,payment_settlement.payments CASCADE");
         when(pricing.lookup(anyString(),any())).thenAnswer(a->new Context(a.getArgument(0),"MERCHANT_API",customerId,merchantId,true,
             UUID.randomUUID().toString(),new BigDecimal("1000.00"),"LKR",new Payer("Test","Payer","test@example.com","0770000000","Address","Colombo","Sri Lanka")));
         when(provider.checkout(any(),any())).thenReturn(new Checkout("PAYHERE","https://sandbox.payhere.lk/pay/checkout","POST",Map.of("hash","test")));

@@ -3,10 +3,11 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
 import { CustomerProfileService } from '../../../features/customer/services/customer-profile.service';
+import { AiChatbotServiceComponent } from '../../../features/customer/ai-chatbot-service/ai-chatbot-service.component';
 
 @Component({
   selector: 'app-customer-layout',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, AiChatbotServiceComponent],
   templateUrl: './customer-layout.html',
   styleUrl: './customer-layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -70,6 +70,7 @@
                   class="app-nav__link"
                   [routerLink]="item.path"
                   routerLinkActive="app-nav__link--active"
+                  [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
                   ariaCurrentWhenActive="page"
                 >
                   {{ item.label }}

@@ -56,6 +56,13 @@
           </svg>
           My Bookings
         </a>
+        <a
+          routerLink="/customer/payments"
+          routerLinkActive="navbar__link--active"
+          class="navbar__link"
+        >
+          Payments
+        </a>
         <!-- Identity: roles, password, and applying as a merchant or courier. -->
         <a routerLink="/account" routerLinkActive="navbar__link--active" class="navbar__link">
           Account &amp; roles
@@ -164,6 +171,14 @@
             My Bookings
           </a>
           <a
+            routerLink="/customer/payments"
+            routerLinkActive="mobile-drawer__link--active"
+            class="mobile-drawer__link"
+            (click)="closeMobileMenu()"
+          >
+            Payments
+          </a>
+          <a
             routerLink="/customer/account"
             routerLinkActive="mobile-drawer__link--active"
             class="mobile-drawer__link"
@@ -211,5 +226,6 @@
       </div>
     </div>
   </footer>
-</div>
 
+  <app-ai-chatbot-service />
+</div>

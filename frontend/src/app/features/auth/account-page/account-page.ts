@@ -58,6 +58,9 @@ export class AccountPage {
   protected readonly isCustomer = computed(() => this.auth.roles().includes('CUSTOMER'));
   protected readonly isMerchant = computed(() => this.auth.roles().includes('MERCHANT'));
   protected readonly isCourier = computed(() => this.auth.roles().includes('COURIER'));
+  protected readonly canManageWarehouses = computed(() =>
+    this.auth.roles().includes('DISPATCHER'),
+  );
 
   /** Google-only accounts have no password yet, so there is no current one to ask for. */
   protected readonly hasPassword = computed(() => this.user()?.authProviders.includes('PASSWORD') ?? false);

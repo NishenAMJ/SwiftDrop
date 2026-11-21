@@ -68,6 +68,13 @@ export interface ReportDashboardData {
   deliveryCounts: DeliveryCounts;
 }
 
+export interface DispatcherOverviewData {
+  summary: ReportSummary;
+  statusBreakdown: StatusBreakdown;
+  dailyDeliveryCounts: DeliveryCounts;
+  monthlyDeliveryCounts: DeliveryCounts;
+}
+
 /** Privacy-safe state sent by the authenticated tracking SSE endpoint. */
 export interface TrackingStreamState {
   trackingNumber: string;

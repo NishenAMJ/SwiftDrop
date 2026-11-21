@@ -1,0 +1,296 @@
+<div class="page page--wide">
+  <header class="page__header management-header">
+    <div>
+      <h1 class="page__title">Warehouses</h1>
+      <p class="page__intro">
+        Maintain warehouse locations, operational contacts, and availability.
+      </p>
+    </div>
+    <button class="sd-button sd-button--primary" type="button" (click)="beginCreate()">
+      Create warehouse
+    </button>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  @if (showForm()) {
+    <section class="sd-card page__section" aria-labelledby="warehouse-form-title">
+      <div>
+        <h2 id="warehouse-form-title" class="page__section-title">
+          {{ editingId() ? 'Edit warehouse' : 'Create warehouse' }}
+        </h2>
+        <p class="page__muted">Required fields are marked with an asterisk.</p>
+      </div>
+      <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="form__grid">
+          <div class="sd-field">
+            @let codeError = fieldError('code');
+            <label class="sd-label" for="warehouse-code">Warehouse code *</label>
+            <input
+              id="warehouse-code"
+              class="sd-input"
+              formControlName="code"
+              autocomplete="off"
+              maxlength="30"
+              [readOnly]="!!editingId()"
+              [attr.aria-invalid]="!!codeError"
+              [attr.aria-describedby]="codeError ? 'warehouse-code-error' : 'warehouse-code-help'"
+            />
+            <p id="warehouse-code-help" class="sd-help">A stable code such as CMB-01.</p>
+            @if (codeError) {
+              <p id="warehouse-code-error" class="sd-error">{{ codeError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let nameError = fieldError('name');
+            <label class="sd-label" for="warehouse-name">Warehouse name *</label>
+            <input
+              id="warehouse-name"
+              class="sd-input"
+              formControlName="name"
+              maxlength="120"
+              [attr.aria-invalid]="!!nameError"
+              [attr.aria-describedby]="nameError ? 'warehouse-name-error' : null"
+            />
+            @if (nameError) {
+              <p id="warehouse-name-error" class="sd-error">{{ nameError }}</p>
+            }
+          </div>
+          <div class="sd-field form__full">
+            @let addressError = fieldError('addressLine1');
+            <label class="sd-label" for="warehouse-address-1">Address line 1 *</label>
+            <input
+              id="warehouse-address-1"
+              class="sd-input"
+              formControlName="addressLine1"
+              autocomplete="street-address"
+              maxlength="160"
+              [attr.aria-invalid]="!!addressError"
+              [attr.aria-describedby]="addressError ? 'warehouse-address-1-error' : null"
+            />
+            @if (addressError) {
+              <p id="warehouse-address-1-error" class="sd-error">{{ addressError }}</p>
+            }
+          </div>
+          <div class="sd-field form__full">
+            <label class="sd-label" for="warehouse-address-2"
+              >Address line 2 <span class="sd-label__optional">Optional</span></label
+            >
+            <input
+              id="warehouse-address-2"
+              class="sd-input"
+              formControlName="addressLine2"
+              maxlength="160"
+            />
+          </div>
+          <div class="sd-field">
+            @let cityError = fieldError('city');
+            <label class="sd-label" for="warehouse-city">City *</label>
+            <input
+              id="warehouse-city"
+              class="sd-input"
+              formControlName="city"
+              autocomplete="address-level2"
+              maxlength="80"
+              [attr.aria-invalid]="!!cityError"
+              [attr.aria-describedby]="cityError ? 'warehouse-city-error' : null"
+            />
+            @if (cityError) {
+              <p id="warehouse-city-error" class="sd-error">{{ cityError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let districtError = fieldError('district');
+            <label class="sd-label" for="warehouse-district">District *</label>
+            <input
+              id="warehouse-district"
+              class="sd-input"
+              formControlName="district"
+              autocomplete="address-level1"
+              maxlength="80"
+              [attr.aria-invalid]="!!districtError"
+              [attr.aria-describedby]="districtError ? 'warehouse-district-error' : null"
+            />
+            @if (districtError) {
+              <p id="warehouse-district-error" class="sd-error">{{ districtError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="warehouse-postal"
+              >Postal code <span class="sd-label__optional">Optional</span></label
+            >
+            <input
+              id="warehouse-postal"
+              class="sd-input"
+              formControlName="postalCode"
+              autocomplete="postal-code"
+              maxlength="20"
+            />
+          </div>
+          <div class="sd-field">
+            @let contactNameError = fieldError('contactName');
+            <label class="sd-label" for="warehouse-contact-name">Operational contact *</label>
+            <input
+              id="warehouse-contact-name"
+              class="sd-input"
+              formControlName="contactName"
+              autocomplete="name"
+              maxlength="120"
+              [attr.aria-invalid]="!!contactNameError"
+              [attr.aria-describedby]="contactNameError ? 'warehouse-contact-name-error' : null"
+            />
+            @if (contactNameError) {
+              <p id="warehouse-contact-name-error" class="sd-error">{{ contactNameError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let phoneError = fieldError('contactPhone');
+            <label class="sd-label" for="warehouse-phone">Contact phone *</label>
+            <input
+              id="warehouse-phone"
+              class="sd-input"
+              formControlName="contactPhone"
+              type="tel"
+              autocomplete="tel"
+              maxlength="30"
+              [attr.aria-invalid]="!!phoneError"
+              [attr.aria-describedby]="phoneError ? 'warehouse-phone-error' : null"
+            />
+            @if (phoneError) {
+              <p id="warehouse-phone-error" class="sd-error">{{ phoneError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let emailError = fieldError('contactEmail');
+            <label class="sd-label" for="warehouse-email"
+              >Contact email <span class="sd-label__optional">Optional</span></label
+            >
+            <input
+              id="warehouse-email"
+              class="sd-input"
+              formControlName="contactEmail"
+              type="email"
+              autocomplete="email"
+              maxlength="160"
+              [attr.aria-invalid]="!!emailError"
+              [attr.aria-describedby]="emailError ? 'warehouse-email-error' : null"
+            />
+            @if (emailError) {
+              <p id="warehouse-email-error" class="sd-error">{{ emailError }}</p>
+            }
+          </div>
+        </div>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--primary"
+            type="submit"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving()"
+          >
+            @if (saving()) {
+              <span class="sd-spinner" aria-hidden="true"></span> Saving…
+            } @else {
+              {{ editingId() ? 'Save changes' : 'Create warehouse' }}
+            }
+          </button>
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="cancelForm()"
+            [disabled]="saving()"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+
+  <section class="page__section" aria-labelledby="warehouse-list-title">
+    <div>
+      <h2 id="warehouse-list-title" class="page__section-title">Warehouse network</h2>
+      <p class="page__muted">{{ warehouses().length }} warehouses shown</p>
+    </div>
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading warehouses…
+      </p>
+    } @else if (warehouses().length > 0) {
+      <div class="sd-table-wrap" role="region" aria-labelledby="warehouse-list-title" tabindex="0">
+        <table class="sd-table">
+          <caption class="sd-visually-hidden">
+            SwiftDrop warehouse locations and operational status
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Warehouse</th>
+              <th scope="col">Location</th>
+              <th scope="col">Contact</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (warehouse of warehouses(); track warehouse.id) {
+              <tr>
+                <td>
+                  <strong>{{ warehouse.name }}</strong
+                  ><br /><span class="management-code">{{ warehouse.code }}</span>
+                </td>
+                <td>{{ warehouse.city }}, {{ warehouse.district }}</td>
+                <td>
+                  {{ warehouse.contactName }}<br /><span class="management-secondary">{{
+                    warehouse.contactPhone
+                  }}</span>
+                </td>
+                <td>
+                  <span class="sd-badge" [class]="statusClass(warehouse.status)">{{
+                    statusLabel(warehouse.status)
+                  }}</span>
+                </td>
+                <td>
+                  <div class="management-actions">
+                    <button
+                      class="sd-button sd-button--secondary"
+                      type="button"
+                      (click)="beginEdit(warehouse)"
+                    >
+                      Edit
+                    </button>
+                    <label class="sd-visually-hidden" [for]="'warehouse-status-' + warehouse.id"
+                      >Status for {{ warehouse.name }}</label
+                    >
+                    <select
+                      class="sd-input management-status"
+                      [id]="'warehouse-status-' + warehouse.id"
+                      [value]="warehouse.status"
+                      [disabled]="changingStatusId() === warehouse.id"
+                      (change)="changeStatus(warehouse, $any($event.target).value)"
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="MAINTENANCE">Maintenance</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="sd-card management-empty">
+        <h3>No warehouses yet</h3>
+        <p>Create the first warehouse to begin recording parcel movements.</p>
+        <button class="sd-button sd-button--primary" type="button" (click)="beginCreate()">
+          Create warehouse
+        </button>
+      </div>
+    }
+  </section>
+</div>
