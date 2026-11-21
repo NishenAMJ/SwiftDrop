@@ -277,5 +277,29 @@
         </div>
       </section>
     }
+
+    @if (issuesFailed()) {
+      <p class="page__muted" role="status">Your reported problems could not be loaded right now.</p>
+    } @else if (issues().length > 0) {
+      <section class="page__section" aria-labelledby="issues-title">
+        <h2 id="issues-title" class="page__section-title">Your reported problems</h2>
+        <div class="sd-card">
+          <ul class="finished">
+            @for (issue of issues(); track issue.id) {
+              <li class="finished__item">
+                <span class="issue-type">{{ issueLabels[issue.issueType] }}</span>
+                @if (issue.parcelReference) {
+                  <span class="delivery__reference">{{ issue.parcelReference }}</span>
+                }
+                <span class="sd-badge" [class]="issueClass(issue.status)">
+                  {{ issueStatusLabels[issue.status] }}
+                </span>
+                <span class="page__muted">Reported {{ issue.reportedAt | colomboDate }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      </section>
+    }
   }
 </div>

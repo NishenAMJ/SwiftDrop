@@ -116,6 +116,14 @@ export class CourierDeliveryService {
     return this.http.post<ProofOfDelivery>(`${ASSIGNMENT_API}/${id(assignmentId)}/proof`, request);
   }
 
+  listAttempts(assignmentId: string): Observable<DeliveryAttempt[]> {
+    return this.http.get<DeliveryAttempt[]>(`${ASSIGNMENT_API}/${id(assignmentId)}/attempts`);
+  }
+
+  getProof(assignmentId: string): Observable<ProofOfDelivery> {
+    return this.http.get<ProofOfDelivery>(`${ASSIGNMENT_API}/${id(assignmentId)}/proof`);
+  }
+
   // Issues
   listIssues(filters: IssueFilters = {}): Observable<DeliveryPage<DeliveryIssue>> {
     let params = new HttpParams()

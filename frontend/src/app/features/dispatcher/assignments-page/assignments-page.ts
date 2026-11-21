@@ -1,5 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
 
@@ -11,8 +19,11 @@ import {
   AssignmentStatus,
   CourierProfile,
   DeliveryAssignment,
+  DeliveryAttempt,
   DeliveryPage,
   EMPTY_DELIVERY_PAGE,
+  FAILURE_REASON_LABELS,
+  ProofOfDelivery,
   assignmentStatusClass,
 } from '../../courier/courier-delivery.models';
 import { CourierDeliveryService } from '../../courier/courier-delivery.service';
@@ -33,6 +44,16 @@ export class AssignmentsPage implements OnInit {
 
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly statusLabels = ASSIGNMENT_STATUS_LABELS;
+  protected readonly failureLabels = FAILURE_REASON_LABELS;
+
+  private readonly courierSelect = viewChild<ElementRef<HTMLSelectElement>>('courierSelect');
+
+  /** The assignment whose attempts or proof are open, with what was loaded for it. */
+  protected readonly detailsId = signal<string | null>(null);
+  protected readonly detailsLoading = signal(false);
+  protected readonly detailsError = signal<string | null>(null);
+  protected readonly attempts = signal<DeliveryAttempt[]>([]);
+  protected readonly proof = signal<ProofOfDelivery | null>(null);
 
   protected readonly couriers = signal<CourierProfile[]>([]);
   protected readonly assignments = signal<DeliveryPage<DeliveryAssignment>>(EMPTY_DELIVERY_PAGE);
@@ -109,6 +130,51 @@ export class AssignmentsPage implements OnInit {
       }
     }
     return errorMessage(error);
+  }
+
+  /** Opens or closes what happened to a finished assignment: why it failed, or who received it. */
+  protected toggleDetails(assignment: DeliveryAssignment): void {
+    if (this.detailsId() === assignment.id) {
+      this.detailsId.set(null);
+      return;
+    }
+    this.detailsId.set(assignment.id);
+    this.detailsError.set(null);
+    this.attempts.set([]);
+    this.proof.set(null);
+    this.detailsLoading.set(true);
+
+    if (assignment.status === 'DELIVERY_FAILED') {
+      this.service
+        .listAttempts(assignment.id)
+        .pipe(finalize(() => this.detailsLoading.set(false)))
+        .subscribe({
+          next: (attempts) => this.attempts.set(attempts),
+          error: (error: unknown) => this.detailsError.set(errorMessage(error)),
+        });
+    } else {
+      this.service
+        .getProof(assignment.id)
+        .pipe(finalize(() => this.detailsLoading.set(false)))
+        .subscribe({
+          next: (proof) => this.proof.set(proof),
+          error: (error: unknown) => this.detailsError.set(errorMessage(error)),
+        });
+    }
+  }
+
+  /** Starts a new assignment for a parcel whose delivery failed: fills in the parcel and moves to the courier. */
+  protected reassign(assignment: DeliveryAssignment): void {
+    this.clearMessages();
+    const select = this.courierSelect();
+    if (!select) {
+      this.error.set('No couriers are available right now. Set a courier to Available on the Couriers page.');
+      return;
+    }
+    this.assignForm.reset({ parcelReference: assignment.parcelReference, courierId: '', notes: '' });
+    this.submitted.set(false);
+    this.notice.set(`Choose a courier to try ${assignment.parcelReference} again.`);
+    select.nativeElement.focus();
   }
 
   protected applyFilters(): void {
