@@ -75,9 +75,9 @@ public class DeliveryAssignmentService {
             throw new ConflictException("Parcel already has an active assignment: " + reference);
         }
         var now = Instant.now();
-        var assignment = assignmentRepository.save(new DeliveryAssignment(parcel.parcelId(), reference, courier,
-                request.assignedBy().trim(), cleanNullable(request.notes()), now));
-        events.progressed(assignment, now);
+        var assignment = assignmentRepository.save(new DeliveryAssignment(parcel.parcelId(), parcel.customerId(),
+                reference, courier, request.assignedBy().trim(), cleanNullable(request.notes()), now));
+        events.progressed(assignment, null, now);
         return AssignmentResponse.from(assignment);
     }
 
@@ -119,8 +119,9 @@ public class DeliveryAssignmentService {
         }
         var assignment = requireAssignment(assignmentId);
         var occurredAt = request.occurredAt() == null ? Instant.now() : request.occurredAt();
+        var previous = assignment.getStatus();
         assignment.moveTo(next, occurredAt);
-        events.progressed(assignment, occurredAt);
+        events.progressed(assignment, previous, occurredAt);
         return AssignmentResponse.from(assignment);
     }
 
@@ -152,7 +153,7 @@ public class DeliveryAssignmentService {
         assignment.moveTo(AssignmentStatus.DELIVERED, deliveredAt);
         var proof = new ProofOfDelivery(assignment, request.recipientName().trim(), cleanNullable(request.notes()),
                 cleanNullable(request.mediaUrl()), deliveredAt);
-        events.progressed(assignment, deliveredAt);
+        events.progressed(assignment, AssignmentStatus.OUT_FOR_DELIVERY, deliveredAt);
         return ProofResponse.from(proofRepository.save(proof));
     }
 

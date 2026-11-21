@@ -117,8 +117,95 @@ class DeliveryEventsTest {
         assertThat(eventsFor(tracking)).extracting(OutboxEvent::getRoutingKey).containsExactly("delivery.assigned");
     }
 
+    @Test
+    void customersHearAboutEveryStepExceptTheAssignmentUsingTheNotificationContractsOwnStatusNames() {
+        var courier = createCourier("EVT-D");
+        var tracking = "SWD-2026-000404";
+        var assignment = assignmentService.assign(
+                new AssignParcelRequest(tracking, courier.id(), "Dispatcher", null), "token");
+        for (var next : List.of(AssignmentStatus.PICKED_UP, AssignmentStatus.IN_TRANSIT,
+                AssignmentStatus.OUT_FOR_DELIVERY)) {
+            assignmentService.updateStatus(assignment.id(), new UpdateAssignmentStatusRequest(next, null));
+        }
+        assignmentService.recordProof(assignment.id(), new RecordProofRequest("Kamala Silva", null, null, null));
+
+        var events = customerEventsFor(tracking);
+
+        // No event for ASSIGNED: that contract has no such status.
+        assertThat(events).hasSize(4);
+        assertThat(events).extracting(OutboxEvent::getExchange).containsOnly("swiftdrop.delivery");
+        assertThat(events).extracting(OutboxEvent::getRoutingKey).containsOnly("parcel.status-changed");
+        var data = events.stream().map(event -> parse(event).get("data")).toList();
+        assertThat(data).extracting(node -> node.get("status").asString())
+                .containsExactly("PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED");
+        // The first step follows ASSIGNED, which that contract cannot express, so it has no previousStatus.
+        assertThat(data.get(0).has("previousStatus")).isFalse();
+        assertThat(data.get(1).get("previousStatus").asString()).isEqualTo("PICKED_UP");
+        assertThat(data.get(2).get("previousStatus").asString()).isEqualTo("IN_TRANSIT");
+        assertThat(data.get(3).get("previousStatus").asString()).isEqualTo("OUT_FOR_DELIVERY");
+        var expectedCustomer = UUID.nameUUIDFromBytes(("customer:" + tracking).getBytes(StandardCharsets.UTF_8));
+        for (var node : data) {
+            assertThat(node.get("customerUserId").asString()).isEqualTo(expectedCustomer.toString());
+            assertThat(node.get("trackingNumber").asString()).isEqualTo(tracking);
+            assertThat(node.get("changedAt").asString()).isNotBlank();
+        }
+    }
+
+    @Test
+    void aFailedDeliveryIsReportedToCustomersAsFailedWithSafeWording() {
+        var courier = createCourier("EVT-E");
+        var tracking = "SWD-2026-000405";
+        var assignment = assignmentService.assign(
+                new AssignParcelRequest(tracking, courier.id(), "Dispatcher", null), "token");
+        assignmentService.updateStatus(assignment.id(),
+                new UpdateAssignmentStatusRequest(AssignmentStatus.PICKED_UP, null));
+        assignmentService.updateStatus(assignment.id(),
+                new UpdateAssignmentStatusRequest(AssignmentStatus.OUT_FOR_DELIVERY, null));
+
+        assignmentService.recordFailedAttempt(assignment.id(), new RecordAttemptRequest(
+                FailureReason.INCORRECT_ADDRESS, "Gate 14 Galle Road, buzzer broken", null));
+
+        var failed = customerEventsFor(tracking).getLast();
+        var data = parse(failed).get("data");
+        assertThat(data.get("status").asString()).isEqualTo("FAILED");
+        assertThat(data.get("previousStatus").asString()).isEqualTo("OUT_FOR_DELIVERY");
+        assertThat(data.get("failureReason").asString()).isEqualTo("The delivery address could not be found");
+        assertThat(failed.getPayload()).doesNotContain("Galle Road").doesNotContain("buzzer");
+    }
+
+    @Test
+    void everyCustomerEventUsesOnlyFieldsAndStatusNamesTheNotificationContractAllows() {
+        var courier = createCourier("EVT-F");
+        var tracking = "SWD-2026-000406";
+        var assignment = assignmentService.assign(
+                new AssignParcelRequest(tracking, courier.id(), "Dispatcher", null), "token");
+        assignmentService.updateStatus(assignment.id(),
+                new UpdateAssignmentStatusRequest(AssignmentStatus.PICKED_UP, null));
+        assignmentService.updateStatus(assignment.id(),
+                new UpdateAssignmentStatusRequest(AssignmentStatus.OUT_FOR_DELIVERY, null));
+        assignmentService.recordFailedAttempt(assignment.id(),
+                new RecordAttemptRequest(FailureReason.RECIPIENT_REFUSED, null, null));
+
+        var allowedFields = List.of("parcelId", "trackingNumber", "status", "previousStatus", "customerUserId",
+                "merchantId", "failureReason", "changedAt");
+        var allowedStatuses = List.of("CREATED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "FAILED");
+        for (var event : customerEventsFor(tracking)) {
+            var data = parse(event).get("data");
+            data.propertyNames().forEach(name -> assertThat(allowedFields).contains(name));
+            assertThat(allowedStatuses).contains(data.get("status").asString());
+        }
+    }
+
     private List<OutboxEvent> eventsFor(String tracking) {
         return outbox.findAllByOrderByCreatedAtAsc().stream()
+                .filter(event -> event.getRoutingKey().startsWith("delivery."))
+                .filter(event -> event.getPayload().contains("\"trackingNumber\":\"" + tracking + "\""))
+                .toList();
+    }
+
+    private List<OutboxEvent> customerEventsFor(String tracking) {
+        return outbox.findAllByOrderByCreatedAtAsc().stream()
+                .filter(event -> event.getRoutingKey().equals("parcel.status-changed"))
                 .filter(event -> event.getPayload().contains("\"trackingNumber\":\"" + tracking + "\""))
                 .toList();
     }

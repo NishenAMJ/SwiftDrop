@@ -87,7 +87,18 @@ ASSIGNED -> PICKED_UP -> IN_TRANSIT (optional) -> OUT_FOR_DELIVERY -> DELIVERED
 
 Each step writes an event to the `outbox_events` table in the same transaction as the change. A scheduled publisher sends them to the topic exchange `swiftdrop.delivery-operations` and marks a row published only after the broker confirms it (at least once; consumers skip repeated `eventId`s). Routing keys: `delivery.assigned`, `delivery.picked-up`, `delivery.in-transit`, `delivery.out-for-delivery`, `delivery.delivered`, `delivery.failed`. The payloads are described in `../../contracts/events/delivery-operations/delivery-status-events.schema.json`, with examples in `../../contracts/examples/delivery-operations/`. Courier notes are never published; a failed delivery carries only a customer-safe `failureCode`.
 
+For customer emails and merchant webhooks, each step except the assignment also writes `parcel.status-changed` to the exchange `swiftdrop.delivery`, which notification-webhook-service already listens on. Its contract is `../../contracts/events/parcel/parcel-status-changed.schema.json`, which has its own status names, so this service translates and nothing in that contract is renamed:
+
+| Assignment status | `status` sent |
+| --- | --- |
+| `ASSIGNED` | not sent (that contract has no such status) |
+| `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED` | the same name |
+| `DELIVERY_FAILED` | `FAILED`, with a customer-safe `failureReason` |
+
+`customerUserId` comes from Parcel & Pricing when the parcel is assigned and is left out when the booking has no registered customer. `merchantId` is not sent yet because Parcel & Pricing does not return it. An example is in `../../contracts/examples/delivery-operations/parcel.status-changed.json`.
+
 ## Not done yet
 
-- `parcel.status-changed` (used by notification-webhook-service) and `delivery.cod-collected` (used by payment-settlement-service) are not published. They need data this service does not have yet, and the consumers' exchange names and contracts still have to be agreed.
+- `delivery.cod-collected` (used by payment-settlement-service) is not published. It needs the COD amount, pricing snapshot id and merchant id, which Parcel & Pricing does not return yet.
+- `parcel.status-changed` has no `merchantId`, so merchant webhooks for delivery steps need Parcel & Pricing to return it.
 - Proof of delivery stores an optional media URL but does not upload files.

@@ -46,7 +46,7 @@ public class HttpParcelLookup implements ParcelLookup {
             if (booking == null || booking.id() == null || booking.trackingNumber() == null) {
                 throw new ParcelServiceUnavailableException("Parcel service returned an unreadable response", null);
             }
-            return new ParcelRef(booking.id(), booking.trackingNumber());
+            return new ParcelRef(booking.id(), booking.trackingNumber(), booking.customerId());
         } catch (HttpClientErrorException.NotFound notFound) {
             throw new ResourceNotFoundException("Parcel not found: " + trackingNumber);
         } catch (ResourceAccessException unreachable) {
@@ -58,6 +58,6 @@ public class HttpParcelLookup implements ParcelLookup {
     }
 
     /** The only fields needed from the booking response. */
-    record Booking(UUID id, String trackingNumber) {
+    record Booking(UUID id, String trackingNumber, UUID customerId) {
     }
 }
