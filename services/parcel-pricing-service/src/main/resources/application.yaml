@@ -64,6 +64,9 @@ management:
       show-details: never
 
 swiftdrop:
+  internal:
+    # Shared key for service-to-service calls (Payment & Settlement's COD check). Empty = endpoint disabled.
+    api-key: ${PARCEL_INTERNAL_API_KEY:}
   # Other services this one calls over REST (Docker values are set in compose.yaml)
   identity:
     base-url: ${SWIFTDROP_IDENTITY_BASE_URL:http://localhost:8081}

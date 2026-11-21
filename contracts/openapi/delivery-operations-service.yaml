@@ -360,6 +360,9 @@ paths:
         Role DISPATCHER. The parcel is looked up in Parcel & Pricing by tracking number, using the
         dispatcher's own token, so it must exist. The courier must be AVAILABLE in an ACTIVE category,
         and the parcel must not already have an active assignment. Publishes delivery.assigned.
+        Refused with 422 and a code in the problem body: PARCEL_CANCELLED (the booking was cancelled)
+        or PARCEL_TOO_HEAVY (the parcel's weight is over the courier category's maxWeightKg; a category
+        with no limit, or a parcel with no known weight, is not checked).
       requestBody:
         required: true
         content:
@@ -435,6 +438,25 @@ paths:
         '201': { description: Attempt recorded }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/history:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Audit trail of an assignment
+      description: >
+        Role DISPATCHER only. Every status change, oldest first, with who made it. changedBy is the
+        identity user id from the access token (sub) and changedByRole is the role on that token; neither
+        is supplied by the caller. Couriers do not read this.
+      responses:
+        '200':
+          description: Status changes, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StatusChange' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/assignments/{assignmentId}/proof:
     parameters:
       - $ref: '#/components/parameters/AssignmentId'
@@ -648,7 +670,8 @@ components:
       enum: [AVAILABLE, OFF_DUTY, INACTIVE]
     AssignmentStatus:
       type: string
-      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED]
+      description: CANCELLED is set only when Parcel & Pricing cancels the booking (parcel.cancelled), never by a person, and publishes no delivery event.
+      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED, CANCELLED]
     FailureReason:
       type: string
       enum: [RECIPIENT_UNAVAILABLE, INCORRECT_ADDRESS, RECIPIENT_REFUSED, OTHER]
@@ -745,6 +768,15 @@ components:
         completedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    StatusChange:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { oneOf: [ { $ref: '#/components/schemas/AssignmentStatus' }, { type: 'null' } ], description: 'Null for the first entry, when the parcel was assigned' }
+        toStatus: { $ref: '#/components/schemas/AssignmentStatus' }
+        changedBy: { type: [string, 'null'], format: uuid, description: 'Identity user id from the access token sub' }
+        changedByRole: { type: string, enum: [DISPATCHER, COURIER, SYSTEM, UNKNOWN] }
+        changedAt: { type: string, format: date-time }
     ParcelContact:
       type: [object, 'null']
       description: Who to meet and where. Present only while the assignment is open, and only to the assigned courier and dispatchers. Never published in events.

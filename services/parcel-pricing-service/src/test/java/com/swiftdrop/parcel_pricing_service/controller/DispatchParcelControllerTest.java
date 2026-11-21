@@ -49,7 +49,8 @@ class DispatchParcelControllerTest {
                 UUID.randomUUID(), "SWD-2026-000001", UUID.randomUUID(), merchant, "COD",
                 new BigDecimal("2500.00"), "SNP-ABC", "LKR",
                 new AddressDto("Nimal", "0771234567", "12 Main St", "Colombo", null, "COLOMBO"),
-                new AddressDto("Kamala", "0777654321", "45 Lake Rd", "Kandy", null, "KANDY")));
+                new AddressDto("Kamala", "0777654321", "45 Lake Rd", "Kandy", null, "KANDY"),
+                "BOOKED", new BigDecimal("12.50")));
 
         mvc.perform(get(URL).with(as("DISPATCHER")))
                 .andExpect(status().isOk())
@@ -59,6 +60,8 @@ class DispatchParcelControllerTest {
                 .andExpect(jsonPath("$.deliveryAddress.contactName").value("Kamala"))
                 .andExpect(jsonPath("$.deliveryAddress.contactPhone").value("0777654321"))
                 .andExpect(jsonPath("$.pickupAddress.streetAddress").value("12 Main St"))
+                .andExpect(jsonPath("$.status").value("BOOKED"))
+                .andExpect(jsonPath("$.weightKg").value(12.50))
                 .andExpect(jsonPath("$.estimatedFee").doesNotExist());
     }
 

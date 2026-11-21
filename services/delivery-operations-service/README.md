@@ -7,7 +7,7 @@ Spring Boot service for SwiftDrop delivery operations. It covers two areas in on
 
 ## Technology
 
-- Java 25 and Spring Boot 4.1
+- Java 21 and Spring Boot 4.1
 - Spring MVC, Validation, and Data JPA
 - PostgreSQL with Flyway migrations
 - Spring Security as an OAuth2 resource server (tokens from identity-merchant-service)
@@ -87,6 +87,10 @@ ASSIGNED -> PICKED_UP -> IN_TRANSIT (optional) -> OUT_FOR_DELIVERY -> DELIVERED
 - The pickup and delivery contact (name, phone, address) is copied onto the assignment when it is created, so the assigned courier can find and call both ends. The API returns it only while the assignment is open and only to that courier or a dispatcher; it is dropped once the parcel is delivered or failed, and it is never put in an event.
 - On a Cash on Delivery parcel the courier must enter the cash collected when recording proof of delivery; on any other parcel an amount is refused.
 
+Cancelled and too-heavy parcels: assigning looks the parcel up with its status and weight. A cancelled parcel is refused (422, code `PARCEL_CANCELLED`), and so is a parcel heavier than the courier category's `maxWeightKg` (422, code `PARCEL_TOO_HEAVY`); a category with no limit, or a parcel with no known weight, is not checked. If Parcel & Pricing cancels a booking after it was assigned, `parcel.cancelled` (queue `delivery-operations-service.parcel-cancelled`, bound to `swiftdrop.parcel-pricing`) ends any open assignment as `CANCELLED`. That is repeat-safe, writes an audit row by `SYSTEM`, and publishes nothing, because Parcel & Pricing already announced the cancellation. An unreadable message is retried three times and then dead-lettered.
+
+Every status change is also written to `assignment_status_history` in the same transaction, with the signed-in user's identity id (the token's `sub`) and role. These come from the verified token, never from the request body (`assignedBy` is only a display name). Rows are only ever added. Dispatchers read it at `GET /api/v1/assignments/{id}/history`; couriers cannot.
+
 Each step writes an event to the `outbox_events` table in the same transaction as the change. A scheduled publisher sends them to the topic exchange `swiftdrop.delivery-operations` and marks a row published only after the broker confirms it (at least once; consumers skip repeated `eventId`s). Routing keys: `delivery.assigned`, `delivery.picked-up`, `delivery.in-transit`, `delivery.out-for-delivery`, `delivery.delivered`, `delivery.failed`. The payloads are described in `../../contracts/events/delivery-operations/delivery-status-events.schema.json`, with examples in `../../contracts/examples/delivery-operations/`. Courier notes are never published; a failed delivery carries only a customer-safe `failureCode`.
 
 For customer emails and merchant webhooks, each step except the assignment also writes `parcel.status-changed` to the exchange `swiftdrop.delivery`, which notification-webhook-service already listens on. Its contract is `../../contracts/events/parcel/parcel-status-changed.schema.json`, which has its own status names, so this service translates and nothing in that contract is renamed:
@@ -103,6 +107,6 @@ When a Cash on Delivery parcel is delivered, `delivery.cod-collected` is also wr
 
 ## Not done yet
 
-- Migrations: `V4__cash_on_delivery.sql` adds the merchant and cash columns. Warehouse work should use `V5` or later.
+- Migrations: `V4__cash_on_delivery.sql` adds the merchant and cash columns. `V5__assignment_status_history.sql` adds the audit trail and `V6__cancelled_assignments.sql` lets a cancelled assignment free its parcel. Warehouse work should use `V7` or later.
 - If the collected amount differs from the amount due, the event still carries both; Payment & Settlement decides what to do.
 - Proof of delivery stores an optional media URL but does not upload files.

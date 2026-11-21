@@ -29,6 +29,8 @@ public class DeliveryEventRecorder {
 
     static final String PRODUCER = "delivery-operations-service";
     static final String PARCEL_STATUS_CHANGED = "parcel.status-changed";
+    private static final String NO_EVENT =
+        "A cancelled assignment publishes no delivery event; Parcel & Pricing announces the cancellation";
 
     private final OutboxEventRepository outbox;
     private final JsonMapper json;
@@ -120,6 +122,7 @@ public class DeliveryEventRecorder {
             case OUT_FOR_DELIVERY -> "delivery.out-for-delivery";
             case DELIVERED -> "delivery.delivered";
             case DELIVERY_FAILED -> "delivery.failed";
+            case CANCELLED -> throw new IllegalStateException(NO_EVENT);
         };
     }
 
@@ -131,6 +134,7 @@ public class DeliveryEventRecorder {
             case OUT_FOR_DELIVERY -> "Out for delivery";
             case DELIVERED -> "Delivered";
             case DELIVERY_FAILED -> "Delivery attempt was unsuccessful";
+            case CANCELLED -> throw new IllegalStateException(NO_EVENT);
         };
     }
 
@@ -146,6 +150,7 @@ public class DeliveryEventRecorder {
             case OUT_FOR_DELIVERY -> Optional.of("OUT_FOR_DELIVERY");
             case DELIVERED -> Optional.of("DELIVERED");
             case DELIVERY_FAILED -> Optional.of("FAILED");
+            case CANCELLED -> Optional.empty();
         };
     }
 

@@ -16,6 +16,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import com.jayway.jsonpath.JsonPath;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.math.BigDecimal;
@@ -136,6 +137,44 @@ class CourierSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON).content(pickedUp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PICKED_UP"));
+    }
+
+    @Test
+    void theAuditTrailNamesWhoMadeEachChangeFromTheirToken() throws Exception {
+        var reference = "SWD-2026-" + (Math.abs(UUID.randomUUID().getMostSignificantBits() % 900_000) + 100_000);
+        var created = mvc.perform(post("/api/v1/assignments").with(dispatcher())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        // assignedBy is only a display name; the audit uses the token, not this text.
+                        .content("{\"parcelReference\":\"" + reference + "\",\"courierId\":\"" + alice.id()
+                                + "\",\"assignedBy\":\"Somebody Else\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        var id = JsonPath.read(created.getResponse().getContentAsString(), "$.id").toString();
+        mvc.perform(patch("/api/v1/assignments/" + id + "/status").with(courier(aliceUser))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PICKED_UP\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/assignments/" + id + "/history").with(dispatcher()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].fromStatus").doesNotExist())
+                .andExpect(jsonPath("$[0].toStatus").value("ASSIGNED"))
+                .andExpect(jsonPath("$[0].changedBy").value(dispatcherUser.toString()))
+                .andExpect(jsonPath("$[0].changedByRole").value("DISPATCHER"))
+                .andExpect(jsonPath("$[1].fromStatus").value("ASSIGNED"))
+                .andExpect(jsonPath("$[1].toStatus").value("PICKED_UP"))
+                .andExpect(jsonPath("$[1].changedBy").value(aliceUser.toString()))
+                .andExpect(jsonPath("$[1].changedByRole").value("COURIER"));
+    }
+
+    @Test
+    void onlyDispatchersCanReadTheAuditTrail() throws Exception {
+        var url = "/api/v1/assignments/" + aliceParcel.id() + "/history";
+        mvc.perform(get(url)).andExpect(status().isUnauthorized());
+        mvc.perform(get(url).with(courier(aliceUser))).andExpect(status().isForbidden());
+        mvc.perform(get(url).with(courier(bobUser))).andExpect(status().isForbidden());
+        mvc.perform(get(url).with(dispatcher())).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/assignments/" + UUID.randomUUID() + "/history").with(dispatcher()))
+                .andExpect(status().isNotFound());
     }
 
     @Test

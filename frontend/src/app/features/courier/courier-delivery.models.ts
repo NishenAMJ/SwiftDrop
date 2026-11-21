@@ -8,7 +8,8 @@ export type AssignmentStatus =
   | 'IN_TRANSIT'
   | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
-  | 'DELIVERY_FAILED';
+  | 'DELIVERY_FAILED'
+  | 'CANCELLED';
 export type FailureReason = 'RECIPIENT_UNAVAILABLE' | 'INCORRECT_ADDRESS' | 'RECIPIENT_REFUSED' | 'OTHER';
 export type IssueType =
   | 'DAMAGED_PARCEL'
@@ -132,6 +133,16 @@ export interface AssignmentFilters {
   size?: number;
 }
 
+/** One line of an assignment's audit trail. Dispatchers only. */
+export interface StatusChange {
+  id: string;
+  fromStatus: AssignmentStatus | null;
+  toStatus: AssignmentStatus;
+  changedBy: string | null;
+  changedByRole: 'DISPATCHER' | 'COURIER' | 'SYSTEM' | 'UNKNOWN';
+  changedAt: string;
+}
+
 export interface RecordAttemptRequest {
   reason: FailureReason;
   notes: string | null;
@@ -213,6 +224,7 @@ export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
   DELIVERY_FAILED: 'Failed',
+  CANCELLED: 'Cancelled',
 };
 
 export function assignmentStatusClass(status: AssignmentStatus): string {
@@ -220,6 +232,7 @@ export function assignmentStatusClass(status: AssignmentStatus): string {
     case 'DELIVERED':
       return 'sd-badge--success';
     case 'DELIVERY_FAILED':
+    case 'CANCELLED':
       return 'sd-badge--danger';
     case 'OUT_FOR_DELIVERY':
       return 'sd-badge--accent';

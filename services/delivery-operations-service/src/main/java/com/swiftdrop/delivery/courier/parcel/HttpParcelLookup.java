@@ -49,7 +49,8 @@ public class HttpParcelLookup implements ParcelLookup {
             }
             return new ParcelRef(booking.id(), booking.trackingNumber(), booking.customerId(), booking.merchantId(),
                     booking.codAmount(), booking.pricingSnapshotId(), booking.currency(),
-                    contact(booking.pickupAddress()), contact(booking.deliveryAddress()));
+                    contact(booking.pickupAddress()), contact(booking.deliveryAddress()), booking.status(),
+                    booking.weightKg());
         } catch (HttpClientErrorException.NotFound notFound) {
             throw new ResourceNotFoundException("Parcel not found: " + trackingNumber);
         } catch (ResourceAccessException unreachable) {
@@ -72,7 +73,8 @@ public class HttpParcelLookup implements ParcelLookup {
 
     /** The only fields needed from the dispatch lookup response. */
     record Booking(UUID id, String trackingNumber, UUID customerId, UUID merchantId, BigDecimal codAmount,
-                   String pricingSnapshotId, String currency, Address pickupAddress, Address deliveryAddress) {
+                   String pricingSnapshotId, String currency, Address pickupAddress, Address deliveryAddress,
+                   String status, BigDecimal weightKg) {
     }
 
     record Address(String contactName, String contactPhone, String streetAddress, String city, String postalCode) {

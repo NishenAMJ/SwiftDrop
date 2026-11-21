@@ -81,4 +81,7 @@ payment:
   cod:
     consumer:
       enabled: ${PAYMENT_COD_CONSUMER_ENABLED:false}
+    # pending (default, fail-closed) or parcel (checks each event against Parcel & Pricing).
     verification-mode: ${PAYMENT_COD_VERIFICATION_MODE:pending}
+    # Shared key sent to Parcel & Pricing's internal COD lookup; the same value as its PARCEL_INTERNAL_API_KEY.
+    parcel-internal-key: ${PAYMENT_PARCEL_INTERNAL_KEY:}

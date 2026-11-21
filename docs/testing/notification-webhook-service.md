@@ -73,7 +73,7 @@ $bc = ($r | Measure-Object BRANCH_COVERED -Sum).Sum; $bm = ($r | Measure-Object 
 
 ## Latest results
 
-Run on: 2026-11-20 (Windows 11, Java 25, Docker Desktop, `.\mvnw.cmd verify`)
+Run on: 2026-11-20 (Windows 11, Java 21, Docker Desktop, `.\mvnw.cmd verify`)
 
 | Measure | Result |
 |---|---|

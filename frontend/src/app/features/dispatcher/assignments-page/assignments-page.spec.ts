@@ -10,6 +10,7 @@ import {
   DeliveryAttempt,
   DeliveryPage,
   ProofOfDelivery,
+  StatusChange,
 } from '../../courier/courier-delivery.models';
 import { CourierDeliveryService } from '../../courier/courier-delivery.service';
 import { AssignmentsPage } from './assignments-page';
@@ -50,6 +51,33 @@ const proof = {
   deliveredAt: '2026-11-20T12:00:00Z',
 } as ProofOfDelivery;
 
+const history = [
+  {
+    id: 'change-1',
+    fromStatus: null,
+    toStatus: 'ASSIGNED',
+    changedBy: 'dispatcher-user',
+    changedByRole: 'DISPATCHER',
+    changedAt: '2026-11-20T09:00:00Z',
+  },
+  {
+    id: 'change-2',
+    fromStatus: 'ASSIGNED',
+    toStatus: 'PICKED_UP',
+    changedBy: 'courier-user',
+    changedByRole: 'COURIER',
+    changedAt: '2026-11-20T10:00:00Z',
+  },
+  {
+    id: 'change-3',
+    fromStatus: 'PICKED_UP',
+    toStatus: 'CANCELLED',
+    changedBy: null,
+    changedByRole: 'SYSTEM',
+    changedAt: '2026-11-20T11:00:00Z',
+  },
+] as StatusChange[];
+
 function page<T>(content: T[]): DeliveryPage<T> {
   return {
     content,
@@ -71,6 +99,7 @@ describe('AssignmentsPage', () => {
     assign: ReturnType<typeof vi.fn>;
     listAttempts: ReturnType<typeof vi.fn>;
     getProof: ReturnType<typeof vi.fn>;
+    listHistory: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -80,6 +109,7 @@ describe('AssignmentsPage', () => {
       assign: vi.fn().mockReturnValue(of(assignment)),
       listAttempts: vi.fn().mockReturnValue(of([failedAttempt])),
       getProof: vi.fn().mockReturnValue(of(proof)),
+      listHistory: vi.fn().mockReturnValue(of(history)),
     };
     await TestBed.configureTestingModule({
       imports: [AssignmentsPage],
@@ -118,6 +148,24 @@ describe('AssignmentsPage', () => {
   });
 
   it.each([
+    ['PARCEL_CANCELLED', 'cancelled by the customer'],
+    ['PARCEL_TOO_HEAVY', 'heavier than this courier'],
+  ])('explains a refusal coded %s in plain words, not with server text', (code, expected) => {
+    service.assign.mockReturnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 422, error: { code, detail: 'internal wording that must not show' } }),
+      ),
+    );
+    const component = fixture.componentInstance as any;
+    component.assignForm.setValue({ parcelReference: 'SWD-1', courierId: 'courier-1', notes: '' });
+
+    component.assign();
+
+    expect(component.error()).toContain(expected);
+    expect(component.error()).not.toContain('internal wording');
+  });
+
+  it.each([
     [404, "couldn't find a parcel"],
     [409, 'already has an active courier assignment'],
     [422, 'cannot take a parcel right now'],
@@ -142,9 +190,8 @@ describe('AssignmentsPage', () => {
       const buttons = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button')).map(
         (button) => button.textContent!.replace(/\s+/g, ' ').trim(),
       );
-      expect(buttons.filter((text) => text.startsWith('View details'))).toHaveLength(2);
+      expect(buttons.filter((text) => text.startsWith('View details'))).toHaveLength(3);
       expect(buttons.filter((text) => text.startsWith('Reassign'))).toHaveLength(1);
-      expect(fixture.nativeElement.textContent).toContain('In progress');
     });
 
     it('shows why a delivery failed in plain words', () => {
@@ -181,6 +228,35 @@ describe('AssignmentsPage', () => {
 
       expect(fixture.nativeElement.textContent).toContain('Cash collected');
       expect(fixture.nativeElement.textContent).toContain('LKR 2,500.00');
+    });
+
+    it('shows who moved an assignment through each status, naming the courier and the role', () => {
+      const component = fixture.componentInstance as any;
+
+      component.toggleDetails(assignment);
+      fixture.detectChanges();
+
+      expect(service.listHistory).toHaveBeenCalledWith('assignment-1');
+      expect(service.listAttempts).not.toHaveBeenCalled();
+      expect(service.getProof).not.toHaveBeenCalled();
+      const text = fixture.nativeElement.textContent.replace(/\s+/g, ' ');
+      expect(text).toContain('Status history');
+      expect(text).toContain('Assigned by Dispatcher');
+      expect(text).toContain('Assigned → Picked up by Nimal Perera');
+      expect(text).toContain('Picked up → Cancelled by Automatic');
+    });
+
+    it('shows a cancelled parcel as cancelled and offers no reassignment for it', () => {
+      const cancelled = { ...assignment, id: 'assignment-4', status: 'CANCELLED' } as DeliveryAssignment;
+      (fixture.componentInstance as any).assignments.set(page([cancelled]));
+      fixture.detectChanges();
+
+      const text = fixture.nativeElement.textContent;
+      expect(text).toContain('Cancelled');
+      const buttons = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button')).map((b) =>
+        b.textContent!.replace(/\s+/g, ' ').trim(),
+      );
+      expect(buttons.some((label) => label.startsWith('Reassign'))).toBe(false);
     });
 
     it('closes the details when asked again', () => {

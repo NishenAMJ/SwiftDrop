@@ -89,6 +89,12 @@ public class DeliveryAssignmentController {
         return assignmentService.recordProof(assignmentId, request);
     }
 
+    /** Who moved this assignment through each status. Dispatchers only. */
+    @GetMapping("/{assignmentId}/history")
+    public List<StatusChangeResponse> history(@PathVariable UUID assignmentId) {
+        return assignmentService.history(assignmentId);
+    }
+
     @GetMapping("/{assignmentId}/proof")
     public ProofResponse getProof(@PathVariable UUID assignmentId, @AuthenticationPrincipal Jwt jwt) {
         access.requireOwnerOrDispatcher(jwt, assignmentService.courierIdOf(assignmentId));

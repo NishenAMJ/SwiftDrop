@@ -10,10 +10,10 @@ import {
   viewChild,
 } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { finalize } from 'rxjs';
+import { finalize, forkJoin, of } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
-import { errorMessage } from '../../../core/auth/problem-messages';
+import { errorMessage, readProblem } from '../../../core/auth/problem-messages';
 import { ColomboDatePipe } from '../../../shared/pipes/colombo-date.pipe';
 import {
   ASSIGNMENT_STATUS_LABELS,
@@ -25,6 +25,7 @@ import {
   EMPTY_DELIVERY_PAGE,
   FAILURE_REASON_LABELS,
   ProofOfDelivery,
+  StatusChange,
   assignmentStatusClass,
 } from '../../courier/courier-delivery.models';
 import { CourierDeliveryService } from '../../courier/courier-delivery.service';
@@ -55,6 +56,13 @@ export class AssignmentsPage implements OnInit {
   protected readonly detailsError = signal<string | null>(null);
   protected readonly attempts = signal<DeliveryAttempt[]>([]);
   protected readonly proof = signal<ProofOfDelivery | null>(null);
+  protected readonly history = signal<StatusChange[]>([]);
+  protected readonly roleLabels: Record<StatusChange['changedByRole'], string> = {
+    DISPATCHER: 'Dispatcher',
+    COURIER: 'Courier',
+    SYSTEM: 'Automatic',
+    UNKNOWN: 'Unknown',
+  };
 
   protected readonly couriers = signal<CourierProfile[]>([]);
   protected readonly assignments = signal<DeliveryPage<DeliveryAssignment>>(EMPTY_DELIVERY_PAGE);
@@ -119,6 +127,13 @@ export class AssignmentsPage implements OnInit {
   /** Plain-language reasons for the ways assigning a parcel can fail; raw server text is never shown. */
   private assignFailure(error: unknown): string {
     if (error instanceof HttpErrorResponse) {
+      // A coded refusal says exactly why, so it wins over the generic wording for its status.
+      switch (readProblem(error).code) {
+        case 'PARCEL_CANCELLED':
+          return 'This parcel was cancelled by the customer, so it cannot be assigned.';
+        case 'PARCEL_TOO_HEAVY':
+          return "This parcel is heavier than this courier's category can carry. Choose a courier in a larger category.";
+      }
       switch (error.status) {
         case 404:
           return "We couldn't find a parcel with that reference. Check the tracking number and try again.";
@@ -133,7 +148,7 @@ export class AssignmentsPage implements OnInit {
     return errorMessage(error);
   }
 
-  /** Opens or closes what happened to a finished assignment: why it failed, or who received it. */
+  /** Opens or closes what happened to an assignment: who moved it, and why it failed or who received it. */
   protected toggleDetails(assignment: DeliveryAssignment): void {
     if (this.detailsId() === assignment.id) {
       this.detailsId.set(null);
@@ -143,25 +158,28 @@ export class AssignmentsPage implements OnInit {
     this.detailsError.set(null);
     this.attempts.set([]);
     this.proof.set(null);
+    this.history.set([]);
     this.detailsLoading.set(true);
 
-    if (assignment.status === 'DELIVERY_FAILED') {
-      this.service
-        .listAttempts(assignment.id)
-        .pipe(finalize(() => this.detailsLoading.set(false)))
-        .subscribe({
-          next: (attempts) => this.attempts.set(attempts),
-          error: (error: unknown) => this.detailsError.set(errorMessage(error)),
-        });
-    } else {
-      this.service
-        .getProof(assignment.id)
-        .pipe(finalize(() => this.detailsLoading.set(false)))
-        .subscribe({
-          next: (proof) => this.proof.set(proof),
-          error: (error: unknown) => this.detailsError.set(errorMessage(error)),
-        });
-    }
+    forkJoin({
+      history: this.service.listHistory(assignment.id),
+      attempts: assignment.status === 'DELIVERY_FAILED' ? this.service.listAttempts(assignment.id) : of([]),
+      proof: assignment.status === 'DELIVERED' ? this.service.getProof(assignment.id) : of(null),
+    })
+      .pipe(finalize(() => this.detailsLoading.set(false)))
+      .subscribe({
+        next: (loaded) => {
+          this.history.set(loaded.history);
+          this.attempts.set(loaded.attempts);
+          this.proof.set(loaded.proof);
+        },
+        error: (error: unknown) => this.detailsError.set(errorMessage(error)),
+      });
+  }
+
+  /** Who made a change: the courier's name for a courier, otherwise the role. */
+  protected actor(change: StatusChange, assignment: DeliveryAssignment): string {
+    return change.changedByRole === 'COURIER' ? assignment.courierName : this.roleLabels[change.changedByRole];
   }
 
   /** Starts a new assignment for a parcel whose delivery failed: fills in the parcel and moves to the courier. */

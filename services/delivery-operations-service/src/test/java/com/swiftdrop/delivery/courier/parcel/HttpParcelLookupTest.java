@@ -86,6 +86,19 @@ class HttpParcelLookupTest {
     }
 
     @Test
+    void readsTheBookingStatusAndWeight() {
+        var id = UUID.randomUUID();
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000129"))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000129\","
+                        + "\"status\":\"CANCELLED\",\"weightKg\":12.50}", MediaType.APPLICATION_JSON));
+
+        var parcel = lookup.find("SWD-2026-000129", "token");
+
+        assertThat(parcel.isCancelled()).isTrue();
+        assertThat(parcel.weightKg()).isEqualByComparingTo("12.50");
+    }
+
+    @Test
     void aBookingWithoutACustomerStillResolves() {
         var id = UUID.randomUUID();
         server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000126"))

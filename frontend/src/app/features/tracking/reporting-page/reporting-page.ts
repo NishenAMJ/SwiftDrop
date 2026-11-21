@@ -7,7 +7,6 @@ import {
   signal,
 } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 
 import { errorMessage } from '../../../core/auth/problem-messages';
 import { DeliveryInterval, ReportDashboardData, ReportFilters } from '../models/tracking.models';
@@ -17,7 +16,7 @@ type ReportState = 'loading' | 'success' | 'error';
 
 @Component({
   selector: 'app-reporting-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule],
   templateUrl: './reporting-page.html',
   styleUrl: './reporting-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

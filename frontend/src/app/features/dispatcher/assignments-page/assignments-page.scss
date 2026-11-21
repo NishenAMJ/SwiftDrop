@@ -52,3 +52,21 @@
     grid-template-columns: minmax(12rem, 2fr) minmax(10rem, 1fr) auto;
   }
 }
+
+.assign-history__title {
+  margin-top: var(--sd-space-5);
+}
+
+.assign-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin: 0;
+  padding-left: var(--sd-space-5);
+}
+
+.assign-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+}

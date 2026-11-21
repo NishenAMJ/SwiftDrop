@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.api;
 
+import com.swiftdrop.delivery.exception.AssignmentRuleException;
 import com.swiftdrop.delivery.exception.ConflictException;
 import com.swiftdrop.delivery.exception.InvalidOperationException;
 import com.swiftdrop.delivery.exception.ResourceNotFoundException;
@@ -23,6 +24,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     ProblemDetail handleConflict(ConflictException exception) {
         return problem(HttpStatus.CONFLICT, "Conflict", exception.getMessage());
+    }
+
+    @ExceptionHandler(AssignmentRuleException.class)
+    ProblemDetail handleAssignmentRule(AssignmentRuleException exception) {
+        var problem = problem(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid operation", exception.getMessage());
+        problem.setProperty("code", exception.getCode());
+        return problem;
     }
 
     @ExceptionHandler(InvalidOperationException.class)

@@ -78,6 +78,8 @@ services:
       SWIFTDROP_IDENTITY_BASE_URL: http://identity-merchant-service:8081
       SWIFTDROP_PAYMENT_BASE_URL: ${SWIFTDROP_PAYMENT_BASE_URL:-http://payment-settlement-service:8085}
       SWIFTDROP_CANCELLATION_FEE: ${SWIFTDROP_CANCELLATION_FEE:-0.00}
+      # Shared key for the internal COD lookup Payment & Settlement calls. Empty = that endpoint is off.
+      PARCEL_INTERNAL_API_KEY: ${PARCEL_INTERNAL_API_KEY:-}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
@@ -146,6 +148,11 @@ services:
       PAYMENT_PAYHERE_NOTIFY_URL: ${PAYMENT_PAYHERE_NOTIFY_URL:-}
       PAYMENT_PAYHERE_RETURN_URL: ${PAYMENT_PAYHERE_RETURN_URL:-http://localhost:4200/payments/return}
       PAYMENT_PAYHERE_CANCEL_URL: ${PAYMENT_PAYHERE_CANCEL_URL:-http://localhost:4200/payments/cancel}
+      # COD collection events from Delivery Operations. Off by default; to enable set the consumer to true,
+      # the verification mode to parcel, and PARCEL_INTERNAL_API_KEY (the same value is sent to Parcel & Pricing).
+      PAYMENT_COD_CONSUMER_ENABLED: ${PAYMENT_COD_CONSUMER_ENABLED:-false}
+      PAYMENT_COD_VERIFICATION_MODE: ${PAYMENT_COD_VERIFICATION_MODE:-pending}
+      PAYMENT_PARCEL_INTERNAL_KEY: ${PARCEL_INTERNAL_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

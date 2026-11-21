@@ -1,6 +1,6 @@
 # Payment & Settlement service — Members 8 and 9
 
-Java 25 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
+Java 21 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
 PayHere. Member 9 owns COD collection, courier cash reconciliation, the merchant
 ledger and merchant settlements.
 
@@ -14,7 +14,7 @@ ledger and merchant settlements.
 
 On 2026-11-15, before Member 9's implementation, `mvn -B clean test` against the
 isolated payment test database and RabbitMQ reported **32 tests, 0 failures, 0 errors,
-0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 25
+0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 21
 and isolated infrastructure. Historical results do not verify the new V5 migration,
 COD workflows, live PayHere, actual identity/pricing integration, gateway routing or
 Docker-image end-to-end readiness.
@@ -77,8 +77,9 @@ routes are denied. Authentication is not implemented by this service.
 | PAYMENT_PAYHERE_NOTIFY_URL | Public callback URL ending /api/v1/payments/callbacks/payhere |
 | PAYMENT_PAYHERE_RETURN_URL / PAYMENT_PAYHERE_CANCEL_URL | localhost:4200/payments/return and /payments/cancel (frontend routes must be implemented) |
 | PAYMENT_WORKERS_ENABLED | true; disables outbox and recovery workers when false |
-| PAYMENT_COD_CONSUMER_ENABLED | false; enable only after COD producer and pricing verification contracts are approved |
-| PAYMENT_COD_VERIFICATION_MODE | pending; fail-closed placeholder that prevents enabling the consumer until an approved verifier is implemented |
+| PAYMENT_COD_CONSUMER_ENABLED | false; set true to consume `delivery.cod-collected` (needs PAYMENT_COD_VERIFICATION_MODE=parcel) |
+| PAYMENT_COD_VERIFICATION_MODE | pending (default, fail-closed: the consumer refuses to start); `parcel` checks every event against Parcel & Pricing before posting |
+| PAYMENT_PARCEL_INTERNAL_KEY | Shared key sent as `X-Internal-Key` to Parcel & Pricing's internal COD lookup; must equal its PARCEL_INTERNAL_API_KEY. Required when the mode is `parcel` |
 
 JWT issuer is `swiftdrop-identity`, audience `swiftdrop-api`. Role checks use `roles`,
 ownership uses `sub` and `merchant_id`. No locally fabricated JWT bypass exists.
@@ -199,8 +200,12 @@ for bodies, status values and error responses.
 Manual acknowledgements occur only after the transactional service returns (and its
 database transaction has committed). Malformed, invalid and conflicting messages are
 dead-lettered. Transient failures are requeued. `PAYMENT_COD_CONSUMER_ENABLED` remains
-false, and pending verification mode fails startup if someone enables it. Implement
-and approve service-to-service pricing verification before enabling this consumer.
+false by default, and pending verification mode fails startup if someone enables it. To
+enable it, set `PAYMENT_COD_VERIFICATION_MODE=parcel`, `PAYMENT_PARCEL_INTERNAL_KEY` (the
+same value as Parcel & Pricing's `PARCEL_INTERNAL_API_KEY`) and the consumer flag. Each
+event is then checked against Parcel & Pricing before posting (see
+`docs/architecture/member9-cod-ledger-contract.md`). The exchange, queue, bindings and DLQ
+are declared even while the consumer is off, so COD events are kept until it is enabled.
 
 ### Member 9 persistence
 

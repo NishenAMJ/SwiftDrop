@@ -29,7 +29,7 @@ type PanelKind = 'delivered' | 'failed' | 'issue';
 
 const FAILURE_REASONS = Object.keys(FAILURE_REASON_LABELS) as FailureReason[];
 const ISSUE_TYPES = Object.keys(ISSUE_TYPE_LABELS) as IssueType[];
-const FINISHED: AssignmentStatus[] = ['DELIVERED', 'DELIVERY_FAILED'];
+const FINISHED: AssignmentStatus[] = ['DELIVERED', 'DELIVERY_FAILED', 'CANCELLED'];
 
 /** A courier's own parcels: move each one forward, then record proof or a failed attempt. */
 @Component({
