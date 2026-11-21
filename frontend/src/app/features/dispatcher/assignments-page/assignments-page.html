@@ -1,0 +1,196 @@
+<div class="page page--wide">
+  <header class="page__header">
+    <h1 class="page__title">Courier assignments</h1>
+    <p class="page__intro">
+      Assign a parcel to an available courier and follow its delivery progress. A parcel can have
+      one active assignment at a time.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="assign-title">
+    <h2 id="assign-title" class="page__section-title">Assign a parcel</h2>
+    @if (loadingCouriers()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading available couriers…
+      </p>
+    } @else if (couriers().length === 0) {
+      <p class="page__muted">
+        No couriers are available right now. Set a courier to Available on the Couriers page.
+      </p>
+    } @else {
+      <p class="form__note">Fields marked * are required.</p>
+      <form class="form" [formGroup]="assignForm" (ngSubmit)="assign()" novalidate>
+        <div class="form__grid">
+          <div class="sd-field">
+            @let referenceError = assignError('parcelReference');
+            <label class="sd-label" for="assign-reference">Parcel reference *</label>
+            <input
+              id="assign-reference"
+              class="sd-input assign-reference"
+              formControlName="parcelReference"
+              maxlength="50"
+              autocomplete="off"
+              [attr.aria-invalid]="!!referenceError"
+              [attr.aria-describedby]="referenceError ? 'assign-reference-error' : null"
+            />
+            @if (referenceError) {
+              <p id="assign-reference-error" class="sd-error">{{ referenceError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let courierError = assignError('courierId');
+            <label class="sd-label" for="assign-courier">Courier *</label>
+            <select
+              id="assign-courier"
+              class="sd-input"
+              formControlName="courierId"
+              [attr.aria-invalid]="!!courierError"
+              [attr.aria-describedby]="courierError ? 'assign-courier-error' : null"
+            >
+              <option value="">Select a courier</option>
+              @for (courier of couriers(); track courier.id) {
+                <option [value]="courier.id">{{ courier.fullName }} · {{ courier.categoryName }}</option>
+              }
+            </select>
+            @if (courierError) {
+              <p id="assign-courier-error" class="sd-error">{{ courierError }}</p>
+            }
+          </div>
+          <div class="sd-field form__full">
+            @let notesError = assignError('notes');
+            <label class="sd-label" for="assign-notes">
+              Notes for the courier <span class="sd-label__optional">Optional</span>
+            </label>
+            <textarea
+              id="assign-notes"
+              class="sd-input"
+              formControlName="notes"
+              maxlength="500"
+              [attr.aria-invalid]="!!notesError"
+              [attr.aria-describedby]="notesError ? 'assign-notes-error' : null"
+            ></textarea>
+            @if (notesError) {
+              <p id="assign-notes-error" class="sd-error">{{ notesError }}</p>
+            }
+          </div>
+        </div>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--primary"
+            type="submit"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving()"
+          >
+            @if (saving()) {
+              <span class="sd-spinner" aria-hidden="true"></span> Assigning…
+            } @else {
+              Assign courier
+            }
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+
+  <section class="sd-card page__section" aria-labelledby="assignment-list-title">
+    <h2 id="assignment-list-title" class="page__section-title">Assignments</h2>
+
+    <form class="assign-filters" [formGroup]="filters" (ngSubmit)="applyFilters()">
+      <div class="sd-field">
+        <label class="sd-label" for="assign-filter-reference">Parcel reference</label>
+        <input
+          id="assign-filter-reference"
+          class="sd-input assign-reference"
+          formControlName="parcelReference"
+          maxlength="50"
+        />
+      </div>
+      <div class="sd-field">
+        <label class="sd-label" for="assign-filter-status">Status</label>
+        <select id="assign-filter-status" class="sd-input" formControlName="status">
+          <option value="">All statuses</option>
+          @for (status of statusOptions; track status) {
+            <option [value]="status">{{ statusLabels[status] }}</option>
+          }
+        </select>
+      </div>
+      <div class="assign-filters__actions">
+        <button class="sd-button sd-button--primary" type="submit">Apply filters</button>
+        <button class="sd-button sd-button--secondary" type="button" (click)="clearFilters()">
+          Clear
+        </button>
+      </div>
+    </form>
+
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading assignments…
+      </p>
+    } @else if (assignments().empty) {
+      <p class="page__muted">No assignments found. Assign a parcel above or adjust the filters.</p>
+    } @else {
+      <div class="sd-table-wrap" role="region" aria-labelledby="assignment-list-title" tabindex="0">
+        <table class="sd-table">
+          <thead>
+            <tr>
+              <th scope="col">Parcel</th>
+              <th scope="col">Courier</th>
+              <th scope="col">Status</th>
+              <th scope="col">Assigned by</th>
+              <th scope="col">Assigned</th>
+              <th scope="col">Completed</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (assignment of assignments().content; track assignment.id) {
+              <tr>
+                <td class="assign-reference">{{ assignment.parcelReference }}</td>
+                <td>{{ assignment.courierName }} <span class="page__muted">({{ assignment.categoryCode }})</span></td>
+                <td>
+                  <span class="sd-badge" [class]="statusClass(assignment.status)">
+                    {{ statusLabels[assignment.status] }}
+                  </span>
+                </td>
+                <td>{{ assignment.assignedBy }}</td>
+                <td>{{ assignment.assignedAt | colomboDate }}</td>
+                <td>{{ assignment.completedAt ? (assignment.completedAt | colomboDate) : '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="assign-pagination" aria-label="Assignment pages">
+        <p>
+          Page {{ assignments().number + 1 }} of {{ assignments().totalPages }} ·
+          {{ assignments().totalElements }} assignments
+        </p>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="previousPage()"
+            [disabled]="assignments().first"
+          >
+            Previous
+          </button>
+          <button
+            class="sd-button sd-button--secondary"
+            type="button"
+            (click)="nextPage()"
+            [disabled]="assignments().last"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+</div>

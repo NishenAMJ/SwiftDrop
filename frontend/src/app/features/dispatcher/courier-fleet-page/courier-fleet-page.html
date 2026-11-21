@@ -1,0 +1,183 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">Couriers</h1>
+    <p class="page__intro">
+      Set up approved couriers for delivery work, give each a vehicle category and control whether
+      they can receive new parcels.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="register-courier-title">
+    <h2 id="register-courier-title" class="page__section-title">Set up a courier</h2>
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading couriers…
+      </p>
+    } @else if (unregistered().length === 0) {
+      <p class="page__muted">
+        Every approved courier is already set up. Approve more courier applications to add people
+        here.
+      </p>
+    } @else if (activeCategories().length === 0) {
+      <p class="page__muted">Add an active courier category first, then come back to set up couriers.</p>
+    } @else {
+      <p class="form__note">Fields marked * are required.</p>
+      <form class="form" [formGroup]="form" (ngSubmit)="register()" novalidate>
+        <div class="form__grid">
+          <div class="sd-field form__full">
+            @let courierError = fieldError('identityUserId');
+            <label class="sd-label" for="fleet-courier">Approved courier *</label>
+            <select
+              id="fleet-courier"
+              class="sd-input"
+              formControlName="identityUserId"
+              (change)="onCourierPicked()"
+              [attr.aria-invalid]="!!courierError"
+              [attr.aria-describedby]="courierError ? 'fleet-courier-error' : null"
+            >
+              <option value="">Select a courier</option>
+              @for (courier of unregistered(); track courier.userId) {
+                <option [value]="courier.userId">{{ courier.fullName }}</option>
+              }
+            </select>
+            @if (courierError) {
+              <p id="fleet-courier-error" class="sd-error">{{ courierError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let categoryError = fieldError('categoryId');
+            <label class="sd-label" for="fleet-category">Category *</label>
+            <select
+              id="fleet-category"
+              class="sd-input"
+              formControlName="categoryId"
+              [attr.aria-invalid]="!!categoryError"
+              [attr.aria-describedby]="categoryError ? 'fleet-category-error' : null"
+            >
+              <option value="">Select a category</option>
+              @for (category of activeCategories(); track category.id) {
+                <option [value]="category.id">{{ category.name }}</option>
+              }
+            </select>
+            @if (categoryError) {
+              <p id="fleet-category-error" class="sd-error">{{ categoryError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let phoneError = fieldError('phone');
+            <label class="sd-label" for="fleet-phone">Phone number *</label>
+            <input
+              id="fleet-phone"
+              class="sd-input"
+              type="tel"
+              formControlName="phone"
+              autocomplete="off"
+              inputmode="tel"
+              maxlength="30"
+              [attr.aria-invalid]="!!phoneError"
+              [attr.aria-describedby]="phoneError ? 'fleet-phone-error' : null"
+            />
+            @if (phoneError) {
+              <p id="fleet-phone-error" class="sd-error">{{ phoneError }}</p>
+            }
+          </div>
+          <div class="sd-field">
+            @let vehicleError = fieldError('vehicleNumber');
+            <label class="sd-label" for="fleet-vehicle">
+              Vehicle number <span class="sd-label__optional">Optional</span>
+            </label>
+            <input
+              id="fleet-vehicle"
+              class="sd-input"
+              formControlName="vehicleNumber"
+              autocomplete="off"
+              maxlength="30"
+              [attr.aria-invalid]="!!vehicleError"
+              [attr.aria-describedby]="vehicleError ? 'fleet-vehicle-error' : null"
+            />
+            @if (vehicleError) {
+              <p id="fleet-vehicle-error" class="sd-error">{{ vehicleError }}</p>
+            }
+          </div>
+        </div>
+        <div class="page__actions">
+          <button
+            class="sd-button sd-button--primary"
+            type="submit"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving()"
+          >
+            @if (saving()) {
+              <span class="sd-spinner" aria-hidden="true"></span> Saving…
+            } @else {
+              Set up courier
+            }
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+
+  <section class="sd-card page__section" aria-labelledby="fleet-list-title">
+    <h2 id="fleet-list-title" class="page__section-title">Delivery couriers</h2>
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading couriers…
+      </p>
+    } @else if (profiles().length === 0) {
+      <p class="page__muted">No couriers are set up for delivery yet.</p>
+    } @else {
+      <div class="sd-table-wrap" role="region" aria-labelledby="fleet-list-title" tabindex="0">
+        <table class="sd-table">
+          <thead>
+            <tr>
+              <th scope="col">Courier</th>
+              <th scope="col">Category</th>
+              <th scope="col">Phone</th>
+              <th scope="col">Vehicle</th>
+              <th scope="col">Availability</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (profile of profiles(); track profile.id) {
+              <tr>
+                <td>{{ profile.fullName }}</td>
+                <td>{{ profile.categoryName }}</td>
+                <td>{{ profile.phone }}</td>
+                <td class="fleet-vehicle">{{ profile.vehicleNumber ?? '—' }}</td>
+                <td>
+                  <span class="sd-badge" [class]="statusClass(profile.status)">
+                    {{ statusLabels[profile.status] }}
+                  </span>
+                  <label class="sd-visually-hidden" [for]="'fleet-status-' + profile.id">
+                    Change availability for {{ profile.fullName }}
+                  </label>
+                  <select
+                    [id]="'fleet-status-' + profile.id"
+                    class="sd-input fleet-status"
+                    [value]="profile.status"
+                    [disabled]="actionId() === profile.id"
+                    (change)="changeStatus(profile, $any($event.target).value)"
+                  >
+                    @for (status of statuses; track status) {
+                      <option [value]="status" [selected]="status === profile.status">
+                        {{ statusLabels[status] }}
+                      </option>
+                    }
+                  </select>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
