@@ -26,6 +26,7 @@ public class PaymentSecurity{
                 .requestMatchers(HttpMethod.GET,"/api/v1/merchant-ledger/entries")
                     .hasAnyRole("MERCHANT","DISPATCHER")
                 .requestMatchers(HttpMethod.POST,"/api/v1/merchant-settlements/**").hasRole("DISPATCHER")
+                .requestMatchers(HttpMethod.GET,"/api/v1/merchant-settlements").hasAnyRole("MERCHANT","DISPATCHER")
                 .requestMatchers(HttpMethod.GET,"/api/v1/merchant-settlements/*")
                     .hasAnyRole("MERCHANT","DISPATCHER")
                 .requestMatchers(HttpMethod.POST,"/api/v1/payments/*/refund").hasRole("DISPATCHER")

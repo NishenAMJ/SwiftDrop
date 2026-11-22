@@ -11,6 +11,7 @@ import java.time.*;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.*;
 
 @Service
 public class MerchantSettlementService {
@@ -81,6 +82,23 @@ public class MerchantSettlementService {
         if (!actor.admin() && (!actor.merchant() || !actor.merchantId().equals(settlement.getMerchantId())))
             throw PaymentProblem.forbidden();
         return view(settlement);
+    }
+
+    @Transactional(readOnly = true)
+    public MerchantSettlementDtos.Page list(UUID requestedMerchantId, int page, int size, Actor actor) {
+        if (page < 0 || size < 1 || size > 100) throw validation("Invalid pagination.");
+        UUID merchantId;
+        if (actor.admin()) {
+            if (requestedMerchantId == null) throw validation("merchantId is required for dispatcher settlement history.");
+            merchantId = requestedMerchantId;
+        } else if (actor.merchant()) {
+            if (requestedMerchantId != null && !actor.merchantId().equals(requestedMerchantId)) throw PaymentProblem.forbidden();
+            merchantId = actor.merchantId();
+        } else throw PaymentProblem.forbidden();
+        var result = settlements.findByMerchantId(merchantId,
+            PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "calculatedAt", "id")));
+        return new MerchantSettlementDtos.Page(result.getContent().stream().map(this::view).toList(),
+            result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     @Transactional

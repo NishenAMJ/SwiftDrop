@@ -37,8 +37,23 @@ class Member9SecurityTest {
             .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
         mvc.perform(get("/api/v1/merchant-ledger/entries"))
             .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/merchant-settlements"))
+            .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/merchant-settlements/00000000-0000-0000-0000-000000000001"))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void merchantAndDispatcherCanReachSettlementHistory() throws Exception {
+        for (String role : java.util.List.of("MERCHANT", "DISPATCHER")) {
+            mvc.perform(get("/api/v1/merchant-settlements")
+                .with(jwt().jwt(token -> token
+                    .subject("00000000-0000-0000-0000-000000000001")
+                    .claim("roles", java.util.List.of(role))
+                    .claim("merchant_id", "00000000-0000-0000-0000-000000000002"))
+                    .authorities(new SimpleGrantedAuthority("ROLE_" + role))))
+                .andExpect(status().isOk());
+        }
     }
 
     @Test
@@ -59,6 +74,8 @@ class Member9SecurityTest {
             .contentType("application/json").content("{\"receivedAmount\":1000}"))
             .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/merchant-ledger/entries").with(role("COURIER")))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/merchant-settlements").with(role("COURIER")))
             .andExpect(status().isForbidden());
     }
 

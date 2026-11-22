@@ -4,7 +4,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { finalize } from 'rxjs';
 
 import { ColomboDatePipe } from '../../../shared/pipes/colombo-date.pipe';
-import { MerchantLedgerPage, MerchantSettlement, ProblemDetail } from '../cod-settlement.models';
+import { MerchantLedgerPage, MerchantSettlement, MerchantSettlementPage, ProblemDetail } from '../cod-settlement.models';
 import { CodSettlementService } from '../cod-settlement.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,10 +21,13 @@ export class MerchantFinancePage implements OnInit {
   private readonly fb = inject(NonNullableFormBuilder);
   protected readonly ledger = signal<MerchantLedgerPage | null>(null);
   protected readonly settlement = signal<MerchantSettlement | null>(null);
+  protected readonly settlements = signal<MerchantSettlementPage | null>(null);
   protected readonly loading = signal(true);
+  protected readonly settlementsLoading = signal(true);
   protected readonly lookupBusy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly settlementError = signal<string | null>(null);
+  protected readonly historyError = signal<string | null>(null);
   protected readonly currency = signal('LKR');
 
   protected readonly currencyForm = this.fb.group({
@@ -36,6 +39,25 @@ export class MerchantFinancePage implements OnInit {
 
   ngOnInit(): void {
     this.loadLedger();
+    this.loadSettlements();
+  }
+
+  protected loadSettlements(page = 0): void {
+    this.settlementsLoading.set(true);
+    this.historyError.set(null);
+    this.api
+      .listSettlements({ page })
+      .pipe(finalize(() => this.settlementsLoading.set(false)))
+      .subscribe({
+        next: (settlements) => this.settlements.set(settlements),
+        error: () => this.historyError.set('Your settlement history could not be loaded. Try again.'),
+      });
+  }
+
+  protected selectSettlement(item: MerchantSettlement): void {
+    this.settlement.set(item);
+    this.lookupForm.controls.settlementId.setValue(item.id);
+    this.settlementError.set(null);
   }
 
   protected loadLedger(page = 0): void {
