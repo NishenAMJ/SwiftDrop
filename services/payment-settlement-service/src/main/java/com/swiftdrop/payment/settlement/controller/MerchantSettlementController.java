@@ -31,6 +31,15 @@ public class MerchantSettlementController {
         return service.get(settlementId, Actor.from(jwt));
     }
 
+    @GetMapping
+    public MerchantSettlementDtos.Page list(
+            @RequestParam(required = false) UUID merchantId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt jwt) {
+        return service.list(merchantId, page, size, Actor.from(jwt));
+    }
+
     @PostMapping("/{settlementId}/approve")
     public MerchantSettlementDtos.View approve(@PathVariable UUID settlementId,
             @Valid @RequestBody MerchantSettlementDtos.Approve request,

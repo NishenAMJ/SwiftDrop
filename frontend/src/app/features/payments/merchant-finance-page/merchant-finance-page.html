@@ -121,6 +121,46 @@
     }
   </section>
 
+  <section class="sd-card stack" aria-labelledby="settlement-history-title" [attr.aria-busy]="settlementsLoading()">
+    <div class="section-header">
+      <div>
+        <h2 id="settlement-history-title">Settlement history</h2>
+        <p class="count">Calculated, approved, and paid settlements for your merchant account.</p>
+      </div>
+      <button class="sd-button sd-button--secondary" type="button" (click)="loadSettlements(settlements()?.page ?? 0)" [disabled]="settlementsLoading()">
+        Refresh settlements
+      </button>
+    </div>
+    @if (settlementsLoading()) {
+      <p role="status"><span class="sd-spinner" aria-hidden="true"></span> Loading settlement history…</p>
+    } @else if (historyError()) {
+      <p class="sd-error" role="alert">{{ historyError() }}</p>
+    } @else if (!settlements()?.content?.length) {
+      <p>No settlements have been calculated yet.</p>
+    } @else {
+      <div class="sd-table-wrap" tabindex="0" aria-labelledby="settlement-history-title">
+        <table class="sd-table" aria-labelledby="settlement-history-title">
+          <thead><tr><th scope="col">Calculated</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+          <tbody>
+            @for (item of settlements()?.content ?? []; track item.id) {
+              <tr>
+                <td>{{ item.calculatedAt | colomboDate }}</td>
+                <td class="amount">{{ item.currency }} {{ item.amount | number: '1.2-2' }}</td>
+                <td><span class="sd-badge" [class]="settlementClass(item.status)">{{ item.status }}</span></td>
+                <td><button class="sd-button sd-button--secondary" type="button" (click)="selectSettlement(item)">View details</button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <nav class="pagination" aria-label="Settlement history pages">
+        <button class="sd-button sd-button--secondary" type="button" (click)="loadSettlements((settlements()?.page ?? 0) - 1)" [disabled]="(settlements()?.page ?? 0) === 0">Previous</button>
+        <span>Page {{ (settlements()?.page ?? 0) + 1 }} of {{ settlements()?.totalPages || 1 }}</span>
+        <button class="sd-button sd-button--secondary" type="button" (click)="loadSettlements((settlements()?.page ?? 0) + 1)" [disabled]="(settlements()?.page ?? 0) + 1 >= (settlements()?.totalPages ?? 0)">Next</button>
+      </nav>
+    }
+  </section>
+
   <section class="sd-card stack" aria-labelledby="settlement-title">
     <div>
       <h2 id="settlement-title">Settlement details</h2>

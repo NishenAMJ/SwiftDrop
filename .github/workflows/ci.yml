@@ -53,9 +53,37 @@ jobs:
         working-directory: services/tracking-reporting-service
         run: ./mvnw -B verify
 
+      - name: Build and test Parcel Pricing service
+        working-directory: services/parcel-pricing-service
+        run: ./mvnw -B verify
+
+      - name: Build and test Notification Webhook service
+        working-directory: services/notification-webhook-service
+        run: ./mvnw -B verify
+
       - name: Build and test API Gateway
         working-directory: services/api-gateway
         run: ./mvnw -B verify
+
+      - name: Upload backend test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-and-coverage-reports
+          if-no-files-found: ignore
+          path: |
+            services/identity-merchant-service/target/surefire-reports
+            services/identity-merchant-service/target/site/jacoco
+            services/delivery-operations-service/target/surefire-reports
+            services/delivery-operations-service/target/site/jacoco
+            services/tracking-reporting-service/target/surefire-reports
+            services/tracking-reporting-service/target/site/jacoco
+            services/parcel-pricing-service/target/surefire-reports
+            services/parcel-pricing-service/target/site/jacoco
+            services/notification-webhook-service/target/surefire-reports
+            services/notification-webhook-service/target/site/jacoco
+            services/api-gateway/target/surefire-reports
+            services/api-gateway/target/site/jacoco
 
       - name: Show Compose status and Parcel logs on failure
         if: failure()
@@ -113,7 +141,9 @@ jobs:
         if: always()
         with:
           name: payment-test-reports
-          path: services/payment-settlement-service/target/surefire-reports
+          path: |
+            services/payment-settlement-service/target/surefire-reports
+            services/payment-settlement-service/target/site/jacoco
 
   frontend:
     name: frontend
