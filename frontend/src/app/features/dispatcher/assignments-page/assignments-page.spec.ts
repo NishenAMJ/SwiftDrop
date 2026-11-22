@@ -100,6 +100,7 @@ describe('AssignmentsPage', () => {
     listAttempts: ReturnType<typeof vi.fn>;
     getProof: ReturnType<typeof vi.fn>;
     listHistory: ReturnType<typeof vi.fn>;
+    getProofFile: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -110,6 +111,7 @@ describe('AssignmentsPage', () => {
       listAttempts: vi.fn().mockReturnValue(of([failedAttempt])),
       getProof: vi.fn().mockReturnValue(of(proof)),
       listHistory: vi.fn().mockReturnValue(of(history)),
+      getProofFile: vi.fn().mockReturnValue(of(new Blob(['x'], { type: 'image/jpeg' }))),
     };
     await TestBed.configureTestingModule({
       imports: [AssignmentsPage],
@@ -215,6 +217,66 @@ describe('AssignmentsPage', () => {
 
       expect(service.getProof).toHaveBeenCalledWith('assignment-3');
       expect(fixture.nativeElement.textContent).toContain('Kamala Silva');
+    });
+
+    describe('the uploaded proof file', () => {
+      const withFile = {
+        ...proof,
+        hasFile: true,
+        fileName: 'front-door.jpg',
+        fileContentType: 'image/jpeg',
+        fileSizeBytes: 2048,
+      } as ProofOfDelivery;
+      let tab: { location: { href: string }; opener: unknown; close: ReturnType<typeof vi.fn> };
+
+      beforeEach(() => {
+        service.getProof.mockReturnValue(of(withFile));
+        tab = { location: { href: '' }, opener: {}, close: vi.fn() };
+        vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+        (URL as any).createObjectURL = vi.fn().mockReturnValue('blob:proof-file');
+        (URL as any).revokeObjectURL = vi.fn();
+      });
+
+      it('describes the file and offers to view it', () => {
+        (fixture.componentInstance as any).toggleDetails(delivered);
+        fixture.detectChanges();
+
+        const text = fixture.nativeElement.textContent.replace(/\s+/g, ' ');
+        expect(text).toContain('Proof file');
+        expect(text).toContain('front-door.jpg');
+        expect(text).toContain('Image');
+        expect(text).toContain('View proof file');
+      });
+
+      it('offers nothing to view when the courier uploaded no file', () => {
+        service.getProof.mockReturnValue(of({ ...proof, hasFile: false } as ProofOfDelivery));
+
+        (fixture.componentInstance as any).toggleDetails(delivered);
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.textContent).not.toContain('View proof file');
+      });
+
+      it('fetches the file with the login and opens it in a tab that cannot reach back into the app', () => {
+        const component = fixture.componentInstance as any;
+
+        component.openProofFile(delivered);
+
+        expect(service.getProofFile).toHaveBeenCalledWith('assignment-3');
+        expect(window.open).toHaveBeenCalledWith('about:blank', '_blank');
+        expect(tab.opener).toBeNull();
+        expect(tab.location.href).toBe('blob:proof-file');
+      });
+
+      it('says so, and closes the empty tab, when the file cannot be opened', () => {
+        service.getProofFile.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+        const component = fixture.componentInstance as any;
+
+        component.openProofFile(delivered);
+
+        expect(tab.close).toHaveBeenCalled();
+        expect(component.proofFileError()).toContain("couldn't be opened");
+      });
     });
 
     it('shows the cash collected on a Cash on Delivery parcel', () => {

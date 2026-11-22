@@ -201,6 +201,37 @@
                   <p [id]="'proof-notes-error-' + assignment.id" class="sd-error">{{ proofNotesError }}</p>
                 }
               </div>
+              <div class="sd-field">
+                @let fileError = proofFileError();
+                <label class="sd-label" [for]="'proof-file-' + assignment.id">
+                  Photo or document of the delivery <span class="sd-label__optional">Optional</span>
+                </label>
+                <input
+                  #proofInput
+                  [id]="'proof-file-' + assignment.id"
+                  class="sd-input"
+                  type="file"
+                  [accept]="proofAccept"
+                  (change)="chooseProofFile($event)"
+                  [attr.aria-invalid]="!!fileError"
+                  [attr.aria-describedby]="
+                    'proof-file-hint-' + assignment.id + (fileError ? ' proof-file-error-' + assignment.id : '')
+                  "
+                />
+                <p [id]="'proof-file-hint-' + assignment.id" class="form__note">JPEG, PNG or PDF, up to 5 MB.</p>
+                @if (proofFile(); as chosen) {
+                  <p class="proof-file__chosen">
+                    <strong>{{ chosen.name }}</strong>
+                    <span class="page__muted">({{ sizeLabel(chosen.size) }})</span>
+                    <button class="sd-button sd-button--secondary" type="button" (click)="removeProofFile(proofInput)">
+                      Remove file
+                    </button>
+                  </p>
+                }
+                @if (fileError) {
+                  <p [id]="'proof-file-error-' + assignment.id" class="sd-error">{{ fileError }}</p>
+                }
+              </div>
               <div class="page__actions">
                 <button class="sd-button sd-button--primary" type="submit" [disabled]="busyId() === assignment.id">
                   Confirm delivered

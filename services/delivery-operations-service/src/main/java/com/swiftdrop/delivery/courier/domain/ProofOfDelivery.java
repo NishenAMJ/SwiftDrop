@@ -45,6 +45,19 @@ public class ProofOfDelivery {
     @Column(name = "collected_amount", precision = 12, scale = 2)
     private BigDecimal collectedAmount;
 
+    /** Reference to the uploaded file; the server-generated key, never returned by the API. Null without a file. */
+    @Column(name = "file_key", length = 64)
+    private String fileKey;
+
+    @Column(name = "file_name", length = 120)
+    private String fileName;
+
+    @Column(name = "file_content_type", length = 50)
+    private String fileContentType;
+
+    @Column(name = "file_size_bytes")
+    private Long fileSizeBytes;
+
     protected ProofOfDelivery() {
     }
 
@@ -58,6 +71,19 @@ public class ProofOfDelivery {
         this.mediaUrl = mediaUrl;
         this.deliveredAt = deliveredAt;
     }
+
+    public void attachFile(String key, String name, String contentType, long sizeBytes) {
+        this.fileKey = key;
+        this.fileName = name;
+        this.fileContentType = contentType;
+        this.fileSizeBytes = sizeBytes;
+    }
+
+    public boolean hasFile() { return fileKey != null; }
+    public String getFileKey() { return fileKey; }
+    public String getFileName() { return fileName; }
+    public String getFileContentType() { return fileContentType; }
+    public Long getFileSizeBytes() { return fileSizeBytes; }
 
     public UUID getId() { return id; }
     public DeliveryAssignment getAssignment() { return assignment; }

@@ -183,6 +183,10 @@ services:
       # Access tokens are checked against identity's keys; parcels are looked up in Parcel & Pricing.
       IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
       DELIVERY_PARCEL_BASE_URL: http://parcel-pricing-service:8082
+      # Uploaded proof-of-delivery files live on a named volume, so they survive rebuilds.
+      DELIVERY_PROOF_STORAGE_DIR: /data/proofs
+    volumes:
+      - delivery_proofs:/data/proofs
     depends_on:
       postgres:
         condition: service_healthy
@@ -265,3 +269,4 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  delivery_proofs:

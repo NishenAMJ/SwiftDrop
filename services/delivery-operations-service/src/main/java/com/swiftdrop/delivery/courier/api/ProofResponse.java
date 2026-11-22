@@ -14,11 +14,16 @@ public record ProofResponse(
         String notes,
         String mediaUrl,
         Instant deliveredAt,
-        BigDecimal collectedAmount
+        BigDecimal collectedAmount,
+        boolean hasFile,
+        String fileName,
+        String fileContentType,
+        Long fileSizeBytes
 ) {
     public static ProofResponse from(ProofOfDelivery proof) {
         return new ProofResponse(proof.getId(), proof.getAssignment().getId(), proof.getParcelReference(),
                 proof.getRecipientName(), proof.getNotes(), proof.getMediaUrl(), proof.getDeliveredAt(),
-                proof.getCollectedAmount());
+                proof.getCollectedAmount(), proof.hasFile(), proof.getFileName(), proof.getFileContentType(),
+                proof.getFileSizeBytes());
     }
 }

@@ -190,7 +190,7 @@ describe('MyDeliveriesPage', () => {
       mediaUrl: null,
       deliveredAt: null,
       collectedAmount: null,
-    });
+    }, null);
   });
 
   it('lists a cancelled parcel as finished, with no actions to take on it', async () => {
@@ -200,6 +200,135 @@ describe('MyDeliveriesPage', () => {
     expect(text).toContain('Cancelled');
     expect(text).not.toContain('Mark as picked up');
     expect(text).not.toContain('Delivery failed');
+  });
+
+  describe('proof file', () => {
+    const parcel = assignment('OUT_FOR_DELIVERY');
+    const photo = new File([new Uint8Array(2048)], 'door.jpg', { type: 'image/jpeg' });
+
+    /** What the browser hands over when the courier picks a file in the file field. */
+    function pick(component: any, file: File | null) {
+      const input = { files: file ? [file] : [], value: 'C:\\fakepath\\x', focus: vi.fn() };
+      component.chooseProofFile({ target: input } as unknown as Event);
+      return input;
+    }
+
+    async function openDeliveredForm() {
+      const fixture = await create([parcel]);
+      const component = fixture.componentInstance as any;
+      component.openPanel(parcel, 'delivered');
+      fixture.detectChanges();
+      return { fixture, component };
+    }
+
+    it('offers an optional, labelled file field with its limits, on the delivery form only', async () => {
+      const { fixture, component } = await openDeliveredForm();
+
+      const label = fixture.nativeElement.querySelector('label[for="proof-file-assignment-1"]');
+      expect(label?.textContent).toContain('Photo or document of the delivery');
+      expect(label?.textContent).toContain('Optional');
+      const input = fixture.nativeElement.querySelector('#proof-file-assignment-1') as HTMLInputElement;
+      expect(input.type).toBe('file');
+      expect(input.accept).toBe('image/jpeg,image/png,application/pdf');
+      expect(input.getAttribute('aria-describedby')).toContain('proof-file-hint-assignment-1');
+      expect(fixture.nativeElement.textContent).toContain('JPEG, PNG or PDF, up to 5 MB.');
+
+      component.openPanel(parcel, 'failed');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('#proof-file-assignment-1')).toBeNull();
+    });
+
+    it('keeps a valid file and shows its name and size', async () => {
+      const { fixture, component } = await openDeliveredForm();
+
+      pick(component, photo);
+      fixture.detectChanges();
+
+      expect(component.proofFile()).toBe(photo);
+      expect(fixture.nativeElement.textContent).toContain('door.jpg');
+      expect(fixture.nativeElement.textContent).toContain('2 KB');
+      expect(fixture.nativeElement.textContent).toContain('Remove file');
+    });
+
+    it.each([
+      ['a text file', new File(['hello'], 'notes.txt', { type: 'text/plain' }), 'Choose a JPEG, PNG or PDF file.'],
+      ['a GIF', new File([new Uint8Array(10)], 'a.gif', { type: 'image/gif' }), 'Choose a JPEG, PNG or PDF file.'],
+      [
+        'a file over 5 MB',
+        new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.jpg', { type: 'image/jpeg' }),
+        'Choose a file smaller than 5 MB.',
+      ],
+      ['an empty file', new File([], 'empty.jpg', { type: 'image/jpeg' }), 'That file is empty.'],
+    ])('refuses %s with a plain message and clears the picker', async (_name, file, message) => {
+      const { fixture, component } = await openDeliveredForm();
+
+      const input = pick(component, file);
+      fixture.detectChanges();
+
+      expect(component.proofFile()).toBeNull();
+      expect(input.value).toBe('');
+      const error = fixture.nativeElement.querySelector('#proof-file-error-assignment-1');
+      expect(error?.textContent).toContain(message);
+      expect(fixture.nativeElement.querySelector('#proof-file-assignment-1').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('sends the chosen file together with the proof details', async () => {
+      const { component } = await openDeliveredForm();
+      component.proofForm.patchValue({ recipientName: 'Kamala Silva' });
+      pick(component, photo);
+
+      component.submitDelivered(parcel);
+
+      expect(service.recordProof).toHaveBeenCalledWith(
+        'assignment-1',
+        { recipientName: 'Kamala Silva', notes: null, mediaUrl: null, deliveredAt: null, collectedAmount: null },
+        photo,
+      );
+    });
+
+    it('lets the courier remove the file again', async () => {
+      const { fixture, component } = await openDeliveredForm();
+      pick(component, photo);
+      fixture.detectChanges();
+      const input = { value: 'x', focus: vi.fn() } as unknown as HTMLInputElement;
+
+      component.removeProofFile(input);
+
+      expect(component.proofFile()).toBeNull();
+      expect(input.value).toBe('');
+      expect(input.focus).toHaveBeenCalled();
+    });
+
+    it('forgets the file when the form is closed or reopened', async () => {
+      const { component } = await openDeliveredForm();
+      pick(component, photo);
+
+      component.closePanel();
+      expect(component.proofFile()).toBeNull();
+
+      pick(component, photo);
+      component.openPanel(parcel, 'delivered');
+      expect(component.proofFile()).toBeNull();
+    });
+
+    it.each([
+      ['UNSUPPORTED_FILE_TYPE', 415, 'Choose a JPEG, PNG or PDF file.'],
+      ['FILE_TOO_LARGE', 413, 'Choose a file smaller than 5 MB.'],
+      ['FILE_EMPTY', 400, 'That file is empty.'],
+    ])('explains the server refusing the file (%s) in plain words and keeps the form open', async (code, status, text) => {
+      const { component } = await openDeliveredForm();
+      service.recordProof.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status, error: { code, detail: 'internal wording' } })),
+      );
+      component.proofForm.patchValue({ recipientName: 'Kamala Silva' });
+      pick(component, photo);
+
+      component.submitDelivered(parcel);
+
+      expect(component.error()).toContain(text);
+      expect(component.error()).not.toContain('internal wording');
+      expect(component.isPanelOpen(parcel, 'delivered')).toBe(true);
+    });
   });
 
   describe('where to go', () => {
@@ -273,7 +402,7 @@ describe('MyDeliveriesPage', () => {
         mediaUrl: null,
         deliveredAt: null,
         collectedAmount: 2500,
-      });
+      }, null);
     });
 
     it('asks for the amount in an accessible field only on COD parcels', async () => {

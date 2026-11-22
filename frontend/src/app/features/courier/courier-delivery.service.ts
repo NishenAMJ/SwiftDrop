@@ -113,8 +113,25 @@ export class CourierDeliveryService {
     return this.http.post<DeliveryAttempt>(`${ASSIGNMENT_API}/${id(assignmentId)}/attempts`, request);
   }
 
-  recordProof(assignmentId: string, request: RecordProofRequest): Observable<ProofOfDelivery> {
-    return this.http.post<ProofOfDelivery>(`${ASSIGNMENT_API}/${id(assignmentId)}/proof`, request);
+  /** With a file the request is sent as a form (the details as JSON, then the file); without one, as plain JSON. */
+  recordProof(
+    assignmentId: string,
+    request: RecordProofRequest,
+    file: File | null = null,
+  ): Observable<ProofOfDelivery> {
+    const url = `${ASSIGNMENT_API}/${id(assignmentId)}/proof`;
+    if (!file) {
+      return this.http.post<ProofOfDelivery>(url, request);
+    }
+    const form = new FormData();
+    form.append('proof', new Blob([JSON.stringify(request)], { type: 'application/json' }));
+    form.append('file', file, file.name);
+    return this.http.post<ProofOfDelivery>(url, form);
+  }
+
+  /** The uploaded proof file. Only the owning courier and dispatchers are allowed; it needs the login token. */
+  getProofFile(assignmentId: string): Observable<Blob> {
+    return this.http.get(`${ASSIGNMENT_API}/${id(assignmentId)}/proof/file`, { responseType: 'blob' });
   }
 
   listAttempts(assignmentId: string): Observable<DeliveryAttempt[]> {

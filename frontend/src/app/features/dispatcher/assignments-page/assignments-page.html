@@ -236,6 +236,29 @@
                                 <dd>{{ assignment.currency }} {{ received.collectedAmount | number: '1.2-2' }}</dd>
                               </div>
                             }
+                            @if (received.hasFile) {
+                              <div class="details__full">
+                                <dt>Proof file</dt>
+                                <dd>
+                                  {{ received.fileName }}
+                                  <span class="page__muted">
+                                    ({{ received.fileContentType === 'application/pdf' ? 'PDF' : 'Image' }}
+                                    @if (received.fileSizeBytes != null) {
+                                      , {{ sizeLabel(received.fileSizeBytes) }}
+                                    })
+                                  </span>
+                                  <button
+                                    class="sd-button sd-button--secondary"
+                                    type="button"
+                                    (click)="openProofFile(assignment)"
+                                    [disabled]="proofFileBusy()"
+                                  >
+                                    View proof file
+                                    <span class="sd-visually-hidden">for {{ assignment.parcelReference }}</span>
+                                  </button>
+                                </dd>
+                              </div>
+                            }
                             @if (received.notes) {
                               <div class="details__full">
                                 <dt>Courier's note (internal)</dt>
@@ -243,6 +266,9 @@
                               </div>
                             }
                           </dl>
+                          @if (proofFileError(); as fileProblem) {
+                            <p class="sd-error" role="alert">{{ fileProblem }}</p>
+                          }
                         }
 
                         <h3 class="assign-history__title">Status history</h3>
