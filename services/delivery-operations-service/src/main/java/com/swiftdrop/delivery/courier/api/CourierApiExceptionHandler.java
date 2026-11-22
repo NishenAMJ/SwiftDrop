@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.net.URI;
 
-/** Error mapping for the courier features; the shared handler covers not found, conflict and validation. */
-@RestControllerAdvice(basePackages = "com.swiftdrop.delivery.courier")
+/** Error mapping for Parcel & Pricing lookup failures used by courier and warehouse features. */
+@RestControllerAdvice
 public class CourierApiExceptionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(CourierApiExceptionHandler.class);
