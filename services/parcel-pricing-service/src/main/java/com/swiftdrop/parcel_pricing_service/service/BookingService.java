@@ -219,12 +219,17 @@ public class BookingService {
     }
 
     /** payment.refunded: completes the refund side of a cancellation. */
-    public void markRefunded(String bookingId, String paymentStatus) {
+    public void markRefunded(String bookingId, String paymentStatus, UUID paymentId, BigDecimal refundedAmount) {
         UUID id = parseUuid(bookingId);
         if (id == null) return;
         parcelRepository.lockById(id).ifPresent(parcel -> {
-            parcel.setPaymentStatus("PARTIALLY_REFUNDED".equals(paymentStatus) ? "PARTIALLY_REFUNDED" : "REFUNDED");
-            if (BookingStatus.CANCELLED.equals(parcel.getStatus())) parcel.setCancellationStatus("REFUNDED");
+            if (!java.util.Objects.equals(parcel.getPaymentId(), paymentId) || paymentId == null
+                    || refundedAmount == null || refundedAmount.signum() < 0
+                    || !java.util.Set.of("PARTIALLY_REFUNDED", "REFUNDED").contains(paymentStatus)) return;
+            // Full refunds must never regress on an older partial-refund event.
+            if (!"REFUNDED".equals(parcel.getPaymentStatus())) parcel.setPaymentStatus(paymentStatus);
+            if (BookingStatus.CANCELLED.equals(parcel.getStatus()) && parcel.getRefundAmount() != null
+                    && refundedAmount.compareTo(parcel.getRefundAmount()) >= 0) parcel.setCancellationStatus("REFUNDED");
             parcel.setUpdatedAt(OffsetDateTime.now());
         });
     }

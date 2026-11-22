@@ -282,3 +282,6 @@ h1 {
     scroll-behavior: auto;
   }
 }
+
+.cancellation-panel { margin-bottom: var(--sd-space-6); padding: var(--sd-space-6); }
+.cancellation-row { padding-block: var(--sd-space-4); border-bottom: 1px solid var(--sd-border); overflow-wrap: anywhere; }

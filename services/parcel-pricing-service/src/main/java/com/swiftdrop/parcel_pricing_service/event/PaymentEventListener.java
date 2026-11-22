@@ -46,7 +46,7 @@ public class PaymentEventListener {
                 }
             };
             case "payment.failed" -> () -> bookingService.markPaymentFailed(bookingId);
-            case "payment.refunded" -> () -> bookingService.markRefunded(bookingId, status);
+            case "payment.refunded" -> () -> bookingService.markRefunded(bookingId, status, event.uuid("paymentId"), event.decimal("refundedAmount"));
             default -> null;
         };
         if (effect != null) inbox.processOnce(event.eventId(), event.eventType(), effect);

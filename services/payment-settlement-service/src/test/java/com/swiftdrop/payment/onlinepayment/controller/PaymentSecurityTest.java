@@ -15,11 +15,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(controllers={PaymentController.class,PaymentCallbackController.class},properties={"spring.config.import=","debug=false"})
+@WebMvcTest(controllers={PaymentController.class,PaymentCallbackController.class,CancellationController.class},properties={"spring.config.import=","debug=false"})
 @Import({PaymentSecurity.class,ProblemHandler.class})
 class PaymentSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean PaymentService service;
+    @MockitoBean com.swiftdrop.payment.onlinepayment.service.CancellationService cancellations;
     @MockitoBean JwtDecoder decoder;
     @Test void paymentRequiresToken() throws Exception {
         mvc.perform(get("/api/v1/payments/history")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
@@ -55,5 +56,17 @@ class PaymentSecurityTest {
             .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_DISPATCHER")))
             .header("Idempotency-Key","unique-key-123456").contentType("application/json").content("{\"amount\":-10,\"reason\":\"\"}"))
             .andExpect(status().isBadRequest());
+    }
+
+    @Test void cancellationRecordsAreDispatcherOnly() throws Exception {
+        mvc.perform(get("/api/v1/payments/cancellations")).andExpect(status().isUnauthorized());
+        for (String role : java.util.List.of("CUSTOMER","MERCHANT","COURIER")) {
+            mvc.perform(get("/api/v1/payments/cancellations").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_"+role))))
+                .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/v1/payments/cancellations").with(jwt()
+            .jwt(j -> j.subject("00000000-0000-0000-0000-000000000001").claim("roles", java.util.List.of("DISPATCHER")))
+            .authorities(new SimpleGrantedAuthority("ROLE_DISPATCHER"))))
+            .andExpect(status().isOk());
     }
 }

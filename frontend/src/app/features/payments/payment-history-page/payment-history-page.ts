@@ -4,7 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PaymentService } from '../payment.service';
-import { EvidenceType, Payment, PaymentPage, RecoveryAudit, Refund } from '../payment.models';
+import { CancellationRefund, CancellationRefundPage, EvidenceType, Payment, PaymentPage, RecoveryAudit, Refund } from '../payment.models';
 
 @Component({
   selector: 'app-payment-history-page',
@@ -31,6 +31,11 @@ export class PaymentHistoryPage implements OnInit {
   readonly refundLookupError = signal<string | null>(null);
   readonly busy = signal(false);
   private refundAttempt: { fingerprint: string; key: string } | null = null;
+  readonly visiblePayments = computed(() => {
+    const items = this.result()?.content ?? [];
+    const selected = this.selectedPayment();
+    return selected && !items.some(item => item.id === selected.id) ? [selected, ...items] : items;
+  });
   readonly totalPages = computed(() => this.result()?.totalPages ?? 0);
 
   readonly refundForm = this.fb.nonNullable.group({
@@ -58,7 +63,37 @@ export class PaymentHistoryPage implements OnInit {
     confirmProviderTerminalFailure: [false, Validators.requiredTrue],
   });
 
+  readonly cancellations = signal<CancellationRefundPage | null>(null);
+  readonly cancellationsLoading = signal(false);
+  readonly cancellationsError = signal<string | null>(null);
+
+  loadCancellations(page = 0): void {
+    if (!this.dispatcher) return;
+    this.cancellationsLoading.set(true);
+    this.cancellationsError.set(null);
+    this.api.cancellations(page).subscribe({
+      next: result => { this.cancellations.set(result); this.cancellationsLoading.set(false); },
+      error: () => { this.cancellationsError.set('Cancellation refunds could not be loaded. Try again.'); this.cancellationsLoading.set(false); },
+    });
+  }
+
+  openCancellation(row: CancellationRefund): void {
+    if (!row.paymentId) return;
+    this.api.get(row.paymentId).subscribe({
+      next: payment => {
+        this.selectedPayment.set(null);
+        this.openPayment(payment);
+        if (row.refundId) {
+          this.refundLookupForm.controls.refundId.setValue(row.refundId);
+          this.lookupRefund();
+        }
+      },
+      error: () => this.cancellationsError.set('The payment could not be loaded. Try again.'),
+    });
+  }
+
   ngOnInit(): void {
+    this.loadCancellations();
     this.load();
   }
 

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -25,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest(properties = {"payment.workers.enabled=false", "payment.cod.consumer.enabled=false",
-    "spring.config.import=", "spring.flyway.create-schemas=true", "debug=false"})
+    "payment.cancellation.consumer.enabled=false", "spring.rabbitmq.host=localhost", "spring.rabbitmq.port=56785",
+    "spring.rabbitmq.username=paymenttest", "spring.rabbitmq.password=payment-test-only", "spring.config.import=", "spring.flyway.create-schemas=true", "debug=false"})
 @EnabledIfEnvironmentVariable(named = "PAYMENT_TEST_DB_URL", matches = ".+")
 class Member9IntegrationTest {
     @DynamicPropertySource
@@ -82,10 +83,10 @@ class Member9IntegrationTest {
             "SELECT id FROM payment_settlement.merchant_ledger_entries WHERE source_reference=?",
             UUID.class, "COD_COLLECTION:" + collectionId);
 
-        assertThrows(DataIntegrityViolationException.class, () -> db.update(
-            "UPDATE payment_settlement.merchant_ledger_entries SET amount=999 WHERE id=?", entryId));
-        assertThrows(DataIntegrityViolationException.class, () -> db.update(
-            "DELETE FROM payment_settlement.merchant_ledger_entries WHERE id=?", entryId));
+        assertTrue(assertThrows(DataAccessException.class, () -> db.update(
+            "UPDATE payment_settlement.merchant_ledger_entries SET amount=999 WHERE id=?", entryId)).getMostSpecificCause().getMessage().contains("immutable"));
+        assertTrue(assertThrows(DataAccessException.class, () -> db.update(
+            "DELETE FROM payment_settlement.merchant_ledger_entries WHERE id=?", entryId)).getMostSpecificCause().getMessage().contains("cannot be deleted"));
         assertEquals(new BigDecimal("1000.00"), db.queryForObject(
             "SELECT amount FROM payment_settlement.merchant_ledger_entries WHERE id=?", BigDecimal.class, entryId));
     }
@@ -149,7 +150,7 @@ class Member9IntegrationTest {
             new CodCollectedEvent.Data("b59b1f85-f260-4620-a6a8-f5ff72" + suffix,
                 "SWD-2026-" + suffix, "SNP-" + suffix, merchantId, courierId, UUID.randomUUID(), "COD",
                 new BigDecimal("1000.00"), collected, "LKR",
-                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1)));
+                OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS)));
     }
 
     private int count(String table) {
