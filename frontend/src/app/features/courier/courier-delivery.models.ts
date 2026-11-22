@@ -177,6 +177,11 @@ export interface ProofOfDelivery {
   mediaUrl: string | null;
   deliveredAt: string;
   collectedAmount: number | null;
+  /** The uploaded proof file's description. The file itself is fetched separately and the server's reference is never sent. */
+  hasFile: boolean;
+  fileName: string | null;
+  fileContentType: string | null;
+  fileSizeBytes: number | null;
 }
 
 export interface ReportIssueRequest {
@@ -294,4 +299,30 @@ export function nextStep(
     default:
       return null;
   }
+}
+
+/** What a courier may upload as proof of delivery. The server checks the real file contents again. */
+export const PROOF_FILE_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+export const PROOF_FILE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Plain wording for the server's refusal codes, so no raw server text is ever shown. */
+export const PROOF_FILE_ERROR_MESSAGES: Record<string, string> = {
+  UNSUPPORTED_FILE_TYPE: 'Choose a JPEG, PNG or PDF file.',
+  FILE_TOO_LARGE: 'Choose a file smaller than 5 MB.',
+  FILE_EMPTY: 'That file is empty. Choose another one.',
+  FILE_UNREADABLE: "That file couldn't be read. Choose another one.",
+};
+
+/** A quick check before uploading; the answer is null when the file looks fine. */
+export function proofFileProblem(file: File): string | null {
+  if (file.size === 0) return PROOF_FILE_ERROR_MESSAGES['FILE_EMPTY'];
+  if (!PROOF_FILE_TYPES.includes(file.type)) return PROOF_FILE_ERROR_MESSAGES['UNSUPPORTED_FILE_TYPE'];
+  if (file.size > PROOF_FILE_MAX_BYTES) return PROOF_FILE_ERROR_MESSAGES['FILE_TOO_LARGE'];
+  return null;
+}
+
+export function fileSizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

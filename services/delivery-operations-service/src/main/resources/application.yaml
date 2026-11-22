@@ -1,5 +1,9 @@
 server:
   port: ${SERVER_PORT:8083}
+  tomcat:
+    # When an upload is refused for being too large, read and discard the rest of it (up to this much) before
+    # answering. Otherwise the connection is cut mid-upload and the courier sees a network error, not the message.
+    max-swallow-size: 16MB
 
 spring:
   config:
@@ -19,6 +23,11 @@ spring:
         default_schema: delivery_operations
         jdbc:
           time_zone: UTC
+  servlet:
+    multipart:
+      # A proof file is at most 5 MB; the request limit leaves room for the JSON part.
+      max-file-size: 5MB
+      max-request-size: 6MB
   flyway:
     enabled: true
     default-schema: delivery_operations
@@ -50,6 +59,10 @@ spring:
           initial-interval: 2s
 
 delivery:
+  proof:
+    # Where uploaded proof files are kept (a volume in Docker). Files are named by random ids.
+    storage-dir: ${DELIVERY_PROOF_STORAGE_DIR:./data/proofs}
+    max-bytes: 5242880
   parcel:
     # Parcel & Pricing, used to turn a tracking number into the parcel id that events must carry.
     base-url: ${DELIVERY_PARCEL_BASE_URL:http://localhost:8082}

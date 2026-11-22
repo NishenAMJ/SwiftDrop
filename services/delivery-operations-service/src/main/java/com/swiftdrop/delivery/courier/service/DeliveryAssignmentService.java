@@ -17,6 +17,8 @@ import com.swiftdrop.delivery.courier.domain.DeliveryAttempt;
 import com.swiftdrop.delivery.courier.domain.ProofOfDelivery;
 import com.swiftdrop.delivery.courier.events.DeliveryEventRecorder;
 import com.swiftdrop.delivery.courier.parcel.ParcelLookup;
+import com.swiftdrop.delivery.courier.proof.ProofFileStorage;
+import com.swiftdrop.delivery.courier.proof.ValidatedProofFile;
 import com.swiftdrop.delivery.courier.repository.AssignmentStatusChangeRepository;
 import com.swiftdrop.delivery.courier.repository.DeliveryAssignmentRepository;
 import com.swiftdrop.delivery.courier.repository.DeliveryAttemptRepository;
@@ -30,6 +32,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -48,6 +52,7 @@ public class DeliveryAssignmentService {
     private final DeliveryEventRecorder events;
     private final AssignmentStatusChangeRepository history;
     private final CurrentActor actor;
+    private final ProofFileStorage proofFiles;
 
     public DeliveryAssignmentService(DeliveryAssignmentRepository assignmentRepository,
                                      DeliveryAttemptRepository attemptRepository,
@@ -56,7 +61,8 @@ public class DeliveryAssignmentService {
                                      ParcelLookup parcelLookup,
                                      DeliveryEventRecorder events,
                                      AssignmentStatusChangeRepository history,
-                                     CurrentActor actor) {
+                                     CurrentActor actor,
+                                     ProofFileStorage proofFiles) {
         this.assignmentRepository = assignmentRepository;
         this.attemptRepository = attemptRepository;
         this.proofRepository = proofRepository;
@@ -65,6 +71,7 @@ public class DeliveryAssignmentService {
         this.events = events;
         this.history = history;
         this.actor = actor;
+        this.proofFiles = proofFiles;
     }
 
     /**
@@ -214,6 +221,27 @@ public class DeliveryAssignmentService {
 
     @Transactional
     public ProofResponse recordProof(UUID assignmentId, RecordProofRequest request) {
+        return recordProof(assignmentId, request, null);
+    }
+
+    /** The bytes and type of an assignment's proof file. Callers must already have checked who may read it. */
+    public ProofFile getProofFile(UUID assignmentId) {
+        var proof = proofRepository.findByAssignment_Id(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Proof of delivery not found for assignment: " + assignmentId));
+        if (!proof.hasFile()) {
+            throw new ResourceNotFoundException("No proof file was uploaded for assignment: " + assignmentId);
+        }
+        return new ProofFile(proofFiles.read(proof.getFileKey()), proof.getFileContentType(), proof.getFileName());
+    }
+
+    /** A stored proof file, ready to send back. */
+    public record ProofFile(byte[] bytes, String contentType, String name) {
+    }
+
+    /** @param file an already validated upload, or null when the courier attached none */
+    @Transactional
+    public ProofResponse recordProof(UUID assignmentId, RecordProofRequest request, ValidatedProofFile file) {
         var assignment = requireAssignment(assignmentId);
         if (proofRepository.findByAssignment_Id(assignmentId).isPresent()) {
             throw new ConflictException("Proof of delivery already recorded for assignment: " + assignmentId);
@@ -231,6 +259,19 @@ public class DeliveryAssignmentService {
         var proof = proofRepository.save(new ProofOfDelivery(assignment, request.recipientName().trim(),
                 cleanNullable(request.notes()), cleanNullable(request.mediaUrl()), deliveredAt,
                 request.collectedAmount()));
+        if (file != null) {
+            // Written only once the delivery itself is accepted, and removed again if the transaction fails.
+            var key = proofFiles.save(file.bytes());
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != STATUS_COMMITTED) {
+                        proofFiles.delete(key);
+                    }
+                }
+            });
+            proof.attachFile(key, file.displayName(), file.contentType(), file.bytes().length);
+        }
         events.progressed(assignment, AssignmentStatus.OUT_FOR_DELIVERY, deliveredAt);
         audit(assignment, previousStatus, AssignmentStatus.DELIVERED, deliveredAt);
         if (assignment.isCashOnDelivery()) {

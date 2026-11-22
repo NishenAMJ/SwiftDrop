@@ -137,3 +137,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.proof-file__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2) var(--sd-space-3);
+}

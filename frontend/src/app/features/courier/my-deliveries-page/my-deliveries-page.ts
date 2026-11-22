@@ -18,10 +18,14 @@ import {
   ISSUE_STATUS_LABELS,
   ISSUE_TYPE_LABELS,
   IssueStatus,
+  PROOF_FILE_ERROR_MESSAGES,
+  PROOF_FILE_TYPES,
   IssueType,
   assignmentStatusClass,
+  fileSizeLabel,
   issueStatusClass,
   nextStep,
+  proofFileProblem,
 } from '../courier-delivery.models';
 import { CourierDeliveryService } from '../courier-delivery.service';
 
@@ -50,6 +54,12 @@ export class MyDeliveriesPage implements OnInit {
   protected readonly issueTypes = ISSUE_TYPES;
   protected readonly issueLabels = ISSUE_TYPE_LABELS;
   protected readonly issueStatusLabels = ISSUE_STATUS_LABELS;
+  protected readonly proofAccept = PROOF_FILE_TYPES.join(',');
+  protected readonly sizeLabel = fileSizeLabel;
+
+  /** The proof file chosen for the open delivery form, once it passed the quick checks. */
+  protected readonly proofFile = signal<File | null>(null);
+  protected readonly proofFileError = signal<string | null>(null);
 
   /** Problems this courier has reported, newest first, so they can see whether anyone has acted on them. */
   protected readonly issues = signal<DeliveryIssue[]>([]);
@@ -140,6 +150,7 @@ export class MyDeliveriesPage implements OnInit {
     this.proofForm.reset();
     this.failedForm.reset();
     this.issueForm.reset();
+    this.resetProofFile();
     // Cash on Delivery parcels need the amount handed over; no other parcel takes one.
     const amount = this.proofForm.controls.collectedAmount;
     if (kind === 'delivered' && assignment.codAmount != null) {
@@ -153,6 +164,34 @@ export class MyDeliveriesPage implements OnInit {
   protected closePanel(): void {
     this.panel.set(null);
     this.submitted.set(false);
+    this.resetProofFile();
+  }
+
+  /** Keeps the chosen file only if it looks acceptable; otherwise says why and clears the picker. */
+  protected chooseProofFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    this.proofFile.set(null);
+    this.proofFileError.set(null);
+    if (!file) return;
+    const problem = proofFileProblem(file);
+    if (problem) {
+      this.proofFileError.set(problem);
+      input.value = '';
+      return;
+    }
+    this.proofFile.set(file);
+  }
+
+  protected removeProofFile(input: HTMLInputElement): void {
+    input.value = '';
+    this.resetProofFile();
+    input.focus();
+  }
+
+  private resetProofFile(): void {
+    this.proofFile.set(null);
+    this.proofFileError.set(null);
   }
 
   protected isPanelOpen(assignment: DeliveryAssignment, kind: PanelKind): boolean {
@@ -165,14 +204,19 @@ export class MyDeliveriesPage implements OnInit {
     const value = this.proofForm.getRawValue();
     this.run(
       assignment,
-      this.service.recordProof(assignment.id, {
-        recipientName: value.recipientName.trim(),
-        notes: value.notes.trim() || null,
-        mediaUrl: null,
-        deliveredAt: null,
-        collectedAmount: assignment.codAmount != null ? value.collectedAmount : null,
-      }),
+      this.service.recordProof(
+        assignment.id,
+        {
+          recipientName: value.recipientName.trim(),
+          notes: value.notes.trim() || null,
+          mediaUrl: null,
+          deliveredAt: null,
+          collectedAmount: assignment.codAmount != null ? value.collectedAmount : null,
+        },
+        this.proofFile(),
+      ),
       `${assignment.parcelReference} marked as delivered.`,
+      PROOF_FILE_ERROR_MESSAGES,
     );
   }
 
@@ -254,6 +298,7 @@ export class MyDeliveriesPage implements OnInit {
     assignment: DeliveryAssignment,
     operation: Observable<unknown>,
     notice: string,
+    messages: Record<string, string> = {},
   ): void {
     this.busyId.set(assignment.id);
     operation.pipe(finalize(() => this.busyId.set(null))).subscribe({
@@ -266,7 +311,7 @@ export class MyDeliveriesPage implements OnInit {
           this.loadIssues(profile.id);
         }
       },
-      error: (error: unknown) => this.error.set(errorMessage(error)),
+      error: (error: unknown) => this.error.set(errorMessage(error, messages)),
     });
   }
 

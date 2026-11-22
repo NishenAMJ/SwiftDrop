@@ -475,16 +475,55 @@ paths:
       description: >
         Role COURIER (own only). The assignment must be OUT_FOR_DELIVERY; it becomes DELIVERED and
         delivery.delivered is published. Proof is recorded once.
+        The proof can be sent as plain JSON, or as multipart/form-data with a `proof` part (the same JSON)
+        and an optional `file` part: a JPEG, PNG or PDF of at most 5 MB. The type is decided from the file's
+        own bytes, not its name or Content-Type header. A refused file saves nothing, so the parcel is not
+        marked delivered. The server keeps the file under a random reference that is never returned.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/RecordProof' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [proof]
+              properties:
+                proof: { $ref: '#/components/schemas/RecordProof' }
+                file: { type: string, format: binary, description: 'JPEG, PNG or PDF, at most 5 MB' }
+            encoding:
+              proof: { contentType: application/json }
+              file: { contentType: 'image/jpeg, image/png, application/pdf' }
       responses:
-        '201': { description: Proof recorded }
+        '201':
+          description: Proof recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProofOfDelivery' }
+        '400': { description: 'FILE_EMPTY or FILE_UNREADABLE (problem body carries `code`)' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '413': { description: 'FILE_TOO_LARGE: the file is over 5 MB' }
+        '415': { description: 'UNSUPPORTED_FILE_TYPE: not a real JPEG, PNG or PDF' }
         '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/proof/file:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Download the uploaded proof file
+      description: >
+        Roles COURIER (own assignment only) and DISPATCHER. It is never available to the public, to customers
+        or to other couriers, and public tracking never receives it. Sent with nosniff, a sandboxing
+        Content-Security-Policy and no-store caching.
+      responses:
+        '200':
+          description: The file, with its stored content type
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'No proof, or no file was uploaded for it' }
   /api/v1/delivery-issues:
     get:
       summary: List delivery issues
@@ -811,6 +850,10 @@ components:
         mediaUrl: { type: [string, 'null'] }
         deliveredAt: { type: string, format: date-time }
         collectedAmount: { type: [number, 'null'] }
+        hasFile: { type: boolean, description: 'True when a proof file was uploaded; fetch it from .../proof/file' }
+        fileName: { type: [string, 'null'], description: 'A safe display name; never a path' }
+        fileContentType: { type: [string, 'null'], enum: [image/jpeg, image/png, application/pdf, null] }
+        fileSizeBytes: { type: [integer, 'null'] }
     ReportIssue:
       type: object
       required: [courierId, issueType, description]

@@ -22,3 +22,6 @@ target/
 # Operating system
 .DS_Store
 Thumbs.db
+
+# Uploaded proof-of-delivery files when running delivery-operations-service outside Docker
+services/delivery-operations-service/data/

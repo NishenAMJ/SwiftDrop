@@ -27,6 +27,7 @@ import {
   ProofOfDelivery,
   StatusChange,
   assignmentStatusClass,
+  fileSizeLabel,
 } from '../../courier/courier-delivery.models';
 import { CourierDeliveryService } from '../../courier/courier-delivery.service';
 
@@ -57,6 +58,9 @@ export class AssignmentsPage implements OnInit {
   protected readonly attempts = signal<DeliveryAttempt[]>([]);
   protected readonly proof = signal<ProofOfDelivery | null>(null);
   protected readonly history = signal<StatusChange[]>([]);
+  protected readonly sizeLabel = fileSizeLabel;
+  protected readonly proofFileBusy = signal(false);
+  protected readonly proofFileError = signal<string | null>(null);
   protected readonly roleLabels: Record<StatusChange['changedByRole'], string> = {
     DISPATCHER: 'Dispatcher',
     COURIER: 'Courier',
@@ -159,6 +163,7 @@ export class AssignmentsPage implements OnInit {
     this.attempts.set([]);
     this.proof.set(null);
     this.history.set([]);
+    this.proofFileError.set(null);
     this.detailsLoading.set(true);
 
     forkJoin({
@@ -174,6 +179,35 @@ export class AssignmentsPage implements OnInit {
           this.proof.set(loaded.proof);
         },
         error: (error: unknown) => this.detailsError.set(errorMessage(error)),
+      });
+  }
+
+  /**
+   * Opens the uploaded proof file in a new tab. The file needs the login token, so it is fetched here and shown
+   * from a temporary local address. The tab is opened first, while the click still counts, so it isn't blocked.
+   */
+  protected openProofFile(assignment: DeliveryAssignment): void {
+    this.proofFileError.set(null);
+    const tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+    this.proofFileBusy.set(true);
+    this.service
+      .getProofFile(assignment.id)
+      .pipe(finalize(() => this.proofFileBusy.set(false)))
+      .subscribe({
+        next: (blob) => {
+          const url = URL.createObjectURL(blob);
+          if (tab) {
+            tab.location.href = url;
+          } else {
+            window.open(url, '_blank');
+          }
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        },
+        error: () => {
+          tab?.close();
+          this.proofFileError.set("The proof file couldn't be opened. Please try again.");
+        },
       });
   }
 

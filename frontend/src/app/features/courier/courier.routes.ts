@@ -1,13 +1,21 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { RedirectFunction, Routes } from '@angular/router';
 
 import { roleGuard } from '../../core/auth/auth.guards';
+import { AuthService } from '../../core/auth/auth.service';
 
 /**
  * Courier screens: the application (identity-merchant-service) and the courier's own deliveries
  * (delivery-operations-service).
  */
+/**
+ * /courier: an approved courier (whose token carries the COURIER role) starts on their deliveries; a customer
+ * applying to become one starts on the application. Both pages stay reachable by their own address.
+ */
+export const courierHome: RedirectFunction = () => (inject(AuthService).hasRole('COURIER') ? 'deliveries' : 'application');
+
 export const COURIER_ROUTES: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'application' },
+  { path: '', pathMatch: 'full', redirectTo: courierHome },
   {
     path: 'deliveries',
     title: 'My deliveries | SwiftDrop',
