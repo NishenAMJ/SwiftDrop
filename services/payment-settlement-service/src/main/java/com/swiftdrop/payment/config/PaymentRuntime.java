@@ -55,6 +55,17 @@ public class PaymentRuntime {
     }
 
     @Bean TopicExchange cancellationExchange() { return new TopicExchange("swiftdrop.parcel-pricing",true,false); }
+    @Bean Queue customerCodQueue() {
+        return QueueBuilder.durable("payment-settlement-service.customer-cod")
+            .deadLetterExchange("swiftdrop.payment.dlx").deadLetterRoutingKey("customer-cod.failed").build();
+    }
+    @Bean Binding customerCodBinding(TopicExchange deliveryOperationsExchange, Queue customerCodQueue) {
+        return BindingBuilder.bind(customerCodQueue).to(deliveryOperationsExchange).with("customer-cod.collected");
+    }
+    @Bean Queue customerCodDeadLetterQueue() { return QueueBuilder.durable("payment-settlement-service.customer-cod.dlq").build(); }
+    @Bean Binding customerCodDeadLetterBinding(DirectExchange paymentDeadLetterExchange, Queue customerCodDeadLetterQueue) {
+        return BindingBuilder.bind(customerCodDeadLetterQueue).to(paymentDeadLetterExchange).with("customer-cod.failed");
+    }
     @Bean Queue cancellationQueue() {
         return QueueBuilder.durable("payment-settlement-service.cancellations")
             .deadLetterExchange("swiftdrop.payment.dlx").deadLetterRoutingKey("cancellation.failed").build();

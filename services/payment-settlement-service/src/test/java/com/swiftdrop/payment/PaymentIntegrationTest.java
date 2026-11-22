@@ -30,6 +30,8 @@ class PaymentIntegrationTest {
     }
     @Autowired PaymentService service;
     @Autowired CancellationService cancellations;
+    @Autowired com.swiftdrop.payment.cod.service.CustomerCodService customerCod;
+    @MockitoBean com.swiftdrop.payment.cod.service.CodAmountVerifier codVerifier;
     @Autowired JdbcTemplate db;
     @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate rabbit;
@@ -41,6 +43,7 @@ class PaymentIntegrationTest {
     final Actor customer=new Actor(customerId,null,Set.of("CUSTOMER"),"test");
     final Actor admin=new Actor(UUID.fromString("a2249d4c-a134-4bc0-b9ed-ffea97ad8791"),null,Set.of("DISPATCHER"),"test");
     @BeforeEach void setup() {
+        db.execute("TRUNCATE payment_settlement.customer_cod_receipts");
         db.execute("TRUNCATE payment_settlement.cancellation_inbox,payment_settlement.merchant_settlement_entries,payment_settlement.cash_reconciliations,"+
             "payment_settlement.cash_handover_items,payment_settlement.merchant_ledger_entries,"+
             "payment_settlement.merchant_settlements,payment_settlement.cash_handovers,payment_settlement.cod_collections,"+
@@ -51,6 +54,50 @@ class PaymentIntegrationTest {
         when(provider.checkout(any(),any())).thenReturn(new Checkout("PAYHERE","https://sandbox.payhere.lk/pay/checkout","POST",Map.of("hash","test")));
     }
     UUID create(String booking,String key) { return UUID.fromString(service.create(new Create(booking),key,customer).get("id").toString()); }
+
+    com.swiftdrop.payment.cod.service.CodCollectedEvent customerCash(UUID eventId, String booking, UUID attempt, String amount) {
+        var at = java.time.OffsetDateTime.parse("2026-11-22T00:00:00Z");
+        return new com.swiftdrop.payment.cod.service.CodCollectedEvent(eventId,"customer-cod.collected",1,at,
+            "delivery-operations-service",new com.swiftdrop.payment.cod.service.CodCollectedEvent.Data(
+                booking,"SWD-2026-000123","SNP-CUSTOMER",null,customerId,attempt,"COD",
+                new BigDecimal("1000.00"),new BigDecimal(amount),"LKR",at));
+    }
+
+    @Test void customerCashCreatesOneReceiptAndPaidEventWithoutMerchantCredit() {
+        when(codVerifier.verifyCustomer(any())).thenReturn(customerId);
+        String booking=UUID.randomUUID().toString(); UUID attempt=UUID.randomUUID();
+        var event=customerCash(UUID.randomUUID(),booking,attempt,"1000.00");
+        customerCod.record(event); customerCod.record(event);
+        customerCod.record(customerCash(UUID.randomUUID(),booking,attempt,"1000.0"));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.customer_cod_receipts",Integer.class));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox WHERE event_type='payment.customer-cod-collected'",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.merchant_ledger_entries",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payments",Integer.class));
+        assertThrows(com.swiftdrop.payment.cod.service.InvalidCodEvent.class,
+            () -> customerCod.record(customerCash(event.eventId(),booking,UUID.randomUUID(),"1000.00")));
+    }
+
+    @Test void customerCashRejectsShortPaymentAndRetriesVerificationOutageWithoutPosting() {
+        String booking=UUID.randomUUID().toString();
+        assertThrows(com.swiftdrop.payment.cod.service.InvalidCodEvent.class,
+            () -> customerCod.record(customerCash(UUID.randomUUID(),booking,UUID.randomUUID(),"900.00")));
+        when(codVerifier.verifyCustomer(any())).thenThrow(new com.swiftdrop.payment.cod.service.CodVerificationUnavailable("offline"));
+        assertThrows(com.swiftdrop.payment.cod.service.CodVerificationUnavailable.class,
+            () -> customerCod.record(customerCash(UUID.randomUUID(),booking,UUID.randomUUID(),"1000.00")));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.customer_cod_receipts",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox",Integer.class));
+    }
+
+    @Test void concurrentCustomerCashReplayPostsOnlyOnce() throws Exception {
+        when(codVerifier.verifyCustomer(any())).thenReturn(customerId);
+        var event=customerCash(UUID.randomUUID(),UUID.randomUUID().toString(),UUID.randomUUID(),"1000.00");
+        try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            for(var task:executor.invokeAll(java.util.List.<Callable<Void>>of(
+                ()->{customerCod.record(event); return null;}, ()->{customerCod.record(event); return null;}))) task.get();
+        }
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.customer_cod_receipts",Integer.class));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox",Integer.class));
+    }
     UUID paid() {
         UUID id=create("BOOK-1","payment-key-000001");
         when(provider.verify(anyMap())).thenReturn(new PaymentProvider.VerifiedCallback(id,"123456",new BigDecimal("1000"),"LKR",2,"a".repeat(64)));

@@ -39,6 +39,12 @@ public class PaymentEventListener {
         if (bookingId == null) throw new AmqpRejectAndDontRequeueException("Payment event without bookingId");
 
         Runnable effect = switch (event.eventType()) {
+            case "payment.customer-cod-collected" -> () -> {
+                if (!"PAID".equals(status)) throw new AmqpRejectAndDontRequeueException("Invalid COD status");
+                bookingService.confirmCustomerCod(bookingId, event.uuid("customerId"),
+                        event.text("pricingSnapshotId"), event.decimal("amount"), event.text("currency"),
+                        event.text("collectedAt"));
+            };
             case "payment.succeeded" -> () -> {
                 if ("SUCCESS".equals(status)) {
                     bookingService.confirmPaidFromEvent(bookingId, event.uuid("paymentId"),

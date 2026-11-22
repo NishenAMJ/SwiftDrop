@@ -155,7 +155,7 @@ public class DeliveryAssignment {
     }
 
     public boolean isCashOnDelivery() {
-        return codAmount != null && merchantId != null;
+        return codAmount != null;
     }
 
     public void moveTo(AssignmentStatus next, Instant at) {

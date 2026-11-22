@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/payment-settlement-service/customer-cod-paid.schema.json",
+  "title": "Verified customer COD payment",
+  "description": "Published transactionally with the customer cash receipt to swiftdrop.payment / payment.customer-cod-collected. Parcel marks the matching direct COD booking PAID without changing delivery status. ReceiptId is not a PayHere paymentId. Cash handover/reconciliation remains separate; no merchant ledger credit is created.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "properties": {
+        "eventType": { "const": "payment.customer-cod-collected" },
+        "version": { "const": 1 },
+        "producer": { "const": "payment-settlement-service" },
+        "data": {
+          "type": "object",
+          "required": ["bookingId", "customerId", "receiptId", "pricingSnapshotId", "amount", "currency", "collectedAt", "status"],
+          "properties": {
+            "bookingId": { "type": "string", "format": "uuid" },
+            "customerId": { "type": "string", "format": "uuid" },
+            "receiptId": { "type": "string", "format": "uuid" },
+            "pricingSnapshotId": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "amount": { "type": "number", "exclusiveMinimum": 0, "maximum": 9999999999.99, "multipleOf": 0.01 },
+            "currency": { "const": "LKR" },
+            "collectedAt": { "type": "string", "format": "date-time" },
+            "status": { "const": "PAID" }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

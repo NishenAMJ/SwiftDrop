@@ -71,6 +71,8 @@ public class FlywayConfig {
         try (ResultSet rs = stmt.executeQuery("SELECT "
                 + "count(*) FILTER (WHERE version = '7' AND description = 'booking payment context'), "
                 + "count(*) FILTER (WHERE version = '7'), "
+                + "count(*) FILTER (WHERE version = '8' AND description = 'add cancellation fields'), "
+                + "count(*) FILTER (WHERE version = '9' AND description = 'booking payment context'), "
                 + "count(*) FILTER (WHERE version = '10') FROM " + HISTORY)) {
             rs.next();
             boolean oldLayout = rs.getInt(1) > 0;
@@ -78,6 +80,17 @@ public class FlywayConfig {
             boolean unfinishedUpgrade = rs.getInt(2) == 0 && rs.getInt(3) > 0;
             if (unfinishedUpgrade) {
                 log.info("Finishing an earlier upgrade from the old migration numbering.");
+                return true;
+            }
+            boolean hybridLayout = rs.getInt(4) > 0 && rs.getInt(5) > 0 && rs.getInt(6) == 0;
+            if (hybridLayout) {
+                // Intermediate layout: V7 price multiplier, V8 cancellation, V9 payment context.
+                // Move cancellation to V10 and payment context to V8 before repair/migration.
+                stmt.executeUpdate("UPDATE " + HISTORY + " SET version = '10' "
+                        + "WHERE version = '8' AND description = 'add cancellation fields'");
+                stmt.executeUpdate("UPDATE " + HISTORY + " SET version = '8' "
+                        + "WHERE version = '9' AND description = 'booking payment context'");
+                log.info("Renumbered Flyway history from the hybrid migration numbering.");
                 return true;
             }
             if (!oldLayout) return false;

@@ -105,6 +105,22 @@ final class ParcelCodAmountVerifier implements CodAmountVerifier {
         }
     }
 
+    @Override
+    public UUID verifyCustomer(CodCollectedEvent.Data collection) {
+        JsonNode booking = fetch(UUID.fromString(collection.bookingId()));
+        require("DIRECT_WEBSITE".equals(text(booking, "channel")) && !booking.hasNonNull("merchantId")
+                && "COD".equals(text(booking, "paymentMethod")), "Not a direct customer COD booking.");
+        require(!"CANCELLED".equals(text(booking, "status")), "The booking was cancelled.");
+        require(collection.trackingNumber().equals(text(booking, "trackingNumber"))
+                && collection.pricingSnapshotId().equals(text(booking, "pricingSnapshotId"))
+                && collection.currency().equals(text(booking, "currency"))
+                && booking.path("codAmount").isNumber()
+                && collection.expectedAmount().compareTo(booking.path("codAmount").decimalValue()) == 0,
+                "Customer COD does not match the authoritative booking.");
+        try { return UUID.fromString(text(booking, "customerId")); }
+        catch (RuntimeException invalid) { throw new InvalidCodEvent("Missing customer on COD booking."); }
+    }
+
     private static String text(JsonNode node, String field) {
         return node.hasNonNull(field) ? node.get(field).asString() : null;
     }

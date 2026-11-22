@@ -32,7 +32,9 @@ public record DispatchParcelDto(
                 parcel.getCustomerId(),
                 parcel.getMerchantId(),
                 parcel.getPaymentMethod(),
-                parcel.getCodAmount(),
+                "COD".equals(parcel.getPaymentMethod())
+                        ? ("DIRECT_WEBSITE".equals(parcel.getChannel()) && parcel.getMerchantId() == null
+                            ? parcel.getEstimatedFee() : parcel.getCodAmount()) : null,
                 parcel.getPricingSnapshotId(),
                 "LKR",
                 AddressDto.from(parcel.getPickupAddress()),

@@ -36,6 +36,27 @@ class CashOnDeliveryTest {
 
     private static final UUID MERCHANT = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
+    @Test
+    void customerDeliveryFeeRequiresFullCashAndUsesSeparateEvent() {
+        var tracking = "SWD-2026-000906";
+        when(parcelLookup.find(eq(tracking), any())).thenReturn(new ParcelRef(UUID.randomUUID(), tracking,
+                UUID.randomUUID(), null, new BigDecimal("450.00"), "SNP-CUSTOMER", "LKR"));
+        var assignment = outForDelivery(tracking, createCourier("COD-F").id());
+        assertThat(assignment.codAmount()).isEqualByComparingTo("450.00");
+        assertThatThrownBy(() -> assignmentService.recordProof(assignment.id(),
+                new RecordProofRequest("Customer", null, null, null, new BigDecimal("400.00"))))
+                .isInstanceOf(InvalidOperationException.class);
+        assertThat(assignmentService.get(assignment.id()).status()).isEqualTo(AssignmentStatus.OUT_FOR_DELIVERY);
+        assignmentService.recordProof(assignment.id(),
+                new RecordProofRequest("Customer", null, null, null, new BigDecimal("450.00")));
+        assertThat(codEventsFor(tracking)).isEmpty();
+        var customerEvents = outbox.findAllByOrderByCreatedAtAsc().stream()
+                .filter(event -> event.getRoutingKey().equals("customer-cod.collected"))
+                .filter(event -> event.getPayload().contains(tracking)).toList();
+        assertThat(customerEvents).hasSize(1);
+        assertThat(json.readTree(customerEvents.getFirst().getPayload()).get("data").has("merchantId")).isFalse();
+    }
+
     @Autowired private CourierCategoryService categoryService;
     @Autowired private CourierService courierService;
     @Autowired private DeliveryAssignmentService assignmentService;

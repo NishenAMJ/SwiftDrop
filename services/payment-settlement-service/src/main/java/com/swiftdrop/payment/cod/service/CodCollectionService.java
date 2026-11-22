@@ -97,15 +97,19 @@ public class CodCollectionService {
     }
 
     static void validate(CodCollectedEvent event) {
+        validate(event, false);
+    }
+
+    static void validate(CodCollectedEvent event, boolean customer) {
         if (event == null || event.eventId() == null || event.occurredAt() == null
-            || !EVENT_TYPE.equals(event.eventType()) || event.version() != 1
+            || !(customer ? "customer-cod.collected" : EVENT_TYPE).equals(event.eventType()) || event.version() != 1
             || !PRODUCER.equals(event.producer()) || event.data() == null)
             throw new InvalidCodEvent("COD event envelope is incomplete or unsupported.");
 
         CodCollectedEvent.Data data = event.data();
         if (blank(data.bookingId(), 100) || blank(data.trackingNumber(), 40)
             || !data.trackingNumber().matches("^SWD-[0-9]{4}-[0-9]{6,}$")
-            || blank(data.pricingSnapshotId(), 64) || data.merchantId() == null
+            || blank(data.pricingSnapshotId(), 64) || (customer ? data.merchantId() != null : data.merchantId() == null)
             || data.courierId() == null || data.deliveryAttemptId() == null
             || !"COD".equals(data.paymentMethod()) || data.collectedAt() == null
             || data.collectedAt().isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5))
