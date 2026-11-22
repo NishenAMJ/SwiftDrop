@@ -74,7 +74,44 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "coverageInclude": [
+              "src/app/**/*.ts"
+            ],
+            "coverageExclude": [
+              "src/app/**/*.spec.ts",
+              "src/app/testing/**"
+            ],
+            "coverageReporters": [
+              "text-summary",
+              "html",
+              "lcov",
+              "json-summary",
+              "cobertura"
+            ]
+          },
+          "configurations": {
+            "ci": {
+              "watch": false,
+              "coverage": true,
+              "reporters": [
+                "default",
+                [
+                  "junit",
+                  {
+                    "outputFile": "test-results/junit.xml"
+                  }
+                ]
+              ],
+              "coverageThresholds": {
+                "statements": 0,
+                "branches": 0,
+                "functions": 0,
+                "lines": 0
+              }
+            }
+          }
         }
       }
     }
