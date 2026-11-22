@@ -55,6 +55,8 @@ describe('AppLayout', () => {
       'Merchant applications',
       'Courier applications',
       'Users',
+      'Delivery zones',
+      'Pricing rules',
       'Tracking reports',
       'Your account',
     ]);

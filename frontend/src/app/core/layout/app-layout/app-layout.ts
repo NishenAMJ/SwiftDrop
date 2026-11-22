@@ -65,6 +65,8 @@ export class AppLayout {
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
+          { label: 'Delivery zones', path: '/dispatcher/delivery-zones' },
+          { label: 'Pricing rules', path: '/dispatcher/pricing-rules' },
           { label: 'Tracking reports', path: '/tracking/reports' },
         ],
       });
