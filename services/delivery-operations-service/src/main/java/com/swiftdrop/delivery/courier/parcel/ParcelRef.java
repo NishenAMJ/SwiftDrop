@@ -8,7 +8,7 @@ import java.util.UUID;
  *
  * @param customerId        the registered customer who booked it; null for bookings without one
  * @param merchantId        the merchant whose order it is; null for customer bookings
- * @param codAmount         cash the courier collects from the receiver; null unless it is a merchant COD order
+ * @param codAmount         cash to collect: merchant proceeds or a direct customer's delivery fee
  * @param pricingSnapshotId Parcel & Pricing's immutable pricing snapshot, copied into the COD event
  * @param pickup            who and where to collect from; null if Parcel & Pricing sent none
  * @param delivery          who and where to deliver to; null if Parcel & Pricing sent none
@@ -41,6 +41,6 @@ public record ParcelRef(UUID parcelId, String trackingNumber, UUID customerId, U
 
     /** True when the courier must collect cash and Payment must be told about it. */
     public boolean collectsCash() {
-        return merchantId != null && codAmount != null && codAmount.signum() > 0 && pricingSnapshotId != null;
+        return codAmount != null && codAmount.signum() > 0 && pricingSnapshotId != null;
     }
 }

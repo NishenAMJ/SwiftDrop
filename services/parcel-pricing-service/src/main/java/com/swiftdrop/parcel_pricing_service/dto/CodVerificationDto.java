@@ -16,7 +16,10 @@ public record CodVerificationDto(
         String paymentMethod,
         BigDecimal codAmount,
         String pricingSnapshotId,
-        String currency
+        String currency,
+        UUID customerId,
+        String channel,
+        String status
 ) {
     public static CodVerificationDto from(Parcel parcel) {
         return new CodVerificationDto(
@@ -24,8 +27,10 @@ public record CodVerificationDto(
                 parcel.getTrackingNumber(),
                 parcel.getMerchantId(),
                 parcel.getPaymentMethod(),
-                parcel.getCodAmount(),
+                "COD".equals(parcel.getPaymentMethod())
+                        ? ("DIRECT_WEBSITE".equals(parcel.getChannel()) && parcel.getMerchantId() == null
+                            ? parcel.getEstimatedFee() : parcel.getCodAmount()) : null,
                 parcel.getPricingSnapshotId(),
-                "LKR");
+                "LKR", parcel.getCustomerId(), parcel.getChannel(), parcel.getStatus());
     }
 }

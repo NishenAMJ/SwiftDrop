@@ -253,6 +253,10 @@ public class DeliveryAssignmentService {
         if (!assignment.isCashOnDelivery() && request.collectedAmount() != null) {
             throw new InvalidOperationException("This parcel is not Cash on Delivery, so no cash can be recorded");
         }
+        if (assignment.isCashOnDelivery() && assignment.getMerchantId() == null
+                && assignment.getCodAmount().compareTo(request.collectedAmount()) != 0) {
+            throw new InvalidOperationException("Collect the full customer delivery fee before completing delivery");
+        }
         var deliveredAt = request.deliveredAt() == null ? Instant.now() : request.deliveredAt();
         var previousStatus = assignment.getStatus();
         assignment.moveTo(AssignmentStatus.DELIVERED, deliveredAt);

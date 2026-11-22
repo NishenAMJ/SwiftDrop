@@ -312,6 +312,34 @@ callbacks, repeated partial refunds and ambiguous outcomes with PayHere credenti
 
 ## Member 8 cancellation refunds
 
+### Customer COD payment status
+
+For direct customer COD bookings, the courier collects the frozen delivery fee in full.
+Delivery publishes `customer-cod.collected` on `swiftdrop.delivery-operations`; Payment consumes
+it from `payment-settlement-service.customer-cod` using the existing `PAYMENT_COD_CONSUMER_ENABLED`
+switch and Parcel verification mode/internal key. The queue and its DLQ are declared even when disabled.
+The separate routing key avoids merchant COD consumers and Tracking's `delivery.*` subscription.
+
+Payment verifies a direct, non-cancelled COD booking, its owner, tracking number, pricing snapshot,
+currency and amount against Parcel's internal COD endpoint. Migration V7 stores the receipt in
+`customer_cod_receipts` and the transaction writes `payment.customer-cod-collected` to the payment
+outbox. Duplicate events/booking receipts are idempotent; conflicting evidence or non-full amounts
+are dead-lettered; verification outages retry. Neither a PayHere payment nor a merchant ledger
+credit is created. Parcel independently matches the verified receipt and marks payment PAID,
+preserving delivery status and the first collection time. It does not wait for cash reconciliation.
+
+Member 3 owns the booking projection, Member 6 the cash capture, Member 8 the verified payment
+receipt/event, and Member 9 owns subsequent cash reconciliation. Customer receipt reconciliation
+is not implemented by the existing merchant-only handover APIs; do not mix these fees into
+merchant payouts. Existing assignments made before this change need to be checked: assignments
+with a null cash amount are not automatically backfilled.
+
+Deploy Parcel's additive lookup/projection changes and Payment's V7/consumer before enabling
+Delivery's customer cash event. The courier UI already displays/collects any assignment COD amount.
+Contracts: `customer-cod-collected.schema.json` (Delivery) and `customer-cod-paid.schema.json` (Payment).
+
+### Automatic online refunds
+
 `parcel.cancelled` is stored in the V6 cancellation inbox before RabbitMQ acknowledges it.
 The durable `payment-settlement-service.cancellations` queue is bound even when
 `PAYMENT_CANCELLATION_CONSUMER_ENABLED=false` (the default). Enable only after the

@@ -143,4 +143,23 @@ class ParcelCodAmountVerifierTest {
     void itRefusesToStartWithoutTheSharedKey() {
         assertThrows(IllegalStateException.class, () -> verifier(""));
     }
+
+    @Test
+    void customerFeeRequiresDirectBookingAndRejectsCancelledOrMismatchedAmounts() {
+        UUID customer = UUID.randomUUID();
+        body = parcel("COD", "SWD-2026-000321", MERCHANT.toString(), "SNP-ABC", "2500.00", "LKR")
+            .replace("\"merchantId\":\"" + MERCHANT + "\"", "\"merchantId\":null")
+            .replace("}", ",\"customerId\":\"" + customer + "\",\"channel\":\"DIRECT_WEBSITE\",\"status\":\"OUT_FOR_DELIVERY\"}");
+        var merchant = data(new BigDecimal("2500.00"));
+        var cash = new CodCollectedEvent.Data(merchant.bookingId(),merchant.trackingNumber(),merchant.pricingSnapshotId(),
+            null,merchant.courierId(),merchant.deliveryAttemptId(),"COD",merchant.expectedAmount(),merchant.collectedAmount(),"LKR",merchant.collectedAt());
+        assertEquals(customer,verifier("k").verifyCustomer(cash));
+        String valid=body;
+        for(String invalid : new String[]{valid.replace("OUT_FOR_DELIVERY","CANCELLED"),
+                valid.replace("DIRECT_WEBSITE","MERCHANT_API"),valid.replace("2500.00","2400.00"),
+                valid.replace("SNP-ABC","SNP-OTHER")}) {
+            body=invalid;
+            assertThrows(InvalidCodEvent.class,()->verifier("k").verifyCustomer(cash));
+        }
+    }
 }

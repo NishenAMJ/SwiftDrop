@@ -74,7 +74,7 @@ public class DeliveryEventRecorder {
         data.put("bookingId", assignment.getParcelId().toString());
         data.put("trackingNumber", assignment.getParcelReference());
         data.put("pricingSnapshotId", assignment.getPricingSnapshotId());
-        data.put("merchantId", assignment.getMerchantId().toString());
+        if (assignment.getMerchantId() != null) data.put("merchantId", assignment.getMerchantId().toString());
         data.put("courierId", assignment.getCourier().getId().toString());
         data.put("deliveryAttemptId", proof.getId().toString());
         data.put("paymentMethod", "COD");
@@ -82,7 +82,9 @@ public class DeliveryEventRecorder {
         data.put("collectedAmount", proof.getCollectedAmount());
         data.put("currency", assignment.getCurrency());
         data.put("collectedAt", collectedAt.toString());
-        record(DeliveryEventsConfig.DELIVERY_OPERATIONS_EXCHANGE, "delivery.cod-collected", collectedAt, data);
+        record(DeliveryEventsConfig.DELIVERY_OPERATIONS_EXCHANGE,
+                assignment.getMerchantId() == null ? "customer-cod.collected" : "delivery.cod-collected",
+                collectedAt, data);
     }
 
     /** parcel.status-changed, for steps the customer hears about. Assigning a courier is not one of them. */

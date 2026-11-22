@@ -206,6 +206,28 @@ public class BookingService {
         return BookingResponseDto.from(parcel, receipt);
     }
 
+    /** Verified full customer cash receipt; delivery status and merchant balances are unaffected. */
+    public void confirmCustomerCod(String bookingId, UUID customerId, String snapshot, BigDecimal amount,
+                                   String currency, String collectedAt) {
+        UUID id = parseUuid(bookingId);
+        Parcel parcel = id == null ? null : parcelRepository.lockById(id).orElse(null);
+        if (parcel == null || !"DIRECT_WEBSITE".equals(parcel.getChannel()) || parcel.getMerchantId() != null
+                || !"COD".equals(parcel.getPaymentMethod()) || BookingStatus.CANCELLED.equals(parcel.getStatus())
+                || !isVisibleBooking(parcel) || customerId == null || !customerId.equals(parcel.getCustomerId())
+                || snapshot == null || !snapshot.equals(parcel.getPricingSnapshotId()) || !"LKR".equals(currency)
+                || amount == null || parcel.getEstimatedFee() == null || amount.compareTo(parcel.getEstimatedFee()) != 0)
+            throw new org.springframework.amqp.AmqpRejectAndDontRequeueException("Customer COD receipt does not match booking");
+        OffsetDateTime paidAt;
+        try { paidAt = OffsetDateTime.parse(collectedAt); }
+        catch (RuntimeException invalid) {
+            throw new org.springframework.amqp.AmqpRejectAndDontRequeueException("Invalid COD collection time", invalid);
+        }
+        if (isPaid(parcel)) return;
+        parcel.setPaymentStatus("PAID");
+        parcel.setPaidAt(paidAt);
+        parcel.setUpdatedAt(OffsetDateTime.now());
+    }
+
     /** payment.failed: keep the draft so the customer can retry, but record the failure. */
     public void markPaymentFailed(String bookingId) {
         UUID id = parseUuid(bookingId);
