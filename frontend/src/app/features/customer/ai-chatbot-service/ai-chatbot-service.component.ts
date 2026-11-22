@@ -90,9 +90,13 @@ export class AiChatbotServiceComponent implements AfterViewChecked {
         this.isTyping.set(false);
         this.addMessage(response, 'assistant');
       },
-      error: () => {
+      error: (error: unknown) => {
         this.isTyping.set(false);
-        this.errorMessage.set('The assistant is temporarily unavailable. Please try again.');
+        this.errorMessage.set(
+          error instanceof Error && error.message
+            ? error.message
+            : 'The assistant is temporarily unavailable. Please try again.',
+        );
         this.lastFailedMessage.set(trimmedMessage);
         this.shouldScroll = true;
       },

@@ -47,3 +47,10 @@ management:
       probes:
         enabled: true
       show-details: never
+
+swiftdrop:
+  ai:
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
