@@ -54,6 +54,10 @@ Warehouse operations (dispatchers only):
 - `/api/v1/transfers` — create, dispatch, receive, and list parcel transfers
 - `/api/v1/warehouses/{warehouseId}/dashboard` — warehouse operational summary
 
+Recording an arrival and creating a transfer look the parcel up in Parcel & Pricing with the
+dispatcher's bearer token. The returned Parcel & Pricing UUID is stored on both the warehouse
+parcel and transfer; if Parcel & Pricing is unavailable, these endpoints return `503`.
+
 Courier delivery:
 
 - `/api/v1/courier-categories` — vehicle categories such as motorcycle, three-wheeler and van
@@ -105,8 +109,22 @@ For customer emails and merchant webhooks, each step except the assignment also 
 
 When a Cash on Delivery parcel is delivered, `delivery.cod-collected` is also written to `swiftdrop.delivery-operations`, following `../../contracts/events/delivery-operations/cod-collected.schema.json` (payment-settlement-service consumes it). It carries only the contract fields: booking id, tracking number, pricing snapshot, merchant, courier, the proof id as `deliveryAttemptId`, expected and collected amounts, currency and time. It is written in the same transaction as the delivery, so cash is never reported for an undelivered parcel. Customer-booked COD parcels have no merchant amount and publish nothing. An example is in `../../contracts/examples/delivery-operations/parcel.status-changed.json`.
 
+## Warehouse tracking events
+
+Warehouse tracking changes use the same transactional outbox and the
+`swiftdrop.delivery-operations` exchange. An arrival and a received transfer write
+`parcel.received-at-warehouse` with `deliveryStatus: AT_WAREHOUSE`; dispatching a transfer writes
+`parcel.transferred` with `deliveryStatus: IN_TRANSIT`. Sorting, creating a transfer and cancelling
+a transfer do not publish an event.
+
+Payloads follow
+`../../contracts/events/delivery-operations/warehouse-parcel-events.schema.json`. They contain only
+the Parcel & Pricing parcel UUID, tracking number, public status text and warehouse/transfer IDs.
+The public location is a warehouse name; addresses, contact details, internal notes and
+`receivedBy` are never published.
+
 ## Not done yet
 
-- Migrations: `V4__cash_on_delivery.sql` adds the merchant and cash columns. `V5__assignment_status_history.sql` adds the audit trail and `V6__cancelled_assignments.sql` lets a cancelled assignment free its parcel. Warehouse work should use `V7` or later.
+- Migrations: `V4__cash_on_delivery.sql` adds the merchant and cash columns. `V5__assignment_status_history.sql` adds the audit trail, `V6__cancelled_assignments.sql` lets a cancelled assignment free its parcel, and `V7__warehouse_parcel_ids.sql` stores Parcel & Pricing UUIDs for warehouse tracking events.
 - If the collected amount differs from the amount due, the event still carries both; Payment & Settlement decides what to do.
 - Proof of delivery stores an optional media URL but does not upload files.
