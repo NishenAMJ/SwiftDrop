@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/delivery-operations/customer-cod-collected.schema.json",
+  "title": "Customer delivery fee collected",
+  "description": "Durable topic exchange swiftdrop.delivery-operations, routing key customer-cod.collected. Published with proof of delivery only after full cash collection for a direct customer booking. Separate from merchant delivery.cod-collected and its ledger. Payment verifies the frozen fee, owner, currency and snapshot with Parcel before recording a receipt.",
+  "allOf": [
+    { "$ref": "../envelope.schema.json" },
+    {
+      "properties": {
+        "eventType": { "const": "customer-cod.collected" },
+        "version": { "const": 1 },
+        "producer": { "const": "delivery-operations-service" },
+        "data": {
+          "type": "object",
+          "required": ["bookingId", "trackingNumber", "pricingSnapshotId", "courierId", "deliveryAttemptId", "paymentMethod", "expectedAmount", "collectedAmount", "currency", "collectedAt"],
+          "properties": {
+            "bookingId": { "type": "string", "format": "uuid" },
+            "trackingNumber": { "type": "string", "pattern": "^SWD-[0-9]{4}-[0-9]{6,}$", "maxLength": 40 },
+            "pricingSnapshotId": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "courierId": { "type": "string", "format": "uuid" },
+            "deliveryAttemptId": { "type": "string", "format": "uuid" },
+            "paymentMethod": { "const": "COD" },
+            "expectedAmount": { "type": "number", "exclusiveMinimum": 0, "maximum": 9999999999.99, "multipleOf": 0.01 },
+            "collectedAmount": { "type": "number", "exclusiveMinimum": 0, "maximum": 9999999999.99, "multipleOf": 0.01, "description": "Must equal expectedAmount; enforced by both services." },
+            "currency": { "const": "LKR" },
+            "collectedAt": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

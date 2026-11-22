@@ -1,4 +1,5 @@
 import { Component, ChangeDetectionStrategy, signal, computed, inject, ViewChild, ElementRef } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { PricingService, PricingRule, PricingRuleRequest } from '../services/pricing.service';
@@ -51,10 +52,14 @@ export class PricingRulesComponent {
   readonly searchCtrl = this.fb.control('');
   readonly statusCtrl = this.fb.control('ALL');
 
+  // Form control values as signals, so the computed list below re-runs when the filters change.
+  private readonly searchTerm = toSignal(this.searchCtrl.valueChanges, { initialValue: this.searchCtrl.value });
+  private readonly statusFilter = toSignal(this.statusCtrl.valueChanges, { initialValue: this.statusCtrl.value });
+
   // Derived filtered list
   readonly filteredRules = computed(() => {
-    const term = this.searchCtrl.value?.toLowerCase() ?? '';
-    const status = this.statusCtrl.value;
+    const term = this.searchTerm()?.trim().toLowerCase() ?? '';
+    const status = this.statusFilter();
     return this.rules()
       .filter((r) => {
         const matchesTerm =
@@ -110,7 +115,10 @@ export class PricingRulesComponent {
     this.errorMessage.set(null);
     this.pricingService.getAllRules().subscribe({
       next: (data) => this.rules.set(data),
-      error: () => this.errorMessage.set('Failed to load pricing rules'),
+      error: () => {
+        this.errorMessage.set('Failed to load pricing rules');
+        this.loading.set(false);
+      },
       complete: () => this.loading.set(false),
     });
   }

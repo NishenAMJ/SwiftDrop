@@ -3,6 +3,8 @@
   "/api/v1/customer": { "target": "http://localhost:8082", "secure": false },
   "/api/pricing": { "target": "http://localhost:8082", "secure": false },
   "/api/zones": { "target": "http://localhost:8082", "secure": false },
+  "/api/merchant/orders": { "target": "http://localhost:8082", "secure": false },
+  "/api/integrations/merchant/orders": { "target": "http://localhost:8082", "secure": false },
   "/api/v1/payments": { "target": "http://localhost:8085", "secure": false },
   "/api/v1/cod-handovers": { "target": "http://localhost:8085", "secure": false },
   "/api/v1/merchant-ledger": { "target": "http://localhost:8085", "secure": false },

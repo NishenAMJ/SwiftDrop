@@ -79,6 +79,14 @@ export interface MerchantSettlement {
   externalPaymentReference?: string | null;
 }
 
+export interface MerchantSettlementPage {
+  content: MerchantSettlement[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface ProblemDetail {
   detail?: string;
   code?: string;

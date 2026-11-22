@@ -51,7 +51,7 @@ class DeliveryEventsTest {
                 AssignmentStatus.OUT_FOR_DELIVERY)) {
             assignmentService.updateStatus(assignment.id(), new UpdateAssignmentStatusRequest(next, null));
         }
-        assignmentService.recordProof(assignment.id(), new RecordProofRequest("Kamala Silva", null, null, null));
+        assignmentService.recordProof(assignment.id(), new RecordProofRequest("Kamala Silva", null, null, null, null));
 
         var events = eventsFor(tracking);
 
@@ -127,7 +127,7 @@ class DeliveryEventsTest {
                 AssignmentStatus.OUT_FOR_DELIVERY)) {
             assignmentService.updateStatus(assignment.id(), new UpdateAssignmentStatusRequest(next, null));
         }
-        assignmentService.recordProof(assignment.id(), new RecordProofRequest("Kamala Silva", null, null, null));
+        assignmentService.recordProof(assignment.id(), new RecordProofRequest("Kamala Silva", null, null, null, null));
 
         var events = customerEventsFor(tracking);
 

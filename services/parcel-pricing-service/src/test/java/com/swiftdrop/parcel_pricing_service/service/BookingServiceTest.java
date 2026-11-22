@@ -44,6 +44,29 @@ class BookingServiceTest {
     private BookingService bookingService;
     private final UUID customerId = UUID.randomUUID();
 
+    @Test
+    void customerCodReceiptMarksPaidWithoutRegressingDeliveryOrAcceptingOtherAmounts() {
+        Parcel parcel = new Parcel();
+        UUID id = UUID.randomUUID();
+        parcel.setId(id); parcel.setCustomerId(customerId); parcel.setChannel("DIRECT_WEBSITE");
+        parcel.setPaymentMethod("COD"); parcel.setStatus(BookingStatus.OUT_FOR_DELIVERY);
+        parcel.setPaymentStatus("UNPAID"); parcel.setEstimatedFee(new BigDecimal("450.00"));
+        parcel.setPricingSnapshotId("SNP-CUSTOMER");
+        when(parcelRepository.lockById(id)).thenReturn(Optional.of(parcel));
+        assertThrows(org.springframework.amqp.AmqpRejectAndDontRequeueException.class, () ->
+            bookingService.confirmCustomerCod(id.toString(), customerId,"SNP-CUSTOMER",new BigDecimal("400.00"),"LKR","2026-11-22T00:00:00Z"));
+        assertEquals("UNPAID",parcel.getPaymentStatus());
+        bookingService.confirmCustomerCod(id.toString(), customerId,"SNP-CUSTOMER",new BigDecimal("450.00"),"LKR","2026-11-22T00:00:00Z");
+        assertEquals("PAID",parcel.getPaymentStatus());
+        assertEquals(BookingStatus.OUT_FOR_DELIVERY,parcel.getStatus());
+        var paidAt = parcel.getPaidAt();
+        bookingService.confirmCustomerCod(id.toString(), customerId,"SNP-CUSTOMER",new BigDecimal("450.00"),"LKR","2026-11-22T00:01:00Z");
+        assertEquals(paidAt, parcel.getPaidAt());
+        parcel.setStatus(BookingStatus.CANCELLED);
+        assertThrows(org.springframework.amqp.AmqpRejectAndDontRequeueException.class, () ->
+            bookingService.confirmCustomerCod(id.toString(), customerId,"SNP-CUSTOMER",new BigDecimal("450.00"),"LKR","2026-11-22T00:00:00Z"));
+    }
+
     @BeforeEach
     void setUp() {
         bookingService = new BookingService(parcelRepository, receiptRepository, referenceGenerator,
@@ -332,5 +355,19 @@ class BookingServiceTest {
         when(parcelRepository.findById(p.getId())).thenReturn(Optional.of(p));
         assertEquals(HttpStatus.FORBIDDEN, assertThrows(ApiException.class,
                 () -> bookingService.getPaymentContext(p.getId(), jwt(UUID.randomUUID()))).getStatus());
+    }
+
+    @Test void cancellationRequiresMatchingPaymentAndFullRefundTarget() {
+        UUID id=UUID.randomUUID(), payment=UUID.randomUUID();
+        Parcel parcel=new Parcel(); parcel.setPaymentId(payment); parcel.setStatus(BookingStatus.CANCELLED);
+        parcel.setPaymentStatus("SUCCESS"); parcel.setCancellationStatus("REFUND_PENDING");
+        parcel.setRefundAmount(new BigDecimal("900.00"));
+        when(parcelRepository.lockById(id)).thenReturn(Optional.of(parcel));
+        bookingService.markRefunded(id.toString(),"REFUNDED",UUID.randomUUID(),new BigDecimal("1000"));
+        assertEquals("REFUND_PENDING",parcel.getCancellationStatus());
+        bookingService.markRefunded(id.toString(),"PARTIALLY_REFUNDED",payment,new BigDecimal("200"));
+        assertEquals("REFUND_PENDING",parcel.getCancellationStatus());
+        bookingService.markRefunded(id.toString(),"PARTIALLY_REFUNDED",payment,new BigDecimal("900"));
+        assertEquals("REFUNDED",parcel.getCancellationStatus());
     }
 }

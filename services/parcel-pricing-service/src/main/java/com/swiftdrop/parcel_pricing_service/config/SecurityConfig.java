@@ -44,6 +44,16 @@ public class SecurityConfig {
                 // cancellation and profile: always a signed-in user; ownership is checked per booking.
                 .requestMatchers("/api/v1/bookings/**").authenticated()
                 .requestMatchers("/api/v1/customer/**").authenticated()
+                // Service-to-service (Payment & Settlement): no user login, the controller checks a shared key
+                // and does not exist at all when no key is configured.
+                .requestMatchers(HttpMethod.GET, "/api/v1/internal/parcels/*/cod-verification").permitAll()
+                // Parcel lookup for Delivery Operations when a dispatcher assigns a courier.
+                .requestMatchers("/api/v1/dispatch/**").hasAnyRole("DISPATCHER", "ADMIN")
+                // Merchant dashboard orders: a MERCHANT token from Identity (merchant_id claim).
+                .requestMatchers("/api/merchant/orders", "/api/merchant/orders/**").hasRole("MERCHANT")
+                // External merchant API: a MERCHANT bearer token, or X-API-Key verified with Identity
+                // inside the controller. A request with neither is answered 401 by the controller.
+                .requestMatchers(HttpMethod.POST, "/api/integrations/merchant/orders").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

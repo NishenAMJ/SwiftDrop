@@ -8,7 +8,8 @@ export type AssignmentStatus =
   | 'IN_TRANSIT'
   | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
-  | 'DELIVERY_FAILED';
+  | 'DELIVERY_FAILED'
+  | 'CANCELLED';
 export type FailureReason = 'RECIPIENT_UNAVAILABLE' | 'INCORRECT_ADDRESS' | 'RECIPIENT_REFUSED' | 'OTHER';
 export type IssueType =
   | 'DAMAGED_PARCEL'
@@ -88,6 +89,13 @@ export interface CourierProfileFilters {
   size?: number;
 }
 
+/** Who to meet and where. Sent only to the assigned courier and dispatchers, and only while the job is open. */
+export interface ParcelContact {
+  name: string;
+  phone: string;
+  address: string;
+}
+
 export interface DeliveryAssignment {
   id: string;
   parcelReference: string;
@@ -97,6 +105,11 @@ export interface DeliveryAssignment {
   assignedBy: string;
   status: AssignmentStatus;
   notes: string | null;
+  /** Cash to collect at the door for a merchant Cash on Delivery order; null otherwise. */
+  codAmount: number | null;
+  currency: string | null;
+  pickup: ParcelContact | null;
+  delivery: ParcelContact | null;
   assignedAt: string;
   pickedUpAt: string | null;
   outForDeliveryAt: string | null;
@@ -120,6 +133,16 @@ export interface AssignmentFilters {
   size?: number;
 }
 
+/** One line of an assignment's audit trail. Dispatchers only. */
+export interface StatusChange {
+  id: string;
+  fromStatus: AssignmentStatus | null;
+  toStatus: AssignmentStatus;
+  changedBy: string | null;
+  changedByRole: 'DISPATCHER' | 'COURIER' | 'SYSTEM' | 'UNKNOWN';
+  changedAt: string;
+}
+
 export interface RecordAttemptRequest {
   reason: FailureReason;
   notes: string | null;
@@ -141,6 +164,8 @@ export interface RecordProofRequest {
   notes: string | null;
   mediaUrl: string | null;
   deliveredAt: string | null;
+  /** Required for Cash on Delivery parcels, left out for all others. */
+  collectedAmount: number | null;
 }
 
 export interface ProofOfDelivery {
@@ -151,6 +176,12 @@ export interface ProofOfDelivery {
   notes: string | null;
   mediaUrl: string | null;
   deliveredAt: string;
+  collectedAmount: number | null;
+  /** The uploaded proof file's description. The file itself is fetched separately and the server's reference is never sent. */
+  hasFile: boolean;
+  fileName: string | null;
+  fileContentType: string | null;
+  fileSizeBytes: number | null;
 }
 
 export interface ReportIssueRequest {
@@ -198,6 +229,7 @@ export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
   DELIVERY_FAILED: 'Failed',
+  CANCELLED: 'Cancelled',
 };
 
 export function assignmentStatusClass(status: AssignmentStatus): string {
@@ -205,6 +237,7 @@ export function assignmentStatusClass(status: AssignmentStatus): string {
     case 'DELIVERED':
       return 'sd-badge--success';
     case 'DELIVERY_FAILED':
+    case 'CANCELLED':
       return 'sd-badge--danger';
     case 'OUT_FOR_DELIVERY':
       return 'sd-badge--accent';
@@ -266,4 +299,30 @@ export function nextStep(
     default:
       return null;
   }
+}
+
+/** What a courier may upload as proof of delivery. The server checks the real file contents again. */
+export const PROOF_FILE_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+export const PROOF_FILE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Plain wording for the server's refusal codes, so no raw server text is ever shown. */
+export const PROOF_FILE_ERROR_MESSAGES: Record<string, string> = {
+  UNSUPPORTED_FILE_TYPE: 'Choose a JPEG, PNG or PDF file.',
+  FILE_TOO_LARGE: 'Choose a file smaller than 5 MB.',
+  FILE_EMPTY: 'That file is empty. Choose another one.',
+  FILE_UNREADABLE: "That file couldn't be read. Choose another one.",
+};
+
+/** A quick check before uploading; the answer is null when the file looks fine. */
+export function proofFileProblem(file: File): string | null {
+  if (file.size === 0) return PROOF_FILE_ERROR_MESSAGES['FILE_EMPTY'];
+  if (!PROOF_FILE_TYPES.includes(file.type)) return PROOF_FILE_ERROR_MESSAGES['UNSUPPORTED_FILE_TYPE'];
+  if (file.size > PROOF_FILE_MAX_BYTES) return PROOF_FILE_ERROR_MESSAGES['FILE_TOO_LARGE'];
+  return null;
+}
+
+export function fileSizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

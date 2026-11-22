@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -40,11 +41,29 @@ public class ProofOfDelivery {
     @Column(name = "delivered_at", nullable = false)
     private Instant deliveredAt;
 
+    /** Cash collected on Cash on Delivery parcels; null otherwise. */
+    @Column(name = "collected_amount", precision = 12, scale = 2)
+    private BigDecimal collectedAmount;
+
+    /** Reference to the uploaded file; the server-generated key, never returned by the API. Null without a file. */
+    @Column(name = "file_key", length = 64)
+    private String fileKey;
+
+    @Column(name = "file_name", length = 120)
+    private String fileName;
+
+    @Column(name = "file_content_type", length = 50)
+    private String fileContentType;
+
+    @Column(name = "file_size_bytes")
+    private Long fileSizeBytes;
+
     protected ProofOfDelivery() {
     }
 
     public ProofOfDelivery(DeliveryAssignment assignment, String recipientName, String notes, String mediaUrl,
-                           Instant deliveredAt) {
+                           Instant deliveredAt, BigDecimal collectedAmount) {
+        this.collectedAmount = collectedAmount;
         this.assignment = assignment;
         this.parcelReference = assignment.getParcelReference();
         this.recipientName = recipientName;
@@ -53,6 +72,19 @@ public class ProofOfDelivery {
         this.deliveredAt = deliveredAt;
     }
 
+    public void attachFile(String key, String name, String contentType, long sizeBytes) {
+        this.fileKey = key;
+        this.fileName = name;
+        this.fileContentType = contentType;
+        this.fileSizeBytes = sizeBytes;
+    }
+
+    public boolean hasFile() { return fileKey != null; }
+    public String getFileKey() { return fileKey; }
+    public String getFileName() { return fileName; }
+    public String getFileContentType() { return fileContentType; }
+    public Long getFileSizeBytes() { return fileSizeBytes; }
+
     public UUID getId() { return id; }
     public DeliveryAssignment getAssignment() { return assignment; }
     public String getParcelReference() { return parcelReference; }
@@ -60,4 +92,5 @@ public class ProofOfDelivery {
     public String getNotes() { return notes; }
     public String getMediaUrl() { return mediaUrl; }
     public Instant getDeliveredAt() { return deliveredAt; }
+    public BigDecimal getCollectedAmount() { return collectedAmount; }
 }

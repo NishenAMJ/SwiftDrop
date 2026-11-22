@@ -35,7 +35,7 @@ class HttpParcelLookupTest {
     void readsTheParcelIdAndForwardsTheCallersToken() {
         var id = UUID.randomUUID();
         var customer = UUID.randomUUID();
-        server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-000125"))
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000125"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("Authorization", "Bearer dispatcher-token"))
                 .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000125\","
@@ -51,9 +51,57 @@ class HttpParcelLookupTest {
     }
 
     @Test
+    void readsTheCashOnDeliveryDetailsOfAMerchantOrder() {
+        var id = UUID.randomUUID();
+        var merchant = UUID.randomUUID();
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000127"))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000127\","
+                        + "\"customerId\":null,\"merchantId\":\"" + merchant + "\",\"paymentMethod\":\"COD\","
+                        + "\"codAmount\":2500.00,\"pricingSnapshotId\":\"SNP-ABC\",\"currency\":\"LKR\"}",
+                        MediaType.APPLICATION_JSON));
+
+        var parcel = lookup.find("SWD-2026-000127", "token");
+
+        assertThat(parcel.merchantId()).isEqualTo(merchant);
+        assertThat(parcel.codAmount()).isEqualByComparingTo("2500.00");
+        assertThat(parcel.pricingSnapshotId()).isEqualTo("SNP-ABC");
+        assertThat(parcel.collectsCash()).isTrue();
+    }
+
+    @Test
+    void readsWhoToMeetAndWhereAtBothEnds() {
+        var id = UUID.randomUUID();
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000128"))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000128\","
+                        + "\"pickupAddress\":{\"contactName\":\"Nimal\",\"contactPhone\":\"0771234567\","
+                        + "\"streetAddress\":\"12 Main St\",\"city\":\"Colombo\",\"postalCode\":\"\"},"
+                        + "\"deliveryAddress\":{\"contactName\":\"Kamala\",\"contactPhone\":\"0777654321\","
+                        + "\"streetAddress\":\"45 Lake Rd\",\"city\":\"Kandy\",\"postalCode\":\"20000\"}}",
+                        MediaType.APPLICATION_JSON));
+
+        var parcel = lookup.find("SWD-2026-000128", "token");
+
+        assertThat(parcel.pickup()).isEqualTo(new ParcelContact("Nimal", "0771234567", "12 Main St, Colombo"));
+        assertThat(parcel.delivery()).isEqualTo(new ParcelContact("Kamala", "0777654321", "45 Lake Rd, Kandy, 20000"));
+    }
+
+    @Test
+    void readsTheBookingStatusAndWeight() {
+        var id = UUID.randomUUID();
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000129"))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000129\","
+                        + "\"status\":\"CANCELLED\",\"weightKg\":12.50}", MediaType.APPLICATION_JSON));
+
+        var parcel = lookup.find("SWD-2026-000129", "token");
+
+        assertThat(parcel.isCancelled()).isTrue();
+        assertThat(parcel.weightKg()).isEqualByComparingTo("12.50");
+    }
+
+    @Test
     void aBookingWithoutACustomerStillResolves() {
         var id = UUID.randomUUID();
-        server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-000126"))
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000126"))
                 .andRespond(withSuccess("{\"id\":\"" + id + "\",\"trackingNumber\":\"SWD-2026-000126\","
                         + "\"customerId\":null}", MediaType.APPLICATION_JSON));
 
@@ -65,7 +113,7 @@ class HttpParcelLookupTest {
 
     @Test
     void anUnknownTrackingNumberIsNotFound() {
-        server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-999999"))
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-999999"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
         assertThatThrownBy(() -> lookup.find("SWD-2026-999999", "token"))
@@ -75,7 +123,7 @@ class HttpParcelLookupTest {
 
     @Test
     void aFailingParcelServiceIsReportedAsUnavailable() {
-        server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-000125"))
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000125"))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
         assertThatThrownBy(() -> lookup.find("SWD-2026-000125", "token"))
@@ -84,7 +132,7 @@ class HttpParcelLookupTest {
 
     @Test
     void aRejectedTokenIsAlsoReportedAsUnavailableNotAsNotFound() {
-        server.expect(requestTo("http://parcel-service/api/v1/bookings/track/SWD-2026-000125"))
+        server.expect(requestTo("http://parcel-service/api/v1/dispatch/parcels/track/SWD-2026-000125"))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         assertThatThrownBy(() -> lookup.find("SWD-2026-000125", "token"))

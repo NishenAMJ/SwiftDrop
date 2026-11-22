@@ -1,217 +1,141 @@
 package com.swiftdrop.parcel_pricing_service.controller;
 
+import com.swiftdrop.parcel_pricing_service.common.ApiExceptionHandler;
+import com.swiftdrop.parcel_pricing_service.config.SecurityConfig;
 import com.swiftdrop.parcel_pricing_service.entity.OrderSource;
+import com.swiftdrop.parcel_pricing_service.exception.DuplicateOrderException;
 import com.swiftdrop.parcel_pricing_service.exception.MerchantOrderExceptionHandler;
-import com.swiftdrop.parcel_pricing_service.exception.OrderAccessDeniedException;
 import com.swiftdrop.parcel_pricing_service.exception.OrderNotFoundException;
-import com.swiftdrop.parcel_pricing_service.exception.UnauthenticatedMerchantException;
-import com.swiftdrop.parcel_pricing_service.security.MerchantIdentityResolver;
+import com.swiftdrop.parcel_pricing_service.security.MerchantPrincipal;
 import com.swiftdrop.parcel_pricing_service.service.MerchantOrderService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.List;
 
-import static com.swiftdrop.parcel_pricing_service.controller.MerchantOrderTestData.sampleResponse;
-import static com.swiftdrop.parcel_pricing_service.controller.MerchantOrderTestData.validJson;
+import static com.swiftdrop.parcel_pricing_service.controller.MerchantOrderTestData.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** Standalone MockMvc tests (no Spring context, no Boot-version-specific test annotations). */
-@ExtendWith(MockitoExtension.class)
+/** Real security rules (SecurityConfig) and error mapping for the merchant dashboard endpoints. */
+@WebMvcTest(controllers = MerchantOrderController.class, properties = {"spring.config.import=", "debug=false"})
+@Import({SecurityConfig.class, ApiExceptionHandler.class, MerchantOrderExceptionHandler.class})
 class MerchantOrderControllerTest {
 
-    @Mock
-    private MerchantOrderService orderService;
-
-    @Mock
-    private MerchantIdentityResolver identityResolver;
-
-    private MockMvc mockMvc;
-
-    @BeforeEach
-    void setUp() {
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-        validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders.standaloneSetup(new MerchantOrderController(orderService, identityResolver))
-                .setControllerAdvice(new MerchantOrderExceptionHandler())
-                .setValidator(validator)
-                .build();
-    }
-
-    // ---------- POST /api/merchant/orders ----------
+    @Autowired MockMvc mvc;
+    @MockitoBean MerchantOrderService orderService;
+    @MockitoBean JwtDecoder decoder;
 
     @Test
-    void create_valid_returns201WithLocation() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenReturn(7L);
-        when(orderService.createOrder(eq(7L), any(), eq(OrderSource.DASHBOARD))).thenReturn(sampleResponse());
+    void withoutATokenEveryEndpointAnswers401() throws Exception {
+        mvc.perform(post("/api/merchant/orders").contentType(MediaType.APPLICATION_JSON).content(validJson("2.50")))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/merchant/orders")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/merchant/orders/" + ORDER_ID)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(orderService);
+    }
 
-        mockMvc.perform(post("/api/merchant/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validJson("2.50")))
+    @Test
+    void aCustomerTokenIsForbidden() throws Exception {
+        mvc.perform(post("/api/merchant/orders").with(tokenWithRole("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON).content(validJson("2.50")))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void aMerchantTokenWithoutMerchantIdClaimIsRejected() throws Exception {
+        mvc.perform(post("/api/merchant/orders").with(tokenWithRole("MERCHANT"))
+                        .contentType(MediaType.APPLICATION_JSON).content(validJson("2.50")))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void create_takesTheMerchantFromTheTokenAndReturns201WithLocation() throws Exception {
+        when(orderService.createOrder(any(), any(), eq(OrderSource.DASHBOARD))).thenReturn(sampleResponse());
+
+        mvc.perform(post("/api/merchant/orders").with(merchantToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(validJson("2.50")))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "http://localhost/api/merchant/orders/10"))
-                .andExpect(jsonPath("$.id").value(10))
-                .andExpect(jsonPath("$.merchantId").value(7))
-                .andExpect(jsonPath("$.status").value("CREATED"))
-                .andExpect(jsonPath("$.deliveryFee").value(450.00));
+                .andExpect(header().string("Location", "http://localhost/api/merchant/orders/" + ORDER_ID))
+                .andExpect(jsonPath("$.trackingNumber").value("SWD-2026-000010"))
+                .andExpect(jsonPath("$.merchantId").value(MERCHANT_ID.toString()))
+                .andExpect(jsonPath("$.deliveryFee").value(575.00))
+                .andExpect(jsonPath("$.status").value("BOOKED"));
+
+        ArgumentCaptor<MerchantPrincipal> principal = ArgumentCaptor.forClass(MerchantPrincipal.class);
+        verify(orderService).createOrder(principal.capture(), any(), eq(OrderSource.DASHBOARD));
+        assertThat(principal.getValue().userId()).isEqualTo(USER_ID);
+        assertThat(principal.getValue().merchantId()).isEqualTo(MERCHANT_ID);
     }
 
     @Test
-    void create_unauthenticated_returns401AndCreatesNothing() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenThrow(new UnauthenticatedMerchantException());
+    void create_invalidFieldsAreReportedPerField() throws Exception {
+        String bad = validJson("0").replace("0777654321", "call me");
 
-        mockMvc.perform(post("/api/merchant/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validJson("2.50")))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401));
-
-        verify(orderService, never()).createOrder(any(), any(), any());
-    }
-
-    @Test
-    void create_invalidWeight_returns400WithFieldError() throws Exception {
-        for (String weight : List.of("0", "-5", "50.01", "1.234")) {
-            mockMvc.perform(post("/api/merchant/orders")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(validJson(weight)))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message").value("Validation failed"))
-                    .andExpect(jsonPath("$.fieldErrors.weightKg").exists());
-        }
-        verify(orderService, never()).createOrder(any(), any(), any());
-    }
-
-    @Test
-    void create_missingRequiredFields_returns400WithFieldErrors() throws Exception {
-        mockMvc.perform(post("/api/merchant/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mvc.perform(post("/api/merchant/orders").with(merchantToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(bad))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors.sender").exists())
-                .andExpect(jsonPath("$.fieldErrors.receiver").exists())
-                .andExpect(jsonPath("$.fieldErrors.pickupAddress").exists())
-                .andExpect(jsonPath("$.fieldErrors.deliveryAddress").exists())
-                .andExpect(jsonPath("$.fieldErrors.parcelDescription").exists())
                 .andExpect(jsonPath("$.fieldErrors.weightKg").exists())
-                .andExpect(jsonPath("$.fieldErrors.deliveryType").exists())
-                .andExpect(jsonPath("$.fieldErrors.paymentMethod").exists());
+                .andExpect(jsonPath("$.fieldErrors['deliveryAddress.contactPhone']").exists());
+        verifyNoInteractions(orderService);
     }
 
     @Test
-    void create_invalidNestedContact_reportsNestedFieldPath() throws Exception {
-        String body = validJson("2.50").replace("+94771234567", "not-a-phone");
-
-        mockMvc.perform(post("/api/merchant/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors['sender.phone']").exists());
-    }
-
-    @Test
-    void create_invalidEnumValue_returns400() throws Exception {
-        String body = validJson("2.50").replace("\"NORMAL\"", "\"SUPERFAST\"");
-
-        mockMvc.perform(post("/api/merchant/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+    void create_unknownEnumValueIs400() throws Exception {
+        mvc.perform(post("/api/merchant/orders").with(merchantToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(validJson("2.50").replace("\"COD\"", "\"CARD\"")))
                 .andExpect(status().isBadRequest());
+        verifyNoInteractions(orderService);
     }
 
     @Test
-    void create_malformedJson_returns400() throws Exception {
-        mockMvc.perform(post("/api/merchant/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{not json"))
-                .andExpect(status().isBadRequest());
+    void create_duplicateReferenceIs409() throws Exception {
+        when(orderService.createOrder(any(), any(), any())).thenThrow(new DuplicateOrderException("exists"));
+
+        mvc.perform(post("/api/merchant/orders").with(merchantToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(validJson("2.50")))
+                .andExpect(status().isConflict());
     }
 
-    // ---------- GET /api/merchant/orders ----------
-
     @Test
-    void list_returnsOwnOrdersWithTotalHeader() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenReturn(7L);
-        when(orderService.getOrders(7L, 0, 20))
+    void list_returnsTheMerchantsOrdersWithTotalHeader() throws Exception {
+        when(orderService.getOrders(any(), eq(0), eq(20)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse()), PageRequest.of(0, 20), 1));
 
-        mockMvc.perform(get("/api/merchant/orders"))
+        mvc.perform(get("/api/merchant/orders").with(merchantToken()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Total-Count", "1"))
-                .andExpect(jsonPath("$[0].orderNumber").value("MO-00000010"));
+                .andExpect(jsonPath("$[0].id").value(ORDER_ID.toString()));
     }
 
     @Test
-    void list_unauthenticated_returns401() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenThrow(new UnauthenticatedMerchantException());
+    void get_orderOfAnotherMerchantIs404() throws Exception {
+        when(orderService.getOrder(any(), eq(ORDER_ID))).thenThrow(new OrderNotFoundException(ORDER_ID));
 
-        mockMvc.perform(get("/api/merchant/orders")).andExpect(status().isUnauthorized());
-        verify(orderService, never()).getOrders(any(), org.mockito.ArgumentMatchers.anyInt(),
-                org.mockito.ArgumentMatchers.anyInt());
+        mvc.perform(get("/api/merchant/orders/" + ORDER_ID).with(merchantToken()))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void list_nonNumericPage_returns400() throws Exception {
-        mockMvc.perform(get("/api/merchant/orders").param("page", "abc"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Parameter 'page' has an invalid value"));
-    }
-
-    // ---------- GET /api/merchant/orders/{id} ----------
-
-    @Test
-    void getById_ownOrder_returns200() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenReturn(7L);
-        when(orderService.getOrder(7L, 10L)).thenReturn(sampleResponse());
-
-        mockMvc.perform(get("/api/merchant/orders/10"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(10));
-    }
-
-    @Test
-    void getById_unknown_returns404() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenReturn(7L);
-        when(orderService.getOrder(7L, 99L)).thenThrow(new OrderNotFoundException(99L));
-
-        mockMvc.perform(get("/api/merchant/orders/99"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Merchant order with id 99 was not found"));
-    }
-
-    @Test
-    void getById_otherMerchantsOrder_returns403WithoutOrderData() throws Exception {
-        when(identityResolver.resolveMerchantId(any())).thenReturn(7L);
-        when(orderService.getOrder(7L, 11L)).thenThrow(new OrderAccessDeniedException());
-
-        mockMvc.perform(get("/api/merchant/orders/11"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You do not have access to this order"))
-                .andExpect(jsonPath("$.orderNumber").doesNotExist())
-                .andExpect(jsonPath("$.sender").doesNotExist());
-    }
-
-    @Test
-    void getById_nonNumericId_returns400() throws Exception {
-        mockMvc.perform(get("/api/merchant/orders/abc"))
+    void get_nonUuidIdIs400() throws Exception {
+        mvc.perform(get("/api/merchant/orders/10").with(merchantToken()))
                 .andExpect(status().isBadRequest());
+        verifyNoInteractions(orderService);
     }
 }

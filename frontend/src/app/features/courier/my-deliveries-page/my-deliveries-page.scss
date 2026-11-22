@@ -94,3 +94,53 @@
     width: auto;
   }
 }
+
+.delivery__cod {
+  margin: 0;
+  padding: var(--sd-space-3) var(--sd-space-4);
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-control);
+  background: var(--sd-surface-subtle);
+}
+
+.delivery__place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-control);
+}
+
+.delivery__place h4,
+.delivery__place p {
+  margin: 0;
+}
+
+.delivery__who {
+  font-weight: 600;
+}
+
+.delivery__where {
+  overflow-wrap: anywhere;
+}
+
+// Stacked and full width on a phone so each is an easy tap; side by side only when there is room.
+.delivery__links {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-2);
+}
+
+@media (min-width: 40rem) {
+  .delivery__links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.proof-file__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2) var(--sd-space-3);
+}

@@ -4,6 +4,7 @@ import com.swiftdrop.delivery.courier.domain.AssignmentStatus;
 import com.swiftdrop.delivery.courier.domain.DeliveryAssignment;
 import com.swiftdrop.delivery.courier.domain.DeliveryAttempt;
 import com.swiftdrop.delivery.courier.domain.FailureReason;
+import com.swiftdrop.delivery.courier.domain.ProofOfDelivery;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -28,6 +29,8 @@ public class DeliveryEventRecorder {
 
     static final String PRODUCER = "delivery-operations-service";
     static final String PARCEL_STATUS_CHANGED = "parcel.status-changed";
+    private static final String NO_EVENT =
+        "A cancelled assignment publishes no delivery event; Parcel & Pricing announces the cancellation";
 
     private final OutboxEventRepository outbox;
     private final JsonMapper json;
@@ -60,6 +63,30 @@ public class DeliveryEventRecorder {
         recordCustomerStatus(assignment, AssignmentStatus.OUT_FOR_DELIVERY, attempt.getReason(), occurredAt);
     }
 
+    /**
+     * delivery.cod-collected, for Payment & Settlement, following
+     * contracts/events/delivery-operations/cod-collected.schema.json. Written with the delivery, so cash
+     * is never reported for a parcel that was not marked delivered. The courier's notes and the
+     * recipient's name stay here.
+     */
+    public void cashCollected(DeliveryAssignment assignment, ProofOfDelivery proof, Instant collectedAt) {
+        var data = new LinkedHashMap<String, Object>();
+        data.put("bookingId", assignment.getParcelId().toString());
+        data.put("trackingNumber", assignment.getParcelReference());
+        data.put("pricingSnapshotId", assignment.getPricingSnapshotId());
+        if (assignment.getMerchantId() != null) data.put("merchantId", assignment.getMerchantId().toString());
+        data.put("courierId", assignment.getCourier().getId().toString());
+        data.put("deliveryAttemptId", proof.getId().toString());
+        data.put("paymentMethod", "COD");
+        data.put("expectedAmount", assignment.getCodAmount());
+        data.put("collectedAmount", proof.getCollectedAmount());
+        data.put("currency", assignment.getCurrency());
+        data.put("collectedAt", collectedAt.toString());
+        record(DeliveryEventsConfig.DELIVERY_OPERATIONS_EXCHANGE,
+                assignment.getMerchantId() == null ? "customer-cod.collected" : "delivery.cod-collected",
+                collectedAt, data);
+    }
+
     /** parcel.status-changed, for steps the customer hears about. Assigning a courier is not one of them. */
     private void recordCustomerStatus(DeliveryAssignment assignment, AssignmentStatus previous,
                                       FailureReason failure, Instant occurredAt) {
@@ -78,6 +105,10 @@ public class DeliveryEventRecorder {
         if (assignment.getCustomerId() != null) {
             data.put("customerUserId", assignment.getCustomerId().toString());
         }
+        // Lets notification-webhook-service send the merchant's webhooks for merchant orders.
+        if (assignment.getMerchantId() != null) {
+            data.put("merchantId", assignment.getMerchantId().toString());
+        }
         if (failure != null) {
             data.put("failureReason", customerFailureReason(failure));
         }
@@ -93,6 +124,7 @@ public class DeliveryEventRecorder {
             case OUT_FOR_DELIVERY -> "delivery.out-for-delivery";
             case DELIVERED -> "delivery.delivered";
             case DELIVERY_FAILED -> "delivery.failed";
+            case CANCELLED -> throw new IllegalStateException(NO_EVENT);
         };
     }
 
@@ -104,6 +136,7 @@ public class DeliveryEventRecorder {
             case OUT_FOR_DELIVERY -> "Out for delivery";
             case DELIVERED -> "Delivered";
             case DELIVERY_FAILED -> "Delivery attempt was unsuccessful";
+            case CANCELLED -> throw new IllegalStateException(NO_EVENT);
         };
     }
 
@@ -119,6 +152,7 @@ public class DeliveryEventRecorder {
             case OUT_FOR_DELIVERY -> Optional.of("OUT_FOR_DELIVERY");
             case DELIVERED -> Optional.of("DELIVERED");
             case DELIVERY_FAILED -> Optional.of("FAILED");
+            case CANCELLED -> Optional.empty();
         };
     }
 

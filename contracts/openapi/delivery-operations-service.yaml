@@ -360,6 +360,9 @@ paths:
         Role DISPATCHER. The parcel is looked up in Parcel & Pricing by tracking number, using the
         dispatcher's own token, so it must exist. The courier must be AVAILABLE in an ACTIVE category,
         and the parcel must not already have an active assignment. Publishes delivery.assigned.
+        Refused with 422 and a code in the problem body: PARCEL_CANCELLED (the booking was cancelled)
+        or PARCEL_TOO_HEAVY (the parcel's weight is over the courier category's maxWeightKg; a category
+        with no limit, or a parcel with no known weight, is not checked).
       requestBody:
         required: true
         content:
@@ -435,6 +438,25 @@ paths:
         '201': { description: Attempt recorded }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/history:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Audit trail of an assignment
+      description: >
+        Role DISPATCHER only. Every status change, oldest first, with who made it. changedBy is the
+        identity user id from the access token (sub) and changedByRole is the role on that token; neither
+        is supplied by the caller. Couriers do not read this.
+      responses:
+        '200':
+          description: Status changes, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StatusChange' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/assignments/{assignmentId}/proof:
     parameters:
       - $ref: '#/components/parameters/AssignmentId'
@@ -453,16 +475,55 @@ paths:
       description: >
         Role COURIER (own only). The assignment must be OUT_FOR_DELIVERY; it becomes DELIVERED and
         delivery.delivered is published. Proof is recorded once.
+        The proof can be sent as plain JSON, or as multipart/form-data with a `proof` part (the same JSON)
+        and an optional `file` part: a JPEG, PNG or PDF of at most 5 MB. The type is decided from the file's
+        own bytes, not its name or Content-Type header. A refused file saves nothing, so the parcel is not
+        marked delivered. The server keeps the file under a random reference that is never returned.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/RecordProof' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [proof]
+              properties:
+                proof: { $ref: '#/components/schemas/RecordProof' }
+                file: { type: string, format: binary, description: 'JPEG, PNG or PDF, at most 5 MB' }
+            encoding:
+              proof: { contentType: application/json }
+              file: { contentType: 'image/jpeg, image/png, application/pdf' }
       responses:
-        '201': { description: Proof recorded }
+        '201':
+          description: Proof recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProofOfDelivery' }
+        '400': { description: 'FILE_EMPTY or FILE_UNREADABLE (problem body carries `code`)' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '413': { description: 'FILE_TOO_LARGE: the file is over 5 MB' }
+        '415': { description: 'UNSUPPORTED_FILE_TYPE: not a real JPEG, PNG or PDF' }
         '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/proof/file:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Download the uploaded proof file
+      description: >
+        Roles COURIER (own assignment only) and DISPATCHER. It is never available to the public, to customers
+        or to other couriers, and public tracking never receives it. Sent with nosniff, a sandboxing
+        Content-Security-Policy and no-store caching.
+      responses:
+        '200':
+          description: The file, with its stored content type
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'No proof, or no file was uploaded for it' }
   /api/v1/delivery-issues:
     get:
       summary: List delivery issues
@@ -648,7 +709,8 @@ components:
       enum: [AVAILABLE, OFF_DUTY, INACTIVE]
     AssignmentStatus:
       type: string
-      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED]
+      description: CANCELLED is set only when Parcel & Pricing cancels the booking (parcel.cancelled), never by a person, and publishes no delivery event.
+      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED, CANCELLED]
     FailureReason:
       type: string
       enum: [RECIPIENT_UNAVAILABLE, INCORRECT_ADDRESS, RECIPIENT_REFUSED, OTHER]
@@ -735,12 +797,32 @@ components:
         assignedBy: { type: string }
         status: { $ref: '#/components/schemas/AssignmentStatus' }
         notes: { type: [string, 'null'] }
+        codAmount: { type: [number, 'null'], description: 'Cash the courier collects at the door; merchant Cash on Delivery orders only' }
+        currency: { type: [string, 'null'], description: 'Currency of codAmount' }
+        pickup: { $ref: '#/components/schemas/ParcelContact' }
+        delivery: { $ref: '#/components/schemas/ParcelContact' }
         assignedAt: { type: string, format: date-time }
         pickedUpAt: { type: [string, 'null'], format: date-time }
         outForDeliveryAt: { type: [string, 'null'], format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    StatusChange:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { oneOf: [ { $ref: '#/components/schemas/AssignmentStatus' }, { type: 'null' } ], description: 'Null for the first entry, when the parcel was assigned' }
+        toStatus: { $ref: '#/components/schemas/AssignmentStatus' }
+        changedBy: { type: [string, 'null'], format: uuid, description: 'Identity user id from the access token sub' }
+        changedByRole: { type: string, enum: [DISPATCHER, COURIER, SYSTEM, UNKNOWN] }
+        changedAt: { type: string, format: date-time }
+    ParcelContact:
+      type: [object, 'null']
+      description: Who to meet and where. Present only while the assignment is open, and only to the assigned courier and dispatchers. Never published in events.
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
     RecordAttempt:
       type: object
       required: [reason]
@@ -756,6 +838,7 @@ components:
         notes: { type: [string, 'null'], maxLength: 500 }
         mediaUrl: { type: [string, 'null'], maxLength: 500 }
         deliveredAt: { type: [string, 'null'], format: date-time }
+        collectedAmount: { type: [number, 'null'], exclusiveMinimum: 0, description: 'Cash handed over. Required for Cash on Delivery parcels (409/422 otherwise) and refused for all others' }
     ProofOfDelivery:
       type: object
       properties:
@@ -766,6 +849,11 @@ components:
         notes: { type: [string, 'null'] }
         mediaUrl: { type: [string, 'null'] }
         deliveredAt: { type: string, format: date-time }
+        collectedAmount: { type: [number, 'null'] }
+        hasFile: { type: boolean, description: 'True when a proof file was uploaded; fetch it from .../proof/file' }
+        fileName: { type: [string, 'null'], description: 'A safe display name; never a path' }
+        fileContentType: { type: [string, 'null'], enum: [image/jpeg, image/png, application/pdf, null] }
+        fileSizeBytes: { type: [integer, 'null'] }
     ReportIssue:
       type: object
       required: [courierId, issueType, description]

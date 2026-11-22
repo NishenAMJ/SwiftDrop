@@ -15,7 +15,7 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 ## 1. Install the tools
 
-You need Git, Java JDK 25, Docker Desktop and (for the frontend) Node.js 24 LTS. Full list and versions: [docs/contributions/prerequisites.md](docs/contributions/prerequisites.md).
+You need Git, Java JDK 21, Docker Desktop and (for the frontend) Node.js 24 LTS. Full list and versions: [docs/contributions/prerequisites.md](docs/contributions/prerequisites.md).
 
 Check they work:
 

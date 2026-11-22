@@ -69,6 +69,38 @@ public class IdentityClient {
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record MerchantContact(UUID id, String businessName, String contactEmail, String contactPhone) {
+    }
+
+    /**
+     * The signed-in merchant's business contact ({@code GET /api/v1/merchants/me}), used as the payer
+     * of merchant orders. This is the one Identity endpoint that also accepts API-key tokens.
+     * Empty when Identity cannot be reached. Never throws for outages.
+     */
+    public Optional<MerchantContact> currentMerchant(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) return Optional.empty();
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/merchants/me"))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Accept", "application/json")
+                    .GET().build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                log.warn("Identity /merchants/me returned status {}", response.statusCode());
+                return Optional.empty();
+            }
+            return Optional.of(json.readValue(response.body(), MerchantContact.class));
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (Exception ex) {
+            log.warn("Identity service is unavailable: {}", ex.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
     /** Changes name and/or phone in Identity. Null values are left unchanged. */
     public IdentityUser updateCurrentUser(Jwt jwt, String fullName, String phoneNumber) {
         Map<String, String> body = new HashMap<>();

@@ -45,6 +45,22 @@ public class Parcel {
     @Column(name = "payment_method", nullable = false, length = 20)
     private String paymentMethod = "ONLINE";
 
+    /** Merchant orders only: the merchant's own order number, unique per merchant. */
+    @Column(name = "merchant_reference", length = 100)
+    private String merchantReference;
+
+    /** Merchant COD orders only: cash the courier collects from the receiver for the goods. */
+    @Column(name = "cod_amount", precision = 12, scale = 2)
+    private BigDecimal codAmount;
+
+    @Column(name = "urgent_note", length = 255)
+    private String urgentNote;
+
+    /** Merchant orders only: DASHBOARD or EXTERNAL_API (see {@link OrderSource}). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_source", length = 20)
+    private OrderSource orderSource;
+
     @Column(name = "pricing_snapshot_id", length = 64)
     private String pricingSnapshotId;
 
@@ -286,6 +302,16 @@ public class Parcel {
     public void setPricingRuleCode(String pricingRuleCode) { this.pricingRuleCode = pricingRuleCode; }
     public String getPricingZoneCode() { return pricingZoneCode; }
     public void setPricingZoneCode(String pricingZoneCode) { this.pricingZoneCode = pricingZoneCode; }
+
+    // Merchant order fields
+    public String getMerchantReference() { return merchantReference; }
+    public void setMerchantReference(String merchantReference) { this.merchantReference = merchantReference; }
+    public BigDecimal getCodAmount() { return codAmount; }
+    public void setCodAmount(BigDecimal codAmount) { this.codAmount = codAmount; }
+    public String getUrgentNote() { return urgentNote; }
+    public void setUrgentNote(String urgentNote) { this.urgentNote = urgentNote; }
+    public OrderSource getOrderSource() { return orderSource; }
+    public void setOrderSource(OrderSource orderSource) { this.orderSource = orderSource; }
 
     // Customer details from Identity at booking time
     public String getCustomerName() { return customerName; }

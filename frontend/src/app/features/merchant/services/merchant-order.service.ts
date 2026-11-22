@@ -1,95 +1,95 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpResponse } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { Observable, map } from 'rxjs';
+
+export const MERCHANT_ORDERS_API = '/api/merchant/orders';
 
 /**
- * Service for interacting with merchant order related backend endpoints.
- * Provides order CRUD, dashboard data, and a simple fee calculator used by the UI.
+ * Merchant orders (parcel-pricing-service). A merchant order is a normal booking: it gets an SWD
+ * tracking number, appears in My Bookings and has a receipt. Fees come from the backend pricing
+ * module (use CustomerBookingService.getFeeQuote), never from a formula in the browser.
  */
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable({ providedIn: 'root' })
 export class MerchantOrderService {
-  private readonly baseUrl = '/api/merchant/orders';
+  private readonly http = inject(HttpClient);
 
-  constructor(private http: HttpClient) {}
-
-  /** Simple fee calculation (mock) based on weight and urgency.
-   * Returns a breakdown used by CreateOrderComponent.
-   */
-  calculateFee(weightKg: number, urgency: 'NORMAL' | 'URGENT'): FeeBreakdown {
-    const baseFee = 50; // base fee in LKR
-    const weightRate = 20; // per kg
-    const urgentSurcharge = urgency === 'URGENT' ? 30 : 0;
-    const weightFee = weightKg * weightRate;
-    const totalFee = baseFee + weightFee + urgentSurcharge;
-    return { baseFee, weightFee, urgencySurcharge: urgentSurcharge, totalFee };
+  createOrder(request: CreateMerchantOrderRequest): Observable<MerchantOrder> {
+    return this.http.post<MerchantOrder>(MERCHANT_ORDERS_API, request);
   }
 
-  /** Retrieves a list of orders belonging to the currently authenticated merchant. */
-  getOrders(): Observable<Order[]> {
-    return this.http.get<Order[]>(this.baseUrl);
+  /** The merchant's orders, newest first. The total count comes from the X-Total-Count header. */
+  getOrders(page = 0, size = 20): Observable<{ orders: MerchantOrder[]; total: number }> {
+    return this.http
+      .get<MerchantOrder[]>(MERCHANT_ORDERS_API, { params: { page, size }, observe: 'response' })
+      .pipe(
+        map((res: HttpResponse<MerchantOrder[]>) => ({
+          orders: res.body ?? [],
+          total: Number(res.headers.get('X-Total-Count') ?? res.body?.length ?? 0),
+        })),
+      );
   }
 
-  /** Creates a new order for the merchant. */
-  createOrder(request: CreateMerchantOrderRequest): Observable<any> {
-    return this.http.post<any>(this.baseUrl, request);
-  }
-
-  /** Retrieves dashboard summary and recent orders. */
-  getDashboardData(): Observable<{ summary: Summary; recentOrders: Order[] }> {
-    return this.http.get<{ summary: Summary; recentOrders: Order[] }>(`${this.baseUrl}/dashboard`);
+  getOrder(id: string): Observable<MerchantOrder> {
+    return this.http.get<MerchantOrder>(`${MERCHANT_ORDERS_API}/${encodeURIComponent(id)}`);
   }
 }
 
-/** Order representation returned by the backend. Adjust fields to match the actual API response. */
-export interface Order {
-  id: string;
-  createdAt: string; // ISO date string
-  deliveryAddress: string;
-  fee: number; // total fee in LKR
-  status: string; // e.g., 'PENDING', 'IN_TRANSIT', 'DELIVERED'
-  recipientName?: string;
-  // Optional aliases for compatibility with existing UI components
-  receiverName?: string;
-  deliveryLocation?: string;
-  orderDate?: string;
+export type MerchantUrgency = 'NORMAL' | 'URGENT';
+export type MerchantPaymentMethod = 'ONLINE' | 'COD';
+
+export interface MerchantOrderAddress {
+  contactName: string;
+  contactPhone: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  zoneCode?: string;
 }
 
-/** Payload for creating a new merchant order. */
+/** Payload for POST /api/merchant/orders (MerchantOrderRequest in the backend). */
 export interface CreateMerchantOrderRequest {
+  merchantReference?: string;
   description?: string;
   weightKg: number;
-  urgency: 'NORMAL' | 'URGENT';
-  pickupAddress: {
-    contactName: string;
-    contactPhone: string;
-    streetAddress: string;
-    city: string;
-    postalCode?: string;
-    zoneCode?: string;
-  };
-  deliveryAddress: {
-    contactName: string;
-    contactPhone: string;
-    streetAddress: string;
-    city: string;
-    postalCode?: string;
-    zoneCode?: string;
-  };
+  urgency: MerchantUrgency;
+  urgentNote?: string;
+  paymentMethod: MerchantPaymentMethod;
+  /** Cash to collect from the recipient (LKR). Required for COD. */
+  codAmount?: number;
+  pickupAddress: MerchantOrderAddress;
+  /** zoneCode is required: it sets the zone charge. */
+  deliveryAddress: MerchantOrderAddress;
 }
 
-/** Fee breakdown interface used by CreateOrderComponent */
-export interface FeeBreakdown {
-  baseFee: number;
-  weightFee: number;
-  urgencySurcharge: number;
-  totalFee: number;
-}
-
-/** Summary interface for merchant dashboard */
-export interface Summary {
-  totalOrders: number;
-  pendingOrders: number;
-  deliveredOrders: number;
+/** MerchantOrderResponse in the backend. `id` is the booking id used by receipts and cancellation. */
+export interface MerchantOrder {
+  id: string;
+  trackingNumber: string;
+  merchantId: string;
+  merchantReference?: string | null;
+  description?: string | null;
+  weightKg: number;
+  urgency: MerchantUrgency;
+  urgentNote?: string | null;
+  paymentMethod: MerchantPaymentMethod;
+  paymentStatus: string;
+  codAmount?: number | null;
+  deliveryFee: number;
+  currency: string;
+  feeBreakdown: {
+    baseFee: number;
+    weightCharge: number;
+    zoneCharge: number;
+    zoneCode: string;
+    urgentSurcharge: number;
+    total: number;
+    pricingRuleCode: string;
+  };
+  status: string;
+  source: 'DASHBOARD' | 'EXTERNAL_API';
+  receiptNumber?: string | null;
+  pickupAddress: MerchantOrderAddress;
+  deliveryAddress: MerchantOrderAddress;
+  createdAt: string;
+  updatedAt: string;
 }

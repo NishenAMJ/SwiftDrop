@@ -14,13 +14,41 @@
     </button>
   </header>
 
+@if (dispatcher) {
+  <section class="sd-card cancellation-panel" aria-labelledby="cancellation-heading" [attr.aria-busy]="cancellationsLoading()">
+    <h2 id="cancellation-heading">Cancellation refunds</h2>
+    <p>Refunds requested by cancelled bookings. Pending means the provider outcome is not yet confirmed.</p>
+    <button class="sd-button sd-button--secondary" (click)="loadCancellations(cancellations()?.page ?? 0)" [disabled]="cancellationsLoading()">Refresh cancellation refunds</button>
+    @if (cancellationsError(); as error) { <p class="sd-alert sd-alert--error" role="alert">{{ error }}</p> }
+    @if (cancellationsLoading()) { <p role="status">Loading cancellation refunds...</p> }
+    @if (cancellations(); as results) {
+      <p role="status">{{ results.totalElements }} cancellation requests</p>
+      @for (row of results.content; track row.eventId) {
+        <article class="cancellation-row">
+          <h3>Booking {{ row.bookingId }}</h3>
+          <span class="sd-badge" [class.sd-badge--success]="row.status === 'COMPLETED'" [class.sd-badge--warning]="row.status !== 'COMPLETED'">{{ row.status.replaceAll('_', ' ') }}</span>
+          <p>Updated {{ row.updatedAt | date:'medium':'+0530' }} (Asia/Colombo)</p>
+          @if (row.failureReason) { <p>{{ row.failureReason }}</p> }
+          @if (row.paymentId) { <button class="sd-button sd-button--secondary" (click)="openCancellation(row)">Open payment and recovery controls</button> }
+        </article>
+      } @empty { <p>No cancellation refunds have been received.</p> }
+      <nav aria-label="Cancellation refund pages" class="page__actions">
+        <button class="sd-button sd-button--secondary" [disabled]="results.page === 0 || cancellationsLoading()" (click)="loadCancellations(results.page - 1)">Previous</button>
+        <span>Page {{ results.page + 1 }} of {{ results.totalPages || 1 }}</span>
+        <button class="sd-button sd-button--secondary" [disabled]="results.page + 1 >= results.totalPages || cancellationsLoading()" (click)="loadCancellations(results.page + 1)">Next</button>
+      </nav>
+    }
+  </section>
+}
+
+
   @if (loading()) {
     <div class="sd-card state" role="status"><span class="sd-spinner" aria-hidden="true"></span> Loading payment history…</div>
   } @else if (error()) {
     <div class="sd-alert sd-alert--error" role="alert">
       {{ error() }} <button class="sd-link" type="button" (click)="load()">Try again</button>
     </div>
-  } @else if (!result()?.content?.length) {
+  } @else if (!visiblePayments().length) {
     <section class="sd-card empty-state">
       <h2>No payments yet</h2>
       <p>Payments will appear here after an online payment is created for one of your bookings.</p>
@@ -29,7 +57,7 @@
   } @else {
     <p class="result-count" aria-live="polite">{{ result()?.totalElements }} payment records</p>
     <div class="payment-list">
-      @for (payment of result()?.content ?? []; track payment.id) {
+      @for (payment of visiblePayments(); track payment.id) {
         <article class="sd-card payment-card">
           <div class="payment-card__main">
             <div class="payment-card__heading">

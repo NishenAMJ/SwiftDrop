@@ -9,6 +9,7 @@ import {
   MerchantLedgerEntry,
   MerchantLedgerPage,
   MerchantSettlement,
+  MerchantSettlementPage,
 } from './cod-settlement.models';
 
 const HANDOVERS = '/api/v1/cod-handovers';
@@ -109,6 +110,14 @@ export class CodSettlementService {
 
   getSettlement(settlementId: string): Observable<MerchantSettlement> {
     return this.http.get<MerchantSettlement>(`${SETTLEMENTS}/${id(settlementId)}`);
+  }
+
+  listSettlements(
+    filters: { merchantId?: string; page?: number; size?: number } = {},
+  ): Observable<MerchantSettlementPage> {
+    let params = new HttpParams().set('page', filters.page ?? 0).set('size', filters.size ?? 20);
+    if (filters.merchantId?.trim()) params = params.set('merchantId', filters.merchantId.trim());
+    return this.http.get<MerchantSettlementPage>(SETTLEMENTS, { params });
   }
 
   approveSettlement(

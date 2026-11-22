@@ -2,13 +2,17 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { EvidenceType, Payment, PaymentPage, RecoveryAudit, Refund } from './payment.models';
+import { CancellationRefundPage, EvidenceType, Payment, PaymentPage, RecoveryAudit, Refund } from './payment.models';
 
 const API = '/api/v1/payments';
 
 @Injectable({ providedIn: 'root' })
 export class PaymentService {
   private readonly http = inject(HttpClient);
+
+  cancellations(page = 0): Observable<CancellationRefundPage> {
+    return this.http.get<CancellationRefundPage>(`${API}/cancellations`, { params: { page, size: 20 } });
+  }
 
   history(page = 0, size = 20): Observable<PaymentPage> {
     const params = new HttpParams()

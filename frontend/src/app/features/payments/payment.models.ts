@@ -53,3 +53,21 @@ export interface RecoveryAudit {
 
 export type EvidenceType = 'PAYHERE_DASHBOARD' | 'PAYHERE_SUPPORT_CASE';
 
+
+export interface CancellationRefund {
+  eventId: string;
+  bookingId: string;
+  paymentId: string | null;
+  refundId: string | null;
+  status: 'PENDING' | 'COMPLETED' | 'ATTENTION_REQUIRED';
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CancellationRefundPage {
+  content: CancellationRefund[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}

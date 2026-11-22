@@ -1,6 +1,6 @@
 # Payment & Settlement service — Members 8 and 9
 
-Java 25 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
+Java 21 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
 PayHere. Member 9 owns COD collection, courier cash reconciliation, the merchant
 ledger and merchant settlements.
 
@@ -14,7 +14,7 @@ ledger and merchant settlements.
 
 On 2026-11-15, before Member 9's implementation, `mvn -B clean test` against the
 isolated payment test database and RabbitMQ reported **32 tests, 0 failures, 0 errors,
-0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 25
+0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 21
 and isolated infrastructure. Historical results do not verify the new V5 migration,
 COD workflows, live PayHere, actual identity/pricing integration, gateway routing or
 Docker-image end-to-end readiness.
@@ -77,8 +77,9 @@ routes are denied. Authentication is not implemented by this service.
 | PAYMENT_PAYHERE_NOTIFY_URL | Public callback URL ending /api/v1/payments/callbacks/payhere |
 | PAYMENT_PAYHERE_RETURN_URL / PAYMENT_PAYHERE_CANCEL_URL | localhost:4200/payments/return and /payments/cancel (frontend routes must be implemented) |
 | PAYMENT_WORKERS_ENABLED | true; disables outbox and recovery workers when false |
-| PAYMENT_COD_CONSUMER_ENABLED | false; enable only after COD producer and pricing verification contracts are approved |
-| PAYMENT_COD_VERIFICATION_MODE | pending; fail-closed placeholder that prevents enabling the consumer until an approved verifier is implemented |
+| PAYMENT_COD_CONSUMER_ENABLED | false; set true to consume `delivery.cod-collected` (needs PAYMENT_COD_VERIFICATION_MODE=parcel) |
+| PAYMENT_COD_VERIFICATION_MODE | pending (default, fail-closed: the consumer refuses to start); `parcel` checks every event against Parcel & Pricing before posting |
+| PAYMENT_PARCEL_INTERNAL_KEY | Shared key sent as `X-Internal-Key` to Parcel & Pricing's internal COD lookup; must equal its PARCEL_INTERNAL_API_KEY. Required when the mode is `parcel` |
 
 JWT issuer is `swiftdrop-identity`, audience `swiftdrop-api`. Role checks use `roles`,
 ownership uses `sub` and `merchant_id`. No locally fabricated JWT bypass exists.
@@ -199,8 +200,12 @@ for bodies, status values and error responses.
 Manual acknowledgements occur only after the transactional service returns (and its
 database transaction has committed). Malformed, invalid and conflicting messages are
 dead-lettered. Transient failures are requeued. `PAYMENT_COD_CONSUMER_ENABLED` remains
-false, and pending verification mode fails startup if someone enables it. Implement
-and approve service-to-service pricing verification before enabling this consumer.
+false by default, and pending verification mode fails startup if someone enables it. To
+enable it, set `PAYMENT_COD_VERIFICATION_MODE=parcel`, `PAYMENT_PARCEL_INTERNAL_KEY` (the
+same value as Parcel & Pricing's `PARCEL_INTERNAL_API_KEY`) and the consumer flag. Each
+event is then checked against Parcel & Pricing before posting (see
+`docs/architecture/member9-cod-ledger-contract.md`). The exchange, queue, bindings and DLQ
+are declared even while the consumer is off, so COD events are kept until it is enabled.
 
 ### Member 9 persistence
 
@@ -303,3 +308,66 @@ Their --rm flag removes them on stop. RabbitMQ test UI: http://localhost:15685,
 paymenttest / payment-test-only. The test consumes its message, so the queue can be
 empty afterward. For sandbox acceptance still test real checkout, cancellation,
 callbacks, repeated partial refunds and ambiguous outcomes with PayHere credentials.
+
+
+## Member 8 cancellation refunds
+
+### Customer COD payment status
+
+For direct customer COD bookings, the courier collects the frozen delivery fee in full.
+Delivery publishes `customer-cod.collected` on `swiftdrop.delivery-operations`; Payment consumes
+it from `payment-settlement-service.customer-cod` using the existing `PAYMENT_COD_CONSUMER_ENABLED`
+switch and Parcel verification mode/internal key. The queue and its DLQ are declared even when disabled.
+The separate routing key avoids merchant COD consumers and Tracking's `delivery.*` subscription.
+
+Payment verifies a direct, non-cancelled COD booking, its owner, tracking number, pricing snapshot,
+currency and amount against Parcel's internal COD endpoint. Migration V7 stores the receipt in
+`customer_cod_receipts` and the transaction writes `payment.customer-cod-collected` to the payment
+outbox. Duplicate events/booking receipts are idempotent; conflicting evidence or non-full amounts
+are dead-lettered; verification outages retry. Neither a PayHere payment nor a merchant ledger
+credit is created. Parcel independently matches the verified receipt and marks payment PAID,
+preserving delivery status and the first collection time. It does not wait for cash reconciliation.
+
+Member 3 owns the booking projection, Member 6 the cash capture, Member 8 the verified payment
+receipt/event, and Member 9 owns subsequent cash reconciliation. Customer receipt reconciliation
+is not implemented by the existing merchant-only handover APIs; do not mix these fees into
+merchant payouts. Existing assignments made before this change need to be checked: assignments
+with a null cash amount are not automatically backfilled.
+
+Deploy Parcel's additive lookup/projection changes and Payment's V7/consumer before enabling
+Delivery's customer cash event. The courier UI already displays/collects any assignment COD amount.
+Contracts: `customer-cod-collected.schema.json` (Delivery) and `customer-cod-paid.schema.json` (Payment).
+
+### Automatic online refunds
+
+`parcel.cancelled` is stored in the V6 cancellation inbox before RabbitMQ acknowledges it.
+The durable `payment-settlement-service.cancellations` queue is bound even when
+`PAYMENT_CANCELLATION_CONSUMER_ENABLED=false` (the default). Enable only after the
+Parcel/Pricing cancellation contract and assignment/cancellation coordination have been verified.
+Messages published before the queue was first declared need producer-side replay; they cannot be recovered from an absent queue.
+
+ONLINE events must include paymentId, customerUserId, parcelId, cancellationFee and refundAmount.
+Payment checks ownership, booking, currency and fee-plus-target against its own payment record.
+The requested amount is the total cancellation refund target; confirmed prior refunds are subtracted.
+An outstanding refund defers reservation. COD cancellations move no money.
+The system actor UUID `00000000-0000-0000-0000-000000000008` identifies automatic reservations,
+with idempotency key `cancellation:<booking UUID>`; this identity has no login or dispatcher role.
+Provider calls use the existing refund worker, outside database transactions.
+Uncertain submissions remain pending and are never automatically resent.
+
+Dispatchers inspect `GET /api/v1/payments/cancellations?page=0&size=20` and
+`GET /api/v1/payments/cancellations/{eventId}` or the cancellation section in Payments and Refunds.
+Open a linked payment/refund to use existing evidence-based recovery controls.
+Malformed/conflicting events go to `payment-settlement-service.cancellations.dlq`.
+Inspect the original event and correct its producer before replay; never modify financial records
+or generate fresh refund requests merely because a provider response timed out.
+
+Deployment order: apply migrations; start Payment to declare queues with consumption disabled;
+verify event contracts and isolated tests; then enable consumption. Turning consumption off
+preserves queued events and already persisted work. `PAYMENT_WORKERS_ENABLED=false` pauses
+all payment workers, including cancellation processing, without deleting reservations.
+Monitor inbox PENDING age, ATTENTION_REQUIRED records and dead-letter queue depth.
+
+Acceptance evidence still required before release: PayHere sandbox checkout/callback/refund,
+actual identity/pricing/gateway integration, and assignment-versus-cancellation race tests owned
+jointly with Members 3?4 and 6. Automated provider mocks do not establish sandbox success.

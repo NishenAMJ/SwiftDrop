@@ -42,4 +42,12 @@ public final class MerchantSettlementDtos {
         OffsetDateTime paidAt,
         String externalPaymentReference
     ) { }
+
+    public record Page(
+        List<View> content,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages
+    ) { }
 }

@@ -4,7 +4,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { finalize } from 'rxjs';
 
 import { ColomboDatePipe } from '../../../shared/pipes/colombo-date.pipe';
-import { MerchantLedgerPage, MerchantSettlement, ProblemDetail } from '../cod-settlement.models';
+import { MerchantLedgerPage, MerchantSettlement, MerchantSettlementPage, ProblemDetail } from '../cod-settlement.models';
 import { CodSettlementService } from '../cod-settlement.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -23,6 +23,10 @@ export class SettlementOperationsPage implements OnInit {
   protected readonly operation = signal<Operation>('ledger');
   protected readonly ledger = signal<MerchantLedgerPage | null>(null);
   protected readonly settlement = signal<MerchantSettlement | null>(null);
+  protected readonly settlements = signal<MerchantSettlementPage | null>(null);
+  protected readonly historyLoading = signal(false);
+  protected readonly historyError = signal<string | null>(null);
+  protected readonly historyMerchantId = signal<string | null>(null);
   protected readonly loading = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -47,6 +51,9 @@ export class SettlementOperationsPage implements OnInit {
   });
   protected readonly lookupForm = this.fb.group({
     settlementId: ['', [Validators.required, Validators.pattern(UUID)]],
+  });
+  protected readonly settlementHistoryForm = this.fb.group({
+    merchantId: ['', [Validators.required, Validators.pattern(UUID)]],
   });
   protected readonly approvalForm = this.fb.group({
     note: ['', Validators.maxLength(500)],
@@ -148,6 +155,8 @@ export class SettlementOperationsPage implements OnInit {
       (result) => {
         this.settlement.set(result as MerchantSettlement);
         this.lookupForm.controls.settlementId.setValue((result as MerchantSettlement).id);
+        this.settlementHistoryForm.controls.merchantId.setValue(request.merchantId);
+        this.loadSettlementHistory();
       },
     );
   }
@@ -168,6 +177,41 @@ export class SettlementOperationsPage implements OnInit {
       });
   }
 
+  protected loadSettlementHistory(page = 0): void {
+    if (this.historyLoading()) return;
+    if (this.settlementHistoryForm.invalid) {
+      this.settlementHistoryForm.markAllAsTouched();
+      return;
+    }
+    const merchantId = this.settlementHistoryForm.controls.merchantId.value.trim();
+    if (merchantId !== this.historyMerchantId()) page = 0;
+    this.historyMerchantId.set(merchantId);
+    this.historyLoading.set(true);
+    this.historyError.set(null);
+    this.settlements.set(null);
+    this.api
+      .listSettlements({ merchantId, page })
+      .pipe(finalize(() => this.historyLoading.set(false)))
+      .subscribe({
+        next: (settlements) => this.settlements.set(settlements),
+        error: () => this.historyError.set('Settlement history could not be loaded. Try again.'),
+      });
+  }
+
+  protected selectSettlement(item: MerchantSettlement): void {
+    if (this.busy()) return;
+    this.settlement.set(item);
+    this.lookupForm.controls.settlementId.setValue(item.id);
+    this.approvalForm.reset({ note: '', confirm: false });
+    this.paymentForm.patchValue({ externalReference: '', confirm: false });
+  }
+
+  private updateHistory(item: MerchantSettlement): void {
+    this.settlements.update((page) => page ? {
+      ...page, content: page.content.map((entry) => entry.id === item.id ? item : entry),
+    } : null);
+  }
+
   protected approve(): void {
     const item = this.settlement();
     if (!item || this.approvalForm.invalid || this.busy()) {
@@ -183,6 +227,7 @@ export class SettlementOperationsPage implements OnInit {
       (result) => {
         this.settlement.set(result as MerchantSettlement);
         this.approvalForm.reset({ note: '', confirm: false });
+        this.updateHistory(result as MerchantSettlement);
       },
     );
   }
@@ -206,6 +251,7 @@ export class SettlementOperationsPage implements OnInit {
       (result) => {
         this.settlement.set(result as MerchantSettlement);
         this.paymentForm.patchValue({ externalReference: '', confirm: false });
+        this.updateHistory(result as MerchantSettlement);
       },
     );
   }

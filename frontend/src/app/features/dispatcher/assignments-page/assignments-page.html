@@ -164,28 +164,24 @@
                 <td>{{ assignment.assignedAt | colomboDate }}</td>
                 <td>{{ assignment.completedAt ? (assignment.completedAt | colomboDate) : '—' }}</td>
                 <td>
-                  @if (assignment.status === 'DELIVERED' || assignment.status === 'DELIVERY_FAILED') {
-                    <div class="assign-actions">
-                      <button
-                        class="sd-button sd-button--secondary"
-                        type="button"
-                        (click)="toggleDetails(assignment)"
-                        [attr.aria-expanded]="detailsId() === assignment.id"
-                        [attr.aria-controls]="'assign-details-' + assignment.id"
-                      >
-                        {{ detailsId() === assignment.id ? 'Hide details' : 'View details' }}
-                        <span class="sd-visually-hidden">for {{ assignment.parcelReference }}</span>
+                  <div class="assign-actions">
+                    <button
+                      class="sd-button sd-button--secondary"
+                      type="button"
+                      (click)="toggleDetails(assignment)"
+                      [attr.aria-expanded]="detailsId() === assignment.id"
+                      [attr.aria-controls]="'assign-details-' + assignment.id"
+                    >
+                      {{ detailsId() === assignment.id ? 'Hide details' : 'View details' }}
+                      <span class="sd-visually-hidden">for {{ assignment.parcelReference }}</span>
+                    </button>
+                    @if (assignment.status === 'DELIVERY_FAILED') {
+                      <button class="sd-button sd-button--primary" type="button" (click)="reassign(assignment)">
+                        Reassign
+                        <span class="sd-visually-hidden">{{ assignment.parcelReference }}</span>
                       </button>
-                      @if (assignment.status === 'DELIVERY_FAILED') {
-                        <button class="sd-button sd-button--primary" type="button" (click)="reassign(assignment)">
-                          Reassign
-                          <span class="sd-visually-hidden">{{ assignment.parcelReference }}</span>
-                        </button>
-                      }
-                    </div>
-                  } @else {
-                    <span class="page__muted">In progress</span>
-                  }
+                    }
+                  </div>
                 </td>
               </tr>
               @if (detailsId() === assignment.id) {
@@ -199,47 +195,103 @@
                         </p>
                       } @else if (detailsError(); as message) {
                         <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
-                      } @else if (assignment.status === 'DELIVERY_FAILED') {
-                        <h3>Why it failed</h3>
-                        @if (attempts().length === 0) {
-                          <p class="page__muted">No attempt details were recorded.</p>
-                        }
-                        @for (attempt of attempts(); track attempt.id) {
+                      } @else {
+                        @if (assignment.status === 'DELIVERY_FAILED') {
+                          <h3>Why it failed</h3>
+                          @if (attempts().length === 0) {
+                            <p class="page__muted">No attempt details were recorded.</p>
+                          }
+                          @for (attempt of attempts(); track attempt.id) {
+                            <dl class="details">
+                              <div>
+                                <dt>Reason</dt>
+                                <dd>{{ failureLabels[attempt.reason] }}</dd>
+                              </div>
+                              <div>
+                                <dt>Attempt</dt>
+                                <dd>{{ attempt.attemptNumber }} · {{ attempt.attemptedAt | colomboDate }}</dd>
+                              </div>
+                              @if (attempt.notes) {
+                                <div class="details__full">
+                                  <dt>Courier's note (internal)</dt>
+                                  <dd>{{ attempt.notes }}</dd>
+                                </div>
+                              }
+                            </dl>
+                          }
+                        } @else if (proof(); as received) {
+                          <h3>Proof of delivery</h3>
                           <dl class="details">
                             <div>
-                              <dt>Reason</dt>
-                              <dd>{{ failureLabels[attempt.reason] }}</dd>
+                              <dt>Received by</dt>
+                              <dd>{{ received.recipientName }}</dd>
                             </div>
                             <div>
-                              <dt>Attempt</dt>
-                              <dd>{{ attempt.attemptNumber }} · {{ attempt.attemptedAt | colomboDate }}</dd>
+                              <dt>Delivered</dt>
+                              <dd>{{ received.deliveredAt | colomboDate }}</dd>
                             </div>
-                            @if (attempt.notes) {
+                            @if (received.collectedAmount != null) {
+                              <div>
+                                <dt>Cash collected</dt>
+                                <dd>{{ assignment.currency }} {{ received.collectedAmount | number: '1.2-2' }}</dd>
+                              </div>
+                            }
+                            @if (received.hasFile) {
+                              <div class="details__full">
+                                <dt>Proof file</dt>
+                                <dd>
+                                  {{ received.fileName }}
+                                  <span class="page__muted">
+                                    ({{ received.fileContentType === 'application/pdf' ? 'PDF' : 'Image' }}
+                                    @if (received.fileSizeBytes != null) {
+                                      , {{ sizeLabel(received.fileSizeBytes) }}
+                                    })
+                                  </span>
+                                  <button
+                                    class="sd-button sd-button--secondary"
+                                    type="button"
+                                    (click)="openProofFile(assignment)"
+                                    [disabled]="proofFileBusy()"
+                                  >
+                                    View proof file
+                                    <span class="sd-visually-hidden">for {{ assignment.parcelReference }}</span>
+                                  </button>
+                                </dd>
+                              </div>
+                            }
+                            @if (received.notes) {
                               <div class="details__full">
                                 <dt>Courier's note (internal)</dt>
-                                <dd>{{ attempt.notes }}</dd>
+                                <dd>{{ received.notes }}</dd>
                               </div>
                             }
                           </dl>
-                        }
-                      } @else if (proof(); as received) {
-                        <h3>Proof of delivery</h3>
-                        <dl class="details">
-                          <div>
-                            <dt>Received by</dt>
-                            <dd>{{ received.recipientName }}</dd>
-                          </div>
-                          <div>
-                            <dt>Delivered</dt>
-                            <dd>{{ received.deliveredAt | colomboDate }}</dd>
-                          </div>
-                          @if (received.notes) {
-                            <div class="details__full">
-                              <dt>Courier's note (internal)</dt>
-                              <dd>{{ received.notes }}</dd>
-                            </div>
+                          @if (proofFileError(); as fileProblem) {
+                            <p class="sd-error" role="alert">{{ fileProblem }}</p>
                           }
-                        </dl>
+                        }
+
+                        <h3 class="assign-history__title">Status history</h3>
+                        @if (history().length === 0) {
+                          <p class="page__muted">No status changes were recorded.</p>
+                        } @else {
+                          <ol class="assign-history">
+                            @for (change of history(); track change.id) {
+                              <li>
+                                <strong>
+                                  @if (change.fromStatus) {
+                                    {{ statusLabels[change.fromStatus] }} → {{ statusLabels[change.toStatus] }}
+                                  } @else {
+                                    {{ statusLabels[change.toStatus] }}
+                                  }
+                                </strong>
+                                <span class="page__muted">
+                                  by {{ actor(change, assignment) }} · {{ change.changedAt | colomboDate }}
+                                </span>
+                              </li>
+                            }
+                          </ol>
+                        }
                       }
                     </div>
                   </td>
