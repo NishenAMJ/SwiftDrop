@@ -44,6 +44,41 @@ security:
   - bearerAuth: []
 
 paths:
+  /api/v1/payments/cancellations:
+    get:
+      tags: [Refunds]
+      summary: List cancellation refund processing records (dispatcher only)
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 0, default: 0}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200':
+          description: Paginated processing records, without internal event payloads
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content: {type: array, items: {$ref: '#/components/schemas/CancellationRefund'}}
+                  page: {type: integer}
+                  size: {type: integer}
+                  totalElements: {type: integer}
+                  totalPages: {type: integer}
+        '403': {description: Dispatcher role required}
+  /api/v1/payments/cancellations/{eventId}:
+    get:
+      tags: [Refunds]
+      summary: Inspect cancellation refund processing (dispatcher only)
+      parameters:
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Processing record
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CancellationRefund'}
+        '403': {description: Dispatcher role required}
+        '404': {description: Cancellation not found}
   /api/v1/payments:
     post:
       tags: [Payments]
@@ -776,6 +811,18 @@ components:
       bearerFormat: JWT
 
   schemas:
+    CancellationRefund:
+      type: object
+      required: [eventId, bookingId, status, createdAt, updatedAt]
+      properties:
+        eventId: {type: string, format: uuid}
+        bookingId: {type: string, format: uuid}
+        paymentId: {type: [string, 'null'], format: uuid}
+        refundId: {type: [string, 'null'], format: uuid}
+        status: {type: string, enum: [PENDING, COMPLETED, ATTENTION_REQUIRED]}
+        failureReason: {type: [string, 'null']}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     CreatePaymentRequest:
       type: object
       required: [bookingId]

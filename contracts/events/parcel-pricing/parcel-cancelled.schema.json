@@ -4,13 +4,21 @@
   "title": "Parcel cancelled",
   "description": "Proposal for team review. Published to the swiftdrop.parcel-pricing topic exchange, routing key parcel.cancelled, after a customer cancellation is committed. A booking can be cancelled only while its status is BOOKED (no courier scheduled yet). Consumers: Tracking & Reporting shows CANCELLED on the public timeline; Delivery Operations must not schedule the parcel; Payment & Settlement refunds refundAmount to paymentId for ONLINE bookings. customerUserId, paymentId and the amounts are internal and must not be shown on public tracking.",
   "allOf": [
-    { "$ref": "../envelope.schema.json" },
+    {
+      "$ref": "../envelope.schema.json"
+    },
     {
       "type": "object",
       "properties": {
-        "eventType": { "const": "parcel.cancelled" },
-        "version": { "const": 1 },
-        "producer": { "const": "parcel-pricing-service" },
+        "eventType": {
+          "const": "parcel.cancelled"
+        },
+        "version": {
+          "const": 1
+        },
+        "producer": {
+          "const": "parcel-pricing-service"
+        },
         "data": {
           "type": "object",
           "required": [
@@ -20,7 +28,9 @@
             "publicDescription",
             "customerUserId",
             "paymentMethod",
-            "cancelledAt"
+            "cancelledAt",
+            "cancellationFee",
+            "refundAmount"
           ],
           "properties": {
             "parcelId": {
@@ -32,7 +42,9 @@
               "type": "string",
               "pattern": "^SWD-[0-9]{4}-[0-9]{6,}$"
             },
-            "deliveryStatus": { "const": "CANCELLED" },
+            "deliveryStatus": {
+              "const": "CANCELLED"
+            },
             "publicDescription": {
               "type": "string",
               "minLength": 1,
@@ -45,7 +57,10 @@
               "description": "Identity user id of the customer who made and cancelled the booking"
             },
             "paymentMethod": {
-              "enum": ["ONLINE", "COD"]
+              "enum": [
+                "ONLINE",
+                "COD"
+              ]
             },
             "paymentId": {
               "type": "string",
@@ -72,8 +87,45 @@
           "additionalProperties": false,
           "allOf": [
             {
-              "if": { "properties": { "paymentMethod": { "const": "COD" } }, "required": ["paymentMethod"] },
-              "then": { "properties": { "refundAmount": { "const": 0 }, "cancellationFee": { "const": 0 } } }
+              "if": {
+                "properties": {
+                  "paymentMethod": {
+                    "const": "COD"
+                  }
+                },
+                "required": [
+                  "paymentMethod"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "refundAmount": {
+                    "const": 0
+                  },
+                  "cancellationFee": {
+                    "const": 0
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "paymentMethod": {
+                    "const": "ONLINE"
+                  }
+                },
+                "required": [
+                  "paymentMethod"
+                ]
+              },
+              "then": {
+                "required": [
+                  "paymentId",
+                  "cancellationFee",
+                  "refundAmount"
+                ]
+              }
             }
           ]
         }

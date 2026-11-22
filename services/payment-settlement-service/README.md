@@ -308,3 +308,38 @@ Their --rm flag removes them on stop. RabbitMQ test UI: http://localhost:15685,
 paymenttest / payment-test-only. The test consumes its message, so the queue can be
 empty afterward. For sandbox acceptance still test real checkout, cancellation,
 callbacks, repeated partial refunds and ambiguous outcomes with PayHere credentials.
+
+
+## Member 8 cancellation refunds
+
+`parcel.cancelled` is stored in the V6 cancellation inbox before RabbitMQ acknowledges it.
+The durable `payment-settlement-service.cancellations` queue is bound even when
+`PAYMENT_CANCELLATION_CONSUMER_ENABLED=false` (the default). Enable only after the
+Parcel/Pricing cancellation contract and assignment/cancellation coordination have been verified.
+Messages published before the queue was first declared need producer-side replay; they cannot be recovered from an absent queue.
+
+ONLINE events must include paymentId, customerUserId, parcelId, cancellationFee and refundAmount.
+Payment checks ownership, booking, currency and fee-plus-target against its own payment record.
+The requested amount is the total cancellation refund target; confirmed prior refunds are subtracted.
+An outstanding refund defers reservation. COD cancellations move no money.
+The system actor UUID `00000000-0000-0000-0000-000000000008` identifies automatic reservations,
+with idempotency key `cancellation:<booking UUID>`; this identity has no login or dispatcher role.
+Provider calls use the existing refund worker, outside database transactions.
+Uncertain submissions remain pending and are never automatically resent.
+
+Dispatchers inspect `GET /api/v1/payments/cancellations?page=0&size=20` and
+`GET /api/v1/payments/cancellations/{eventId}` or the cancellation section in Payments and Refunds.
+Open a linked payment/refund to use existing evidence-based recovery controls.
+Malformed/conflicting events go to `payment-settlement-service.cancellations.dlq`.
+Inspect the original event and correct its producer before replay; never modify financial records
+or generate fresh refund requests merely because a provider response timed out.
+
+Deployment order: apply migrations; start Payment to declare queues with consumption disabled;
+verify event contracts and isolated tests; then enable consumption. Turning consumption off
+preserves queued events and already persisted work. `PAYMENT_WORKERS_ENABLED=false` pauses
+all payment workers, including cancellation processing, without deleting reservations.
+Monitor inbox PENDING age, ATTENTION_REQUIRED records and dead-letter queue depth.
+
+Acceptance evidence still required before release: PayHere sandbox checkout/callback/refund,
+actual identity/pricing/gateway integration, and assignment-versus-cancellation race tests owned
+jointly with Members 3?4 and 6. Automated provider mocks do not establish sandbox success.

@@ -53,4 +53,17 @@ public class PaymentRuntime {
     Binding codDeadLetterBinding(DirectExchange paymentDeadLetterExchange, Queue codDeadLetterQueue) {
         return BindingBuilder.bind(codDeadLetterQueue).to(paymentDeadLetterExchange).with("cod.failed");
     }
+
+    @Bean TopicExchange cancellationExchange() { return new TopicExchange("swiftdrop.parcel-pricing",true,false); }
+    @Bean Queue cancellationQueue() {
+        return QueueBuilder.durable("payment-settlement-service.cancellations")
+            .deadLetterExchange("swiftdrop.payment.dlx").deadLetterRoutingKey("cancellation.failed").build();
+    }
+    @Bean Binding cancellationBinding(TopicExchange cancellationExchange, Queue cancellationQueue) {
+        return BindingBuilder.bind(cancellationQueue).to(cancellationExchange).with("parcel.cancelled");
+    }
+    @Bean Queue cancellationDeadLetterQueue() { return QueueBuilder.durable("payment-settlement-service.cancellations.dlq").build(); }
+    @Bean Binding cancellationDeadLetterBinding(DirectExchange paymentDeadLetterExchange, Queue cancellationDeadLetterQueue) {
+        return BindingBuilder.bind(cancellationDeadLetterQueue).to(paymentDeadLetterExchange).with("cancellation.failed");
+    }
 }

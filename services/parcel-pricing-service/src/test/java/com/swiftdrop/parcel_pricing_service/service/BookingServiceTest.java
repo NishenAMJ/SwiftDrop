@@ -333,4 +333,18 @@ class BookingServiceTest {
         assertEquals(HttpStatus.FORBIDDEN, assertThrows(ApiException.class,
                 () -> bookingService.getPaymentContext(p.getId(), jwt(UUID.randomUUID()))).getStatus());
     }
+
+    @Test void cancellationRequiresMatchingPaymentAndFullRefundTarget() {
+        UUID id=UUID.randomUUID(), payment=UUID.randomUUID();
+        Parcel parcel=new Parcel(); parcel.setPaymentId(payment); parcel.setStatus(BookingStatus.CANCELLED);
+        parcel.setPaymentStatus("SUCCESS"); parcel.setCancellationStatus("REFUND_PENDING");
+        parcel.setRefundAmount(new BigDecimal("900.00"));
+        when(parcelRepository.lockById(id)).thenReturn(Optional.of(parcel));
+        bookingService.markRefunded(id.toString(),"REFUNDED",UUID.randomUUID(),new BigDecimal("1000"));
+        assertEquals("REFUND_PENDING",parcel.getCancellationStatus());
+        bookingService.markRefunded(id.toString(),"PARTIALLY_REFUNDED",payment,new BigDecimal("200"));
+        assertEquals("REFUND_PENDING",parcel.getCancellationStatus());
+        bookingService.markRefunded(id.toString(),"PARTIALLY_REFUNDED",payment,new BigDecimal("900"));
+        assertEquals("REFUNDED",parcel.getCancellationStatus());
+    }
 }

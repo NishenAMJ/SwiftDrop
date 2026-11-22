@@ -150,6 +150,7 @@ services:
       PAYMENT_PAYHERE_CANCEL_URL: ${PAYMENT_PAYHERE_CANCEL_URL:-http://localhost:4200/payments/cancel}
       # COD collection events from Delivery Operations. Off by default; to enable set the consumer to true,
       # the verification mode to parcel, and PARCEL_INTERNAL_API_KEY (the same value is sent to Parcel & Pricing).
+      PAYMENT_CANCELLATION_CONSUMER_ENABLED: ${PAYMENT_CANCELLATION_CONSUMER_ENABLED:-false}
       PAYMENT_COD_CONSUMER_ENABLED: ${PAYMENT_COD_CONSUMER_ENABLED:-false}
       PAYMENT_COD_VERIFICATION_MODE: ${PAYMENT_COD_VERIFICATION_MODE:-pending}
       PAYMENT_PARCEL_INTERNAL_KEY: ${PARCEL_INTERNAL_API_KEY:-}
