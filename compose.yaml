@@ -78,6 +78,7 @@ services:
       SWIFTDROP_IDENTITY_BASE_URL: http://identity-merchant-service:8081
       SWIFTDROP_PAYMENT_BASE_URL: ${SWIFTDROP_PAYMENT_BASE_URL:-http://payment-settlement-service:8085}
       SWIFTDROP_CANCELLATION_FEE: ${SWIFTDROP_CANCELLATION_FEE:-0.00}
+      PAYMENT_ONLINE_ENABLED: ${PAYMENT_ONLINE_ENABLED:-false}
       # Shared key for the internal COD lookup Payment & Settlement calls. Empty = that endpoint is off.
       PARCEL_INTERNAL_API_KEY: ${PARCEL_INTERNAL_API_KEY:-}
       RABBITMQ_HOST: rabbitmq
@@ -140,6 +141,7 @@ services:
       PAYMENT_PRICING_BASE_URL: ${PAYMENT_PRICING_BASE_URL:-http://parcel-pricing-service:8082}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
       PAYMENT_PRICING_STUB_ENABLED: ${PAYMENT_PRICING_STUB_ENABLED:-false}
+      PAYMENT_ONLINE_ENABLED: ${PAYMENT_ONLINE_ENABLED:-false}
       PAYMENT_PAYHERE_MERCHANT_ID: ${PAYMENT_PAYHERE_MERCHANT_ID:-}
       PAYMENT_PAYHERE_MERCHANT_SECRET: ${PAYMENT_PAYHERE_MERCHANT_SECRET:-}
       PAYMENT_PAYHERE_APP_ID: ${PAYMENT_PAYHERE_APP_ID:-}
@@ -208,6 +210,7 @@ services:
       DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://delivery-operations-service:8083}
       TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://tracking-reporting-service:8084}
       PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
+      NOTIFICATION_SERVICE_URI: ${GATEWAY_NOTIFICATION_SERVICE_URI:-http://notification-webhook-service:8086}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -28,6 +28,7 @@ public record CancellationEvent(UUID eventId, UUID bookingId, UUID paymentId, UU
         UUID payment = data.hasNonNull("paymentId") ? UUID.fromString(data.path("paymentId").asString()) : null;
         if ("ONLINE".equals(method) && payment == null) throw new IllegalArgumentException("Missing payment");
         if ("COD".equals(method) && (fee.signum() != 0 || target.signum() != 0)) throw new IllegalArgumentException("COD cannot refund money");
+        if ("COD".equals(method) && payment != null) throw new IllegalArgumentException("COD cannot reference an online payment");
         return new CancellationEvent(UUID.fromString(root.path("eventId").asString()),
                 UUID.fromString(data.path("parcelId").asString()), payment,
                 UUID.fromString(data.path("customerUserId").asString()), method, fee, target);

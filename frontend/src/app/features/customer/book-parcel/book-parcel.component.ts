@@ -6,6 +6,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, merge, switchMap, catchError, of, takeUntil, timer } from 'rxjs';
 import { ConfirmDialog } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ONLINE_PAYMENTS_ENABLED } from '../../../core/config/payment-features';
 import {
   BookingCheckout,
   BookingResponseDto,
@@ -48,6 +49,7 @@ type PaymentStep = 'starting' | 'redirecting' | 'verifying' | 'not-confirmed';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BookParcelComponent implements OnInit, OnDestroy {
+  readonly onlinePaymentsEnabled = inject(ONLINE_PAYMENTS_ENABLED);
   private readonly destroy$ = new Subject<void>();
   private readonly fb = inject(FormBuilder);
   private readonly bookingService = inject(CustomerBookingService);
@@ -112,7 +114,7 @@ export class BookParcelComponent implements OnInit, OnDestroy {
       description: ['', [Validators.maxLength(255)]],
       weightKg: [initialWeight, [Validators.required, Validators.min(0.01), Validators.max(1000)]],
       urgency: [initialUrgency, [Validators.required]],
-      paymentMethod: ['ONLINE', [Validators.required]],
+      paymentMethod: [this.onlinePaymentsEnabled ? 'ONLINE' : 'COD', [Validators.required]],
 
       pickupAddress: this.fb.group({
         contactName: [profile.fullName || user?.fullName || '', [Validators.required, Validators.maxLength(100)]],
@@ -211,10 +213,11 @@ export class BookParcelComponent implements OnInit, OnDestroy {
   }
 
   get selectedPaymentMethod(): PaymentMethod {
-    return this.bookingForm.get('paymentMethod')?.value || 'ONLINE';
+    return this.bookingForm.get('paymentMethod')?.value || 'COD';
   }
 
   setPaymentMethod(method: PaymentMethod): void {
+    if (method === 'ONLINE' && !this.onlinePaymentsEnabled) return;
     if (this.draft()) return;
     this.bookingForm.get('paymentMethod')?.setValue(method);
   }
@@ -222,6 +225,10 @@ export class BookParcelComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------- submit
 
   onSubmit(): void {
+    if (this.selectedPaymentMethod === 'ONLINE' && !this.onlinePaymentsEnabled) {
+      this.errorMessage.set('Online payments are unavailable. Choose cash on delivery to continue.');
+      return;
+    }
     if (this.submitting()) return;
     if (this.draft()) {
       this.paymentOpen.set(true);
@@ -315,6 +322,7 @@ export class BookParcelComponent implements OnInit, OnDestroy {
 
   /** Pay (again) for the same booking. The saved payment is reused, so nobody is charged twice. */
   payNow(): void {
+    if (!this.onlinePaymentsEnabled) return;
     if (this.submitting() || !this.draft()) return;
     if (this.checkout()?.checkout) {
       this.paymentStep.set('redirecting');
@@ -336,6 +344,7 @@ export class BookParcelComponent implements OnInit, OnDestroy {
 
   /** Create (or reuse, with the same idempotency key) the payment and open the payment page. */
   startPayment(): void {
+    if (!this.onlinePaymentsEnabled) return;
     const booking = this.draft();
     if (!booking || this.submitting()) return;
     this.submitting.set(true);
@@ -371,6 +380,7 @@ export class BookParcelComponent implements OnInit, OnDestroy {
 
   /** Opens PayHere in this tab. PayHere brings the customer back to /payments/return. */
   openGateway(): void {
+    if (!this.onlinePaymentsEnabled) return;
     const checkout = this.checkout()?.checkout;
     if (!checkout || checkout.provider !== 'PAYHERE' || checkout.method !== 'POST') return;
     let url: URL;
@@ -512,6 +522,15 @@ export class BookParcelComponent implements OnInit, OnDestroy {
    * continue the saved checkout and verify the payment automatically.
    */
   private restoreCheckout(): void {
+    if (!this.onlinePaymentsEnabled) {
+      // Preserve the saved reference for support; never turn an old online draft into COD.
+      try {
+        if (localStorage.getItem(this.storageKey)) {
+          this.errorMessage.set('A previous online checkout is saved. Online payments are currently unavailable. Check your bookings or contact support before creating another booking.');
+        }
+      } catch { /* Storage can be unavailable; COD booking does not require it. */ }
+      return;
+    }
     let pending: { id?: string; key?: string; paymentId?: string } | null = null;
     try {
       pending = JSON.parse(localStorage.getItem(this.storageKey) || 'null');

@@ -53,6 +53,7 @@ class BookingServiceEdgeCaseTest {
     @BeforeEach
     void setUp() {
         service = new BookingService(parcels, receipts, references, pricing, zones, identity, events);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "onlinePaymentsEnabled", true);
         when(receipts.findByParcelId(any())).thenReturn(Optional.empty());
         when(receipts.save(any())).thenAnswer(i -> i.getArgument(0));
         when(references.generateReceiptNumber(any())).thenReturn("RCP-2026-000001");

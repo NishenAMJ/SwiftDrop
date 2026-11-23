@@ -11,6 +11,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  production-config:
+    name: production configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production Compose without starting containers
+        run: python3 scripts/production/validate.py
+      - name: Check operational scripts
+        run: |
+          for script in scripts/production/*.sh infrastructure/production/*.sh; do
+            bash -n "$script"
+          done
+          python3 -m unittest discover -s scripts/production -p 'test_*.py'
+
   backend:
     name: backend
     runs-on: ubuntu-latest

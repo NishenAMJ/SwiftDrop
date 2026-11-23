@@ -5,6 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { BookParcelComponent } from './book-parcel.component';
+import { ONLINE_PAYMENTS_ENABLED } from '../../../core/config/payment-features';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CustomerProfileService } from '../services/customer-profile.service';
 
@@ -18,6 +19,7 @@ describe('Booking and payment flow', () => {
     TestBed.configureTestingModule({
       imports: [BookParcelComponent],
       providers: [
+        { provide: ONLINE_PAYMENTS_ENABLED, useValue: true },
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: Router, useValue: { navigate } },
@@ -60,6 +62,37 @@ describe('Booking and payment flow', () => {
     status: 'CHECKOUT_DRAFT',
     estimatedFee: 650,
   };
+
+  it('defaults to COD and hides online checkout when online payments are disabled', () => {
+    TestBed.overrideProvider(ONLINE_PAYMENTS_ENABLED, { useValue: false });
+    const fixture = TestBed.createComponent(BookParcelComponent);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne((r) => r.url === '/api/zones').flush(zones);
+    const component = fixture.componentInstance;
+    expect(component.selectedPaymentMethod).toBe('COD');
+    expect(fixture.nativeElement.textContent).not.toContain('Online Card Payment');
+    component.setPaymentMethod('ONLINE');
+    expect(component.selectedPaymentMethod).toBe('COD');
+    component.bookingForm.patchValue({ paymentMethod: 'ONLINE' });
+    component.onSubmit();
+    expect(component.errorMessage()).toContain('unavailable');
+    http.expectNone('/api/v1/bookings');
+    http.expectNone('/api/v1/payments');
+  });
+
+  it('preserves a saved online checkout without reopening it while disabled', () => {
+    TestBed.overrideProvider(ONLINE_PAYMENTS_ENABLED, { useValue: false });
+    const saved = JSON.stringify({ id: 'draft-123', key: 'saved-key', paymentId: 'payment-123' });
+    localStorage.setItem('swiftdrop:booking-checkout:customer-test', saved);
+    const { component, http } = setup('COD');
+    component.startPayment();
+    component.payNow();
+    expect(component.errorMessage()).toContain('previous online checkout');
+    expect(localStorage.getItem('swiftdrop:booking-checkout:customer-test')).toBe(saved);
+    http.expectNone('/api/v1/bookings/draft-123');
+    http.expectNone('/api/v1/payments');
+  });
 
   it('gets the fee from the pricing module for the chosen zone', () => {
     vi.useFakeTimers();

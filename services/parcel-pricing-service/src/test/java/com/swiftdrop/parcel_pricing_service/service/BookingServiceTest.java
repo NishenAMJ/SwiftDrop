@@ -71,6 +71,7 @@ class BookingServiceTest {
     void setUp() {
         bookingService = new BookingService(parcelRepository, receiptRepository, referenceGenerator,
                 pricingService, zoneRepository, identityClient, events);
+        org.springframework.test.util.ReflectionTestUtils.setField(bookingService, "onlinePaymentsEnabled", true);
         when(referenceGenerator.generateTrackingNumber()).thenReturn("SWD-2026-000001");
         when(referenceGenerator.generateReceiptNumber("SWD-2026-000001")).thenReturn("RCP-2026-000001");
         when(parcelRepository.save(any(Parcel.class))).thenAnswer(i -> i.getArgument(0));

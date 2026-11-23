@@ -34,6 +34,8 @@ import java.util.UUID;
 @Service
 @Transactional
 public class BookingService {
+    @org.springframework.beans.factory.annotation.Value("${swiftdrop.bookings.online-payments-enabled:false}")
+    private boolean onlinePaymentsEnabled;
 
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
     private static final String CURRENCY = "LKR";
@@ -69,6 +71,7 @@ public class BookingService {
         UUID customerId = customerIdOf(jwt);
         DeliveryType urgency = parseUrgency(request.urgency());
         PaymentMethod paymentMethod = parsePaymentMethod(request.paymentMethod());
+        requirePaymentMethodAvailable(paymentMethod.name());
 
         String deliveryZone = normalizeZone(request.deliveryAddress().zoneCode());
         if (deliveryZone == null) {
@@ -137,6 +140,7 @@ public class BookingService {
      * Shared by customer bookings and merchant orders, so both behave exactly the same.
      */
     public NewBooking saveNewBooking(Parcel parcel) {
+        requirePaymentMethodAvailable(parcel.getPaymentMethod());
         if (PaymentMethod.COD.name().equals(parcel.getPaymentMethod())) {
             parcel.setStatus(BookingStatus.BOOKED);
             parcel.setPaymentStatus("PENDING");
@@ -148,6 +152,13 @@ public class BookingService {
         parcel.setStatus(BookingStatus.CHECKOUT_DRAFT);
         parcel.setPaymentStatus("UNPAID");
         return new NewBooking(parcelRepository.save(parcel), null);
+    }
+
+    private void requirePaymentMethodAvailable(String method) {
+        if (PaymentMethod.ONLINE.name().equals(method) && !onlinePaymentsEnabled) {
+            throw ApiException.conflict("ONLINE_PAYMENTS_DISABLED",
+                    "Online payments are unavailable. Choose cash on delivery to continue.");
+        }
     }
 
     // ---------------------------------------------------------------- payment confirmation

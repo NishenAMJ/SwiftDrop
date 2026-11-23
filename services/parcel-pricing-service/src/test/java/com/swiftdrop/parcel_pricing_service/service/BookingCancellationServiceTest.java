@@ -68,6 +68,7 @@ class BookingCancellationServiceTest {
 
     @Test
     void paidOnlineBookingIsRefundedInFullByDefault() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "onlinePaymentsEnabled", true);
         Parcel p = parcel("BOOKED", "ONLINE");
         var eligibility = service.eligibility(p.getId(), jwt(p.getCustomerId()));
         assertEquals(0, new BigDecimal("550.00").compareTo(eligibility.refundableAmount()));
@@ -80,6 +81,7 @@ class BookingCancellationServiceTest {
     @Test
     void configuredFeeIsDeductedFromTheRefund() {
         var withFee = new BookingCancellationService(repo, events, new BigDecimal("100.00"));
+        org.springframework.test.util.ReflectionTestUtils.setField(withFee, "onlinePaymentsEnabled", true);
         Parcel p = parcel("BOOKED", "ONLINE");
         withFee.initiate(p.getId(), jwt(p.getCustomerId()));
         assertEquals(0, new BigDecimal("450.00").compareTo(p.getRefundAmount()));
@@ -112,5 +114,14 @@ class BookingCancellationServiceTest {
         Parcel p = new Parcel();
         p.setStatus("CANCELLED");
         assertThrows(IllegalStateException.class, () -> p.setStatus("BOOKED"));
+    }
+
+    @Test
+    void onlineCancellationDoesNotPromiseARefundWhileDisabled() {
+        Parcel p = parcel("BOOKED", "ONLINE");
+        assertFalse(service.eligibility(p.getId(), jwt(p.getCustomerId())).eligible());
+        assertThrows(ApiException.class, () -> service.initiate(p.getId(), jwt(p.getCustomerId())));
+        assertEquals("BOOKED", p.getStatus());
+        verifyNoInteractions(events);
     }
 }

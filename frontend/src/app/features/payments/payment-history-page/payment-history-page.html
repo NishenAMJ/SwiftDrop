@@ -13,6 +13,9 @@
       @if (loading()) { <span class="sd-spinner" aria-hidden="true"></span> Refreshing } @else { Refresh payments }
     </button>
   </header>
+  @if (!onlinePaymentsEnabled) {
+    <p class="sd-help">Online payments and new online refunds are currently unavailable. Existing records remain available for review.</p>
+  }
 
 @if (dispatcher) {
   <section class="sd-card cancellation-panel" aria-labelledby="cancellation-heading" [attr.aria-busy]="cancellationsLoading()">
@@ -127,12 +130,14 @@
                   <button class="sd-button sd-button--secondary" type="button" (click)="refreshRefund()" [disabled]="busy()">Refresh refund status</button>
                   @if (dispatcher && refund.status === 'PENDING') {
                     <div class="recovery-grid">
+                      @if (onlinePaymentsEnabled) {
                       <form [formGroup]="retryForm" (ngSubmit)="retryRefund()" class="recovery-card">
                         <h4>Retry uncertain refund</h4>
                         <p class="sd-help">Only continue after checking PayHere and confirming that no refund is recorded there. The service also checks provider status.</p>
                         <label class="check-row"><input type="checkbox" formControlName="confirmNoRefundAtProvider" /> I checked PayHere and no refund is listed.</label>
                         <button class="sd-button sd-button--secondary" type="submit" [disabled]="busy() || retryForm.invalid">Retry after provider check</button>
                       </form>
+                      }
                       <form [formGroup]="resolutionForm" (ngSubmit)="resolveRefund()" class="recovery-card">
                         <h4>Record reviewed provider outcome</h4>
                         <p class="sd-help">Use only after reviewing PayHere dashboard or support evidence. This action records a decision; it does not contact PayHere.</p>

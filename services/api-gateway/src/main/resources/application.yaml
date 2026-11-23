@@ -35,7 +35,11 @@ spring:
             - id: payment-settlement-service
               uri: ${PAYMENT_SERVICE_URI:http://localhost:8085}
               predicates:
-                - Path=/api/v1/payments,/api/v1/payments/**
+                - Path=/api/v1/payments,/api/v1/payments/**,/api/v1/cod-handovers,/api/v1/cod-handovers/**,/api/v1/merchant-ledger,/api/v1/merchant-ledger/**,/api/v1/merchant-settlements,/api/v1/merchant-settlements/**
+            - id: notification-webhook-service
+              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8086}
+              predicates:
+                - Path=/api/v1/webhooks,/api/v1/webhooks/**
 
 management:
   endpoints:

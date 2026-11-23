@@ -2,6 +2,10 @@
 node_modules/
 dist/
 .angular/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
 
 # Backend
 target/
@@ -11,8 +15,24 @@ target/
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.pem
 *.key
+/secrets/
+/backups/
+__pycache__/
+
+# Local database exports (keep migrations and initialization SQL tracked)
+/*_backup.sql
+/*.dump
+
+# Temporary editor files and Python bytecode
+*.tmp
+*.bak
+*.swp
+*.swo
+*.pyc
+*.pyo
 
 # IDE
 .idea/

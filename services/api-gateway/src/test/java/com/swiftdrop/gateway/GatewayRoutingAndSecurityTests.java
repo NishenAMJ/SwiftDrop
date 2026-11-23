@@ -45,10 +45,12 @@ class GatewayRoutingAndSecurityTests {
     private static final AtomicReference<String> path = new AtomicReference<>();
     private static final AtomicReference<String> authorization = new AtomicReference<>();
     private static final AtomicReference<String> correlation = new AtomicReference<>();
+    private static final AtomicReference<String> idempotency = new AtomicReference<>();
     private static final HttpServer identity = upstream("identity");
     private static final HttpServer parcel = upstream("parcel");
     private static final HttpServer delivery = upstream("delivery");
     private static final HttpServer payment = upstream("payment");
+    private static final HttpServer notification = upstream("notification");
     private static final int closedPort = closedPort();
 
     @Autowired
@@ -63,6 +65,7 @@ class GatewayRoutingAndSecurityTests {
         registry.add("PARCEL_SERVICE_URI", () -> uri(parcel));
         registry.add("DELIVERY_SERVICE_URI", () -> uri(delivery));
         registry.add("PAYMENT_SERVICE_URI", () -> uri(payment));
+        registry.add("NOTIFICATION_SERVICE_URI", () -> uri(notification));
         // Tracking is "down": nothing listens on this port.
         registry.add("TRACKING_SERVICE_URI", () -> "http://127.0.0.1:" + closedPort);
         registry.add("IDENTITY_JWKS_URI", () -> "http://127.0.0.1/unused-jwks");
@@ -74,6 +77,7 @@ class GatewayRoutingAndSecurityTests {
         path.set(null);
         authorization.set(null);
         correlation.set(null);
+        idempotency.set(null);
         Instant now = Instant.now();
         Jwt valid = Jwt.withTokenValue("valid-token").header("alg", "RS256").subject("user-1")
                 .issuedAt(now).expiresAt(now.plusSeconds(600))
@@ -89,7 +93,7 @@ class GatewayRoutingAndSecurityTests {
 
     @AfterAll
     static void stop() {
-        for (HttpServer server : List.of(identity, parcel, delivery, payment)) server.stop(0);
+        for (HttpServer server : List.of(identity, parcel, delivery, payment, notification)) server.stop(0);
     }
 
     @ParameterizedTest
@@ -105,7 +109,15 @@ class GatewayRoutingAndSecurityTests {
             "/api/v1/warehouses,delivery",
             "/api/v1/assignments/abc/proof,delivery",
             "/api/v1/courier-profiles/by-identity/x,delivery",
-            "/api/v1/payments/history,payment"})
+            "/api/v1/payments/history,payment",
+            "/api/v1/cod-handovers,payment",
+            "/api/v1/cod-handovers/abc,payment",
+            "/api/v1/merchant-ledger,payment",
+            "/api/v1/merchant-ledger/entries,payment",
+            "/api/v1/merchant-settlements,payment",
+            "/api/v1/merchant-settlements/abc,payment",
+            "/api/v1/webhooks,notification",
+            "/api/v1/webhooks/subscriptions,notification"})
     void authenticatedRequestsReachTheOwningService(String requestPath, String expectedService) {
         client.get().uri(requestPath).header(HttpHeaders.AUTHORIZATION, "Bearer valid-token").exchange()
                 .expectStatus().isOk();
@@ -130,9 +142,12 @@ class GatewayRoutingAndSecurityTests {
         client.post().uri("/.well-known/jwks.json").exchange().expectStatus().isUnauthorized();
     }
 
-    @Test
-    void protectedRoutesRequireAToken() {
-        client.get().uri("/api/v1/bookings/my").exchange()
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/v1/bookings/my", "/api/v1/cod-handovers",
+            "/api/v1/merchant-ledger", "/api/v1/merchant-settlements",
+            "/api/v1/webhooks/subscriptions"})
+    void protectedRoutesRequireAToken(String requestPath) {
+        client.get().uri(requestPath).exchange()
                 .expectStatus().isUnauthorized()
                 .expectHeader().valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer.*");
         assertThat(service.get()).as("request must not reach the upstream").isNull();
@@ -186,6 +201,21 @@ class GatewayRoutingAndSecurityTests {
         assertThat(correlation.get()).isEqualTo("corr-123");
     }
 
+    @ParameterizedTest
+    @CsvSource({"/api/v1/cod-handovers,payment",
+            "/api/v1/merchant-settlements/calculate,payment",
+            "/api/v1/webhooks/subscriptions,notification"})
+    void newWriteRoutesPreserveAuthenticationAndIdempotency(String requestPath, String expectedService) {
+        client.post().uri(requestPath).header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                .header("Idempotency-Key", "operation-123")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+                .exchange().expectStatus().isOk();
+        assertThat(service.get()).isEqualTo(expectedService);
+        assertThat(path.get()).isEqualTo(requestPath);
+        assertThat(authorization.get()).isEqualTo("Bearer valid-token");
+        assertThat(idempotency.get()).isEqualTo("operation-123");
+    }
+
     @Test
     void healthIsPublic() {
         client.get().uri("/actuator/health").exchange().expectStatus().isOk();
@@ -205,6 +235,7 @@ class GatewayRoutingAndSecurityTests {
                 path.set(exchange.getRequestURI().getPath());
                 authorization.set(exchange.getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION));
                 correlation.set(exchange.getRequestHeaders().getFirst("X-Correlation-Id"));
+                idempotency.set(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
                 exchange.getRequestBody().readAllBytes();
                 byte[] body = ("{\"service\":\"" + name + "\"}").getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);

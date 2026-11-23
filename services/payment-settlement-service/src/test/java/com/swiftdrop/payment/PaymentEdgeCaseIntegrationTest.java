@@ -45,7 +45,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * Failure, replay and boundary paths of online payments against a disposable PostgreSQL database.
  * The PayHere provider is always a mock: no test here can move real money.
  */
-@SpringBootTest(properties = {"payment.workers.enabled=false", "payment.cod.consumer.enabled=false",
+@SpringBootTest(properties = {"payment.online.enabled=true", "payment.workers.enabled=false", "payment.cod.consumer.enabled=false",
         "payment.cod.verification-mode=pending", "payment.cancellation.consumer.enabled=false", "spring.config.import=",
         "spring.flyway.create-schemas=true", "spring.rabbitmq.password=payment-test-only",
         "spring.rabbitmq.username=paymenttest", "spring.rabbitmq.host=localhost", "spring.rabbitmq.port=56785",

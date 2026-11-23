@@ -29,6 +29,8 @@ ownership decisions remain in each service.
 | `/api/v1/sorting-records/**`, `/api/v1/transfers/**`, `/api/v1/warehouses/**`, `/api/v1/warehouse-parcels/**`, `/api/v1/courier-categories/**`, `/api/v1/courier-profiles/**`, `/api/v1/assignments/**`, `/api/v1/delivery-issues/**` | Delivery Operations, `:8083` |
 | `/api/v1/public/tracking/**`, `/api/v1/tracking/**`, `/api/v1/reports/**` | Tracking & Reporting, `:8084` |
 | `/api/v1/payments` and `/api/v1/payments/**` | Payment & Settlement, `:8085` |
+| `/api/v1/cod-handovers`, `/api/v1/merchant-ledger`, `/api/v1/merchant-settlements` and their subpaths | Payment & Settlement, `:8085` |
+| `/api/v1/webhooks` and its subpaths | Notification & Webhook, `:8086` |
 
 The API contracts are under `contracts/openapi`. Add routes when an owning service
 publishes its API contract; do not invent or shadow service paths.
@@ -38,6 +40,11 @@ publishes its API contract; do not invent or shadow service paths.
 Defaults target services running on localhost. In Docker Compose, set service URIs to
 container DNS names where services share the Compose network, and configure
 `IDENTITY_JWKS_URI` to an Identity URL reachable from the gateway container.
+
+`NOTIFICATION_SERVICE_URI` defaults to `http://localhost:8086` for local runs.
+Compose uses `http://notification-webhook-service:8086`, overridable with
+`GATEWAY_NOTIFICATION_SERVICE_URI` in the root `.env`. COD, ledger, settlement and
+webhook routes require a valid access token; service-level role checks still apply.
 
 ```powershell
 cd D:\Projects\EAD\SwiftDrop\services\api-gateway

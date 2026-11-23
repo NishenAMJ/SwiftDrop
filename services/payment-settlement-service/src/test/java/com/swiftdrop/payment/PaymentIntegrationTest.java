@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Runs against a disposable PostgreSQL database, never the development database. */
-@SpringBootTest(properties={"payment.workers.enabled=false","payment.cod.consumer.enabled=false","payment.cod.verification-mode=pending","payment.cancellation.consumer.enabled=false","spring.config.import=","spring.flyway.create-schemas=true",
+@SpringBootTest(properties={"payment.online.enabled=true","payment.workers.enabled=false","payment.cod.consumer.enabled=false","payment.cod.verification-mode=pending","payment.cancellation.consumer.enabled=false","spring.config.import=","spring.flyway.create-schemas=true",
     "spring.rabbitmq.password=payment-test-only","spring.rabbitmq.username=paymenttest",
     "spring.rabbitmq.host=localhost","spring.rabbitmq.port=56785","payment.payhere.merchant-id=test","debug=false"})
 @EnabledIfEnvironmentVariable(named="PAYMENT_TEST_DB_URL",matches=".+")

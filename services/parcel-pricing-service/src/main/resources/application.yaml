@@ -73,6 +73,7 @@ swiftdrop:
   payment:
     base-url: ${SWIFTDROP_PAYMENT_BASE_URL:http://localhost:8085}
   bookings:
+    online-payments-enabled: ${PAYMENT_ONLINE_ENABLED:false}
     # Deducted from the refund when a paid online booking is cancelled before courier scheduling.
     cancellation-fee: ${SWIFTDROP_CANCELLATION_FEE:0.00}
   events:

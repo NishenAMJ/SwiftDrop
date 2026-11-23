@@ -312,6 +312,49 @@ callbacks, repeated partial refunds and ambiguous outcomes with PayHere credenti
 
 ## Member 8 cancellation refunds
 
+### COD-only release
+
+`PAYMENT_ONLINE_ENABLED` defaults to `false`. Payment creation, checkout retrieval,
+new online refunds, refund retries and cancellation refund reservations reject requests
+with `ONLINE_PAYMENTS_DISABLED`. The refund worker leaves existing reservations intact
+without submitting them while disabled. History, verified callbacks and existing recovery
+records remain available; disabling the feature does not erase or settle past payments.
+
+Parcel & Pricing uses the same environment flag to reject new ONLINE bookings, including
+the shared merchant booking writer, and to prevent new online cancellations from promising
+an unavailable refund. COD bookings and eligible COD cancellations retain their existing rules.
+The Angular `ONLINE_PAYMENTS_ENABLED` injection token defaults to false: checkout is hidden,
+new bookings default to COD, and saved online checkout references are preserved without
+reopening checkout. Dispatcher refund creation/retry controls are hidden while disabled.
+
+Production Compose explicitly keeps online payments disabled in both services. Future
+enablement requires coordinated backend configuration, frontend configuration and provider
+verification. Existing provider integration tests explicitly opt in with a mocked provider.
+
+COD cancellation inbox processing completes without contacting the online provider.
+Already-queued online cancellation refunds stay pending when the feature is disabled;
+they must not be reported as refunded. COD events referencing an online payment are rejected.
+The cancellation consumer remains opt-in until PostgreSQL/RabbitMQ integration is verified.
+
+The COD-only changes and test updates have **not been run or verified**, at the user's request.
+When ready, run the following from each indicated directory:
+
+```powershell
+# services/payment-settlement-service (unit/security tests; DB suites require their test environment)
+mvn -B test
+
+# services/parcel-pricing-service (focused tests without starting Docker)
+mvn -B test '-Dtest=BookingServiceTest,BookingServiceEdgeCaseTest,BookingCancellationServiceTest,OnlineBookingDisabledTest'
+
+# frontend
+npm test -- --no-watch
+npm run build
+```
+
+Before enabling the cancellation consumer, separately verify durable inbox persistence,
+duplicate delivery, broker acknowledgement/retry and the complete cancellation flow against
+disposable PostgreSQL/RabbitMQ instances. Unit mocks do not establish those guarantees.
+
 ### Customer COD payment status
 
 For direct customer COD bookings, the courier collects the frozen delivery fee in full.

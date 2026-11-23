@@ -5,6 +5,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { PaymentService } from '../payment.service';
 import { Payment } from '../payment.models';
 import { PaymentHistoryPage } from './payment-history-page';
+import { ONLINE_PAYMENTS_ENABLED } from '../../../core/config/payment-features';
 
 describe('Cancellation refund visibility', () => {
   const page = { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 };
@@ -15,7 +16,7 @@ describe('Cancellation refund visibility', () => {
     };
     TestBed.configureTestingModule({
       imports: [PaymentHistoryPage],
-      providers: [provideRouter([]), { provide: AuthService, useValue: { roles: () => roles } },
+      providers: [provideRouter([]), { provide: ONLINE_PAYMENTS_ENABLED, useValue: true }, { provide: AuthService, useValue: { roles: () => roles } },
         { provide: PaymentService, useValue: api }],
     });
     const fixture = TestBed.createComponent(PaymentHistoryPage);

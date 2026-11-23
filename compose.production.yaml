@@ -1,0 +1,212 @@
+# Always combine with compose.yaml; see scripts/production/compose.sh.
+# Requires Docker Compose 2.24.4+ for !reset and !override.
+x-runtime: &runtime
+  restart: unless-stopped
+  stop_grace_period: 45s
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+x-app-health: &app-health
+  test: ["CMD", "bash", "/opt/swiftdrop/http-healthcheck.sh"]
+  interval: 30s
+  timeout: 8s
+  start_period: 120s
+  retries: 3
+
+services:
+  postgres:
+    <<: *runtime
+    ports: !reset []
+    networks: !override [backend]
+
+  rabbitmq:
+    <<: *runtime
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+    ports: !reset []
+    networks: !override [backend]
+
+  identity-merchant-service:
+    <<: *runtime
+    ports: !reset []
+    networks: !override [backend, outbound]
+    environment:
+      HEALTH_PORT: "8081"
+      IDENTITY_COOKIE_SECURE: "true"
+      IDENTITY_JWT_PRIVATE_KEY_PATH: /run/secrets/identity-jwt.pem
+      FRONTEND_BASE_URL: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      IDENTITY_RATE_LIMIT_ENABLED: "true"
+    secrets:
+      - source: identity_jwt
+        target: identity-jwt.pem
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+
+  parcel-pricing-service:
+    <<: *runtime
+    ports: !reset []
+    networks: !override [backend]
+    environment:
+      HEALTH_PORT: "8082"
+      PAYMENT_ONLINE_ENABLED: "false"
+      PARCEL_INTERNAL_API_KEY: ${PARCEL_INTERNAL_API_KEY:?Set PARCEL_INTERNAL_API_KEY}
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+
+  delivery-operations-service:
+    <<: *runtime
+    ports: !reset []
+    networks: !override [backend]
+    environment:
+      HEALTH_PORT: "8083"
+      DELIVERY_PARCEL_STUB_ENABLED: "false"
+      RABBIT_HEALTH_ENABLED: "true"
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+
+  tracking-reporting-service:
+    <<: *runtime
+    ports: !reset []
+    networks: !override [backend]
+    environment:
+      HEALTH_PORT: "8084"
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+
+  payment-settlement-service:
+    <<: *runtime
+    ports: !reset []
+    extra_hosts: !reset []
+    networks: !override [backend]
+    environment:
+      HEALTH_PORT: "8085"
+      SPRING_PROFILES_ACTIVE: default
+      PAYMENT_PRICING_STUB_ENABLED: "false"
+      PAYMENT_ONLINE_ENABLED: "false"
+      PAYMENT_PARCEL_INTERNAL_KEY: ${PARCEL_INTERNAL_API_KEY:?Set PARCEL_INTERNAL_API_KEY}
+      PAYMENT_PAYHERE_RETURN_URL: https://${APP_DOMAIN}/payments/return
+      PAYMENT_PAYHERE_CANCEL_URL: https://${APP_DOMAIN}/payments/cancel
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+
+  notification-webhook-service:
+    <<: *runtime
+    ports: !reset []
+    networks: !override [backend, outbound]
+    environment:
+      HEALTH_PORT: "8086"
+      SPRING_PROFILES_ACTIVE: default
+      WEBHOOK_ENCRYPTION_KEY: ${WEBHOOK_ENCRYPTION_KEY:?Set WEBHOOK_ENCRYPTION_KEY}
+      WEBHOOK_ALLOW_HTTP: "false"
+      WEBHOOK_ALLOW_PRIVATE_ADDRESSES: "false"
+      TRACKING_BASE_URL: https://${APP_DOMAIN}/track
+      MAIL_HOST: ${SMTP_HOST:?Set SMTP_HOST}
+      MAIL_PORT: ${SMTP_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SMTP_USERNAME:?Set SMTP_USERNAME}
+      SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_CONNECTIONTIMEOUT: "5000"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_TIMEOUT: "5000"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_WRITETIMEOUT: "5000"
+      NOTIFICATION_FROM_EMAIL: ${NOTIFICATION_FROM_EMAIL:?Set NOTIFICATION_FROM_EMAIL}
+      # The SMS adapter is a mock. No parcel status should invoke it in this release.
+      SPRING_APPLICATION_JSON: '{"swiftdrop":{"notification":{"parcel":{"sms-statuses":[]}}}}'
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+
+  api-gateway:
+    <<: *runtime
+    ports: !reset []
+    extra_hosts: !reset []
+    networks: !override [backend, edge]
+    environment:
+      HEALTH_PORT: "8080"
+      # Preserve only the forwarding headers sanitized by Caddy. Do not append
+      # the gateway's HTTP scheme or address to them.
+      SERVER_FORWARD_HEADERS_STRATEGY: none
+      SPRING_APPLICATION_JSON: '{"spring.cloud.gateway.server.webflux.forwarded.enabled":false,"spring.cloud.gateway.server.webflux.x-forwarded.enabled":false}'
+    volumes:
+      - ./infrastructure/production/http-healthcheck.sh:/opt/swiftdrop/http-healthcheck.sh:ro
+    healthcheck: *app-health
+    depends_on:
+      payment-settlement-service:
+        condition: service_healthy
+      delivery-operations-service:
+        condition: service_healthy
+      notification-webhook-service:
+        condition: service_healthy
+
+  # Inactive in production. Use compose.yaml alone for local Mailpit testing.
+  mailpit:
+    profiles: [development-mail]
+    ports: !reset []
+    networks: !override [backend]
+
+  web:
+    <<: *runtime
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [edge]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./infrastructure/production/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8088/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Explicitly invoked for backup/restore only; no network or Docker socket.
+  archive:
+    image: alpine:3.22
+    profiles: [operations]
+    network_mode: none
+    volumes:
+      - delivery_proofs:/proofs
+      - rabbitmq_data:/rabbitmq
+      - ${BACKUP_DIR:?Set an absolute BACKUP_DIR}:/backup
+    entrypoint: ["sh"]
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+  outbound: {}
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  identity_jwt:
+    file: ${IDENTITY_JWT_PRIVATE_KEY_FILE:?Set IDENTITY_JWT_PRIVATE_KEY_FILE}
