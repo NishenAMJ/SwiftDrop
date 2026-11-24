@@ -1,9 +1,17 @@
 package com.swiftdrop.parcel_pricing_service.repository;
 
 import com.swiftdrop.parcel_pricing_service.entity.Parcel;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,14 +19,33 @@ import java.util.UUID;
 @Repository
 public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @org.springframework.data.jpa.repository.Query("select p from Parcel p where p.id = :id")
-    Optional<Parcel> lockById(@org.springframework.data.repository.query.Param("id") UUID id);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Parcel p where p.id = :id")
+    Optional<Parcel> lockById(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Parcel p where p.trackingNumber = :trackingNumber")
+    Optional<Parcel> lockByTrackingNumber(@Param("trackingNumber") String trackingNumber);
 
     Optional<Parcel> findByTrackingNumber(String trackingNumber);
 
     List<Parcel> findByCustomerIdOrderByCreatedAtDesc(UUID customerId);
 
     Optional<Parcel> findByIdAndCustomerId(UUID id, UUID customerId);
-}
 
+    // ---- merchant orders (parcels with merchant_id set). Always queried through the owning merchant.
+
+    Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);
+
+    Optional<Parcel> findByIdAndMerchantId(UUID id, UUID merchantId);
+
+    boolean existsByMerchantIdAndMerchantReference(UUID merchantId, String merchantReference);
+
+    /** Unpaid checkouts whose price validity has passed. They stay in the table for payment audit. */
+    @Modifying
+    @Query("""
+            update Parcel p set p.status = 'EXPIRED', p.updatedAt = :now
+            where p.status = 'CHECKOUT_DRAFT' and p.pricingExpiresAt < :now
+            """)
+    int expireDrafts(@Param("now") OffsetDateTime now);
+}

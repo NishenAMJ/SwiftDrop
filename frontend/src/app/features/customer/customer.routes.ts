@@ -29,6 +29,12 @@ export const CUSTOMER_ROUTES: Routes = [
       ),
   },
   {
+    path: 'payments',
+    title: 'Payment history | SwiftDrop',
+    loadComponent: () =>
+      import('../payments/payment-history-page/payment-history-page').then((m) => m.PaymentHistoryPage),
+  },
+  {
     path: 'receipt/:id',
     title: 'Booking Receipt | SwiftDrop',
     loadComponent: () =>

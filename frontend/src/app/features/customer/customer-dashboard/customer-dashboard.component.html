@@ -91,7 +91,7 @@
           </svg>
           Quick Parcel Tracking
         </h2>
-        <span class="tool-card__hint">Enter the tracking reference from your receipt</span>
+        <span class="tool-card__hint">Find one of your bookings by its tracking reference</span>
       </div>
 
       <form (ngSubmit)="onTrackSubmit()" class="track-form">
@@ -124,6 +124,7 @@
       @if (trackError()) {
         <div class="sd-alert sd-alert--error track-alert" role="status">
           {{ trackError() }}
+          <a routerLink="/tracking" class="sd-link">Open public tracking</a>
         </div>
       }
 
@@ -156,7 +157,8 @@
           </div>
 
           <div class="track-result__footer">
-            <span class="sd-badge sd-badge--info">{{ parcel.status }}</span>
+            <span class="sd-badge" [ngClass]="statusBadgeClass(parcel.status)">{{ statusLabel(parcel.status) }}</span>
+            <a routerLink="/tracking" class="sd-link">Full timeline &rarr;</a>
             <a [routerLink]="['/customer/receipt', parcel.id]" class="sd-link">
               View Receipt &rarr;
             </a>
@@ -180,7 +182,7 @@
           </svg>
           Quick Delivery Rate Estimator
         </h2>
-        <span class="tool-card__hint">Base Rs. 350 + Rs. 150/kg</span>
+        <span class="tool-card__hint">Uses current SwiftDrop pricing; your zone is added when you book</span>
       </div>
 
       <div class="estimator-form">
@@ -216,7 +218,7 @@
                 [class.toggle-btn--active]="estimateUrgency() === 'URGENT'"
                 (click)="setEstimateUrgency('URGENT')"
               >
-                Urgent (+Rs. 300)
+                Urgent
               </button>
             </div>
           </div>
@@ -225,7 +227,17 @@
         <div class="estimator-display">
           <div class="estimator-price">
             <span class="price-caption">Estimated Fee:</span>
-            <span class="price-val sd-tabular">{{ estimateWeight() && estimateWeight()! > 0 ? ('Rs. ' + (feeBreakdown().totalFee | number:'1.2-2')) : 'Enter parcel weight' }}</span>
+            <span class="price-val sd-tabular" aria-live="polite">
+              @if (!estimateWeight() || estimateWeight()! <= 0) {
+                Enter parcel weight
+              } @else if (estimateLoading()) {
+                Calculating...
+              } @else if (estimateError()) {
+                {{ estimateError() }}
+              } @else {
+                From LKR {{ feeBreakdown().totalFee | number:'1.2-2' }}
+              }
+            </span>
           </div>
           <button
             type="button"
@@ -331,23 +343,7 @@
                     }
                   </td>
                   <td>
-                    @switch (booking.status?.toUpperCase()) {
-                      @case ('DELIVERED') {
-                        <span class="sd-badge sd-badge--success">Delivered</span>
-                      }
-                      @case ('IN_TRANSIT') {
-                        <span class="sd-badge sd-badge--info">In Transit</span>
-                      }
-                      @case ('OUT_FOR_DELIVERY') {
-                        <span class="sd-badge sd-badge--accent">Out for Delivery</span>
-                      }
-                      @case ('FAILED') {
-                        <span class="sd-badge sd-badge--danger">Failed</span>
-                      }
-                      @default {
-                        <span class="sd-badge sd-badge--info">{{ booking.status }}</span>
-                      }
-                    }
+                    <span class="sd-badge" [ngClass]="statusBadgeClass(booking.status)">{{ statusLabel(booking.status) }}</span>
                   </td>
                   <td class="text-right sd-tabular amount-cell">
                     Rs. {{ booking.estimatedFee | number:'1.2-2' }}

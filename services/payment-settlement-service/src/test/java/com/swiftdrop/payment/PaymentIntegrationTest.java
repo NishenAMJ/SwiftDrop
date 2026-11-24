@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Runs against a disposable PostgreSQL database, never the development database. */
-@SpringBootTest(properties={"payment.workers.enabled=false","spring.config.import=","spring.flyway.create-schemas=true",
+@SpringBootTest(properties={"payment.online.enabled=true","payment.workers.enabled=false","payment.cod.consumer.enabled=false","payment.cod.verification-mode=pending","payment.cancellation.consumer.enabled=false","spring.config.import=","spring.flyway.create-schemas=true",
     "spring.rabbitmq.password=payment-test-only","spring.rabbitmq.username=paymenttest",
     "spring.rabbitmq.host=localhost","spring.rabbitmq.port=56785","payment.payhere.merchant-id=test","debug=false"})
 @EnabledIfEnvironmentVariable(named="PAYMENT_TEST_DB_URL",matches=".+")
@@ -29,6 +29,9 @@ class PaymentIntegrationTest {
         p.add("spring.datasource.username",()->"postgres"); p.add("spring.datasource.password",()->"payment-test-only");
     }
     @Autowired PaymentService service;
+    @Autowired CancellationService cancellations;
+    @Autowired com.swiftdrop.payment.cod.service.CustomerCodService customerCod;
+    @MockitoBean com.swiftdrop.payment.cod.service.CodAmountVerifier codVerifier;
     @Autowired JdbcTemplate db;
     @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate rabbit;
@@ -40,12 +43,61 @@ class PaymentIntegrationTest {
     final Actor customer=new Actor(customerId,null,Set.of("CUSTOMER"),"test");
     final Actor admin=new Actor(UUID.fromString("a2249d4c-a134-4bc0-b9ed-ffea97ad8791"),null,Set.of("DISPATCHER"),"test");
     @BeforeEach void setup() {
-        db.execute("TRUNCATE payment_settlement.payment_callbacks,payment_settlement.payment_transactions,payment_settlement.payment_outbox,payment_settlement.payment_booking_claims,payment_settlement.payments CASCADE");
+        db.execute("TRUNCATE payment_settlement.customer_cod_receipts");
+        db.execute("TRUNCATE payment_settlement.cancellation_inbox,payment_settlement.merchant_settlement_entries,payment_settlement.cash_reconciliations,"+
+            "payment_settlement.cash_handover_items,payment_settlement.merchant_ledger_entries,"+
+            "payment_settlement.merchant_settlements,payment_settlement.cash_handovers,payment_settlement.cod_collections,"+
+            "payment_settlement.payment_callbacks,payment_settlement.payment_transactions,payment_settlement.payment_outbox,"+
+            "payment_settlement.payment_booking_claims,payment_settlement.payments CASCADE");
         when(pricing.lookup(anyString(),any())).thenAnswer(a->new Context(a.getArgument(0),"MERCHANT_API",customerId,merchantId,true,
             UUID.randomUUID().toString(),new BigDecimal("1000.00"),"LKR",new Payer("Test","Payer","test@example.com","0770000000","Address","Colombo","Sri Lanka")));
         when(provider.checkout(any(),any())).thenReturn(new Checkout("PAYHERE","https://sandbox.payhere.lk/pay/checkout","POST",Map.of("hash","test")));
     }
     UUID create(String booking,String key) { return UUID.fromString(service.create(new Create(booking),key,customer).get("id").toString()); }
+
+    com.swiftdrop.payment.cod.service.CodCollectedEvent customerCash(UUID eventId, String booking, UUID attempt, String amount) {
+        var at = java.time.OffsetDateTime.parse("2026-11-22T00:00:00Z");
+        return new com.swiftdrop.payment.cod.service.CodCollectedEvent(eventId,"customer-cod.collected",1,at,
+            "delivery-operations-service",new com.swiftdrop.payment.cod.service.CodCollectedEvent.Data(
+                booking,"SWD-2026-000123","SNP-CUSTOMER",null,customerId,attempt,"COD",
+                new BigDecimal("1000.00"),new BigDecimal(amount),"LKR",at));
+    }
+
+    @Test void customerCashCreatesOneReceiptAndPaidEventWithoutMerchantCredit() {
+        when(codVerifier.verifyCustomer(any())).thenReturn(customerId);
+        String booking=UUID.randomUUID().toString(); UUID attempt=UUID.randomUUID();
+        var event=customerCash(UUID.randomUUID(),booking,attempt,"1000.00");
+        customerCod.record(event); customerCod.record(event);
+        customerCod.record(customerCash(UUID.randomUUID(),booking,attempt,"1000.0"));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.customer_cod_receipts",Integer.class));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox WHERE event_type='payment.customer-cod-collected'",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.merchant_ledger_entries",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payments",Integer.class));
+        assertThrows(com.swiftdrop.payment.cod.service.InvalidCodEvent.class,
+            () -> customerCod.record(customerCash(event.eventId(),booking,UUID.randomUUID(),"1000.00")));
+    }
+
+    @Test void customerCashRejectsShortPaymentAndRetriesVerificationOutageWithoutPosting() {
+        String booking=UUID.randomUUID().toString();
+        assertThrows(com.swiftdrop.payment.cod.service.InvalidCodEvent.class,
+            () -> customerCod.record(customerCash(UUID.randomUUID(),booking,UUID.randomUUID(),"900.00")));
+        when(codVerifier.verifyCustomer(any())).thenThrow(new com.swiftdrop.payment.cod.service.CodVerificationUnavailable("offline"));
+        assertThrows(com.swiftdrop.payment.cod.service.CodVerificationUnavailable.class,
+            () -> customerCod.record(customerCash(UUID.randomUUID(),booking,UUID.randomUUID(),"1000.00")));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.customer_cod_receipts",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox",Integer.class));
+    }
+
+    @Test void concurrentCustomerCashReplayPostsOnlyOnce() throws Exception {
+        when(codVerifier.verifyCustomer(any())).thenReturn(customerId);
+        var event=customerCash(UUID.randomUUID(),UUID.randomUUID().toString(),UUID.randomUUID(),"1000.00");
+        try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            for(var task:executor.invokeAll(java.util.List.<Callable<Void>>of(
+                ()->{customerCod.record(event); return null;}, ()->{customerCod.record(event); return null;}))) task.get();
+        }
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.customer_cod_receipts",Integer.class));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox",Integer.class));
+    }
     UUID paid() {
         UUID id=create("BOOK-1","payment-key-000001");
         when(provider.verify(anyMap())).thenReturn(new PaymentProvider.VerifiedCallback(id,"123456",new BigDecimal("1000"),"LKR",2,"a".repeat(64)));
@@ -202,5 +254,140 @@ class PaymentIntegrationTest {
         var message=rabbit.receive("payment-settlement-service.audit",5000);
         assertNotNull(message); assertEquals("application/json",message.getMessageProperties().getContentType());
         assertNotNull(message.getMessageProperties().getMessageId());
+    }
+
+    String cancellation(UUID event, UUID booking, UUID payment, String target) {
+        return """
+            {"eventId":"%s","eventType":"parcel.cancelled","version":1,"producer":"parcel-pricing-service",
+             "occurredAt":"2026-11-22T00:00:00Z","data":{"parcelId":"%s","paymentId":"%s",
+             "customerUserId":"%s","paymentMethod":"ONLINE","deliveryStatus":"CANCELLED",
+             "cancelledAt":"2026-11-22T00:00:00Z","cancellationFee":100.00,"refundAmount":%s}}
+            """.formatted(event,booking,payment,customerId,target);
+    }
+    void readyAgain() { db.update("UPDATE payment_settlement.cancellation_inbox SET next_attempt_at=timezone('UTC',now())"); }
+    @Test void cancellationRefundSurvivesReplayAndCompletesOnlyAfterProviderSuccess() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        String body=cancellation(event,booking,payment,"900.00");
+        cancellations.accept(body); cancellations.accept(body);
+        cancellations.accept(cancellation(UUID.randomUUID(),booking,payment,"900.00"));
+        cancellations.processNext();
+        UUID refund=(UUID)cancellations.get(event,admin).get("refundId");
+        assertNotNull(refund); assertEquals("PENDING",cancellations.get(event,admin).get("status"));
+        verify(provider,never()).refund(anyString(),any(),anyString());
+        when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("SUCCESS","987654"));
+        service.submitRefund(refund); readyAgain(); cancellations.processNext();
+        assertEquals("COMPLETED",cancellations.get(event,admin).get("status"));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+        assertThrows(IllegalArgumentException.class,()->cancellations.accept(cancellation(event,booking,payment,"800.00")));
+        assertThrows(PaymentProblem.class,()->cancellations.list(0,20,customer));
+    }
+    @Test void cancellationSubtractsPriorRefundAndDefersUncertainSubmission() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("SUCCESS","987654"));
+        service.refund(payment,new RefundRequest(new BigDecimal("200.00"),"Adjustment"),"prior-refund-key-01",admin);
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"900.00")); cancellations.processNext();
+        UUID refund=(UUID)cancellations.get(event,admin).get("refundId");
+        assertEquals(0,new BigDecimal("700.00").compareTo(service.refundView(refund,payment,admin).amount()));
+        when(provider.refund(anyString(),any(),anyString())).thenThrow(new RuntimeException("timeout"));
+        service.submitRefund(refund); service.submitRefund(refund); readyAgain(); cancellations.processNext();
+        assertEquals("PENDING",cancellations.get(event,admin).get("status"));
+        verify(provider,times(1)).refund(anyString(),eq(new BigDecimal("700.00")),anyString());
+    }
+    @Test void cancellationWithWrongAmountNeedsAttentionWithoutMoneyMovement() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"800.00")); cancellations.processNext();
+        assertEquals("ATTENTION_REQUIRED",cancellations.get(event,admin).get("status"));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+    }
+
+    @Test void codCancellationDoesNotReserveRefund() {
+        UUID event=UUID.randomUUID();
+        String body=cancellation(event,UUID.randomUUID(),UUID.randomUUID(),"0.00")
+                .replace("ONLINE","COD").replace("100.00","0.00");
+        cancellations.accept(body); cancellations.processNext();
+        assertEquals("COMPLETED",cancellations.get(event,admin).get("status"));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+    }
+    @Test void zeroTargetValidatesPaymentButDoesNotMoveMoney() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"0.00").replace("100.00","1000.00"));
+        cancellations.processNext();
+        assertEquals("COMPLETED",cancellations.get(event,admin).get("status"));
+        verify(provider,never()).refund(anyString(),any(),anyString());
+    }
+    @Test void cancellationWaitsForOutstandingRefundThenOnlyReservesRemainder() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("UNKNOWN",null));
+        service.refund(payment,new RefundRequest(new BigDecimal("200.00"),"Adjustment"),"outstanding-key-0001",admin);
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"900.00")); cancellations.processNext();
+        assertNull(cancellations.get(event,admin).get("refundId"));
+        assertEquals("PENDING",cancellations.get(event,admin).get("status"));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+    }
+    @Test void malformedCancellationIsRejectedBeforePersistence() {
+        var listener=new CancellationListener(cancellations);
+        assertThrows(org.springframework.amqp.AmqpRejectAndDontRequeueException.class,()->listener.receive(
+            new org.springframework.amqp.core.Message("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.cancellation_inbox",Integer.class));
+    }
+    @Test @EnabledIfEnvironmentVariable(named="PAYMENT_TEST_RABBIT",matches="true")
+    void cancellationQueueRetainsMessagesWhileConsumerDisabled() {
+        rabbitAdmin.initialize(); rabbitAdmin.purgeQueue("payment-settlement-service.cancellations",false);
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        rabbit.send("swiftdrop.parcel-pricing","parcel.cancelled",new org.springframework.amqp.core.Message(
+            cancellation(event,booking,payment,"900.00").getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        var message=rabbit.receive("payment-settlement-service.cancellations",5000);
+        assertNotNull(message);
+        new CancellationListener(cancellations).receive(message);
+        new CancellationListener(cancellations).receive(message);
+        assertEquals(1,cancellations.list(0,20,admin).totalElements());
+    }
+
+    @Test void concurrentCancellationDeliveryReservesOnlyOneRefund() throws Exception {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        String body=cancellation(event,booking,payment,"900.00");
+        try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            var tasks=executor.invokeAll(java.util.List.<java.util.concurrent.Callable<Void>>of(
+                ()->{cancellations.accept(body); cancellations.processNext(); return null;},
+                ()->{cancellations.accept(body); cancellations.processNext(); return null;}));
+            for(var task:tasks) task.get();
+        }
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+    }
+    @Test void alreadyRefundedTargetReannouncesVerifiedResultWithoutAnotherRefund() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("SUCCESS","987654"));
+        service.refund(payment,new RefundRequest(new BigDecimal("900.00"),"Adjustment"),"prior-refund-key-02",admin);
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"900.00")); cancellations.processNext();
+        assertEquals("COMPLETED",cancellations.get(event,admin).get("status"));
+        assertEquals(1,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+        assertEquals(2,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_outbox WHERE event_type='payment.refunded'",Integer.class));
+    }
+    @Test void failedCancellationRefundRequiresReviewAndDoesNotResubmit() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"900.00")); cancellations.processNext();
+        UUID refund=(UUID)cancellations.get(event,admin).get("refundId");
+        when(provider.refund(anyString(),any(),anyString())).thenReturn(new PaymentProvider.RefundResult("FAILED",null));
+        service.submitRefund(refund); readyAgain(); cancellations.processNext();
+        assertEquals("ATTENTION_REQUIRED",cancellations.get(event,admin).get("status"));
+        readyAgain(); cancellations.processNext();
+        verify(provider,times(1)).refund(anyString(),any(),anyString());
+    }
+    @Test void cancellationRejectsAnotherCustomersPayment() {
+        UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
+        db.update("UPDATE payment_settlement.payments SET booking_id=? WHERE id=?",booking.toString(),payment);
+        cancellations.accept(cancellation(event,booking,payment,"900.00").replace(customerId.toString(),UUID.randomUUID().toString()));
+        cancellations.processNext();
+        assertEquals("ATTENTION_REQUIRED",cancellations.get(event,admin).get("status"));
+        assertNull(cancellations.get(event,admin).get("refundId"));
     }
 }

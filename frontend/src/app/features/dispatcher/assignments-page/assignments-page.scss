@@ -1,0 +1,72 @@
+@use '../../../shared/styles/page';
+
+.assign-reference {
+  font-family: var(--sd-font-mono);
+}
+
+.assign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+}
+
+.assign-details-row td {
+  padding: 0;
+}
+
+.assign-details {
+  padding: var(--sd-space-5);
+  background: var(--sd-surface-subtle);
+}
+
+.assign-details h3 {
+  margin: 0 0 var(--sd-space-3);
+}
+
+.assign-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+}
+
+.assign-filters__actions,
+.assign-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sd-space-2);
+}
+
+.assign-pagination {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.assign-pagination p {
+  margin: 0;
+  color: var(--sd-text-secondary);
+}
+
+@media (min-width: 48rem) {
+  .assign-filters {
+    grid-template-columns: minmax(12rem, 2fr) minmax(10rem, 1fr) auto;
+  }
+}
+
+.assign-history__title {
+  margin-top: var(--sd-space-5);
+}
+
+.assign-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin: 0;
+  padding-left: var(--sd-space-5);
+}
+
+.assign-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+}

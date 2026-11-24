@@ -1,0 +1,15 @@
+{
+  "eventId": "9a2d6e03-1f58-4b7c-a3d4-8e5c0b1f7a62",
+  "eventType": "delivery.delivered",
+  "version": 1,
+  "occurredAt": "2026-11-21T11:42:10Z",
+  "producer": "delivery-operations-service",
+  "data": {
+    "parcelId": "7e1a3b5c-9d2f-4a8b-b6e1-2f5c8d0a7e99",
+    "trackingNumber": "SWD-2026-001234",
+    "deliveryStatus": "DELIVERED",
+    "publicDescription": "Delivered",
+    "assignmentId": "d4f7a9b2-3c1e-4d68-9a05-6e8b2c4f1a70",
+    "courierId": "a93c5e17-8b2d-4f46-b1a9-0c7d3e5f2b84"
+  }
+}

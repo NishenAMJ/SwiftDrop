@@ -1,7 +1,7 @@
 import { Component, signal, computed, ViewChild, ElementRef } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormControl } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { DeliveryZoneService, Zone } from '../services/delivery-zone.service';
 
 /**
@@ -12,7 +12,7 @@ import { DeliveryZoneService, Zone } from '../services/delivery-zone.service';
 @Component({
   selector: 'app-delivery-zones',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './delivery-zones.component.html',
   styleUrls: ['./delivery-zones.component.scss'],
 })
@@ -23,8 +23,11 @@ export class DeliveryZonesComponent {
   error = signal<string | null>(null);
 
   // Search / filter controls
-  searchCtrl!: FormControl;
-  statusCtrl!: FormControl;
+  searchCtrl: FormControl = new FormControl('');
+  statusCtrl: FormControl = new FormControl('ALL');
+  // Control values as signals, so the computed list below re-runs when the filters change.
+  private readonly searchTerm = toSignal(this.searchCtrl.valueChanges, { initialValue: this.searchCtrl.value });
+  private readonly statusFilter = toSignal(this.statusCtrl.valueChanges, { initialValue: this.statusCtrl.value });
 
   // Form for add/edit modal (shared)
   zoneForm: FormGroup;
@@ -35,8 +38,8 @@ export class DeliveryZonesComponent {
 
   // Derived filtered list
   filteredZones = computed(() => {
-    const term = this.searchCtrl?.value?.toLowerCase() ?? '';
-    const status = this.statusCtrl?.value;
+    const term = this.searchTerm()?.trim().toLowerCase() ?? '';
+    const status = this.statusFilter();
     return this.zones()
       .filter(z => {
         const matchesTerm =
@@ -50,9 +53,6 @@ export class DeliveryZonesComponent {
   });
 
   constructor(private fb: FormBuilder, private service: DeliveryZoneService) {
-    // initialize controls after FormBuilder is available
-    this.searchCtrl = this.fb.control('');
-    this.statusCtrl = this.fb.control('ALL');
     this.zoneForm = this.fb.group({
       code: ['', [Validators.required, Validators.maxLength(10)]],
       name: ['', [Validators.required, Validators.maxLength(50)]],
@@ -67,7 +67,10 @@ export class DeliveryZonesComponent {
     this.error.set(null);
     this.service.getZones().subscribe({
       next: data => this.zones.set(data),
-      error: () => this.error.set('Failed to load zones'),
+      error: () => {
+        this.error.set('Failed to load zones');
+        this.loading.set(false);
+      },
       complete: () => this.loading.set(false),
     });
   }

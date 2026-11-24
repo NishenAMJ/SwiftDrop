@@ -1,3 +1,6 @@
+server:
+  tomcat:
+    max-swallow-size: 16MB
 spring:
   datasource:
     url: jdbc:h2:mem:delivery;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
@@ -10,10 +13,31 @@ spring:
       ddl-auto: create-drop
   flyway:
     enabled: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Never contacted: tests present pre-built tokens through MockMvc.
+          jwk-set-uri: http://localhost:0/.well-known/jwks.json
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   rabbitmq:
     listener:
       simple:
         auto-startup: false
+
+delivery:
+  proof:
+    storage-dir: target/test-proofs
+    max-bytes: 5242880
+  parcel:
+    stub-enabled: true
+  outbox:
+    # The publisher is exercised directly in OutboxPublisherTest.
+    enabled: false
+    table: outbox_events
 
 management:
   health:

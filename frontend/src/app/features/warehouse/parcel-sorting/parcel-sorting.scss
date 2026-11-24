@@ -1,0 +1,26 @@
+@use '../../../shared/styles/page';
+
+.sorting-lookup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+  align-items: stretch;
+}
+.sorting-lookup__field {
+  flex: 1;
+}
+.sorting-reference {
+  font-family: var(--sd-font-mono);
+}
+.sorting-parcel {
+  padding: var(--sd-space-4);
+  background: var(--sd-surface-subtle);
+  border-radius: var(--sd-radius-control);
+}
+
+@media (min-width: 40rem) {
+  .sorting-lookup {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}

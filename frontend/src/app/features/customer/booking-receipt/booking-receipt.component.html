@@ -1,6 +1,6 @@
 <div class="receipt-page">
   <div class="receipt-actions-bar no-print">
-    <a routerLink="/customer/bookings" class="sd-link back-link">
+    <a [routerLink]="bookingsLink" class="sd-link back-link">
       &larr; Back to My Bookings
     </a>
     <div class="action-buttons">
@@ -12,7 +12,7 @@
         </svg>
         Print Receipt
       </button>
-      <a routerLink="/customer/book" class="sd-button sd-button--primary">
+      <a [routerLink]="newBookingLink" class="sd-button sd-button--primary">
         + Book Another
       </a>
     </div>
@@ -32,7 +32,7 @@
   } @else if (errorMessage()) {
     <div class="sd-alert sd-alert--error">
       {{ errorMessage() }}
-      <a routerLink="/customer/bookings" class="sd-link">Return to Bookings</a>
+      <a [routerLink]="bookingsLink" class="sd-link">Return to Bookings</a>
     </div>
   } @else {
     <!-- The Official Receipt Card -->
@@ -59,9 +59,15 @@
             <span class="meta-val sd-font-mono">{{ receipt()?.receiptNumber || parcel()?.receiptNumber || 'Not available' }}</span>
           </div>
           <div class="meta-row">
-            <span class="meta-label">Date Issued:</span>
+            <span class="meta-label">Booking Date:</span>
             <span class="meta-val sd-tabular">
-              {{ (receipt()?.issuedAt || parcel()?.createdAt) | date:'medium' }}
+              {{ (receipt()?.bookingDate || parcel()?.createdAt) | date:'medium':'+0530' }}
+            </span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Receipt Issued:</span>
+            <span class="meta-val sd-tabular">
+              {{ receipt()?.issuedAt | date:'medium':'+0530' }}
             </span>
           </div>
         </div>
@@ -108,7 +114,7 @@
             }
 
             <span class="sd-badge sd-badge--info">
-              {{ receipt()?.status || parcel()?.status || 'Not provided' }}
+              Status: {{ statusLabel(receipt()?.status || parcel()?.status) }}
             </span>
           </div>
         </div>
@@ -117,12 +123,27 @@
       <section class="payment-action-box">
         @if (receipt()?.paymentMethod === 'COD') {
           <p><strong>Payment method: Cash on Delivery (COD)</strong></p>
-          <p>Payment pending. The delivery fee will be collected by the courier.</p>
+          <p>Payment status: {{ paymentStatusLabel(receipt()?.paymentStatus) }}. The delivery fee is collected by the courier.</p>
         } @else if (receipt()?.paymentMethod === 'ONLINE') {
           <p><strong>Payment method: Online payment</strong></p>
-          <p>Payment verified successfully.</p>
+          <p>
+            Payment status: {{ paymentStatusLabel(receipt()?.paymentStatus) }}
+            @if (receipt()?.paidAt) { on {{ receipt()?.paidAt | date:'medium':'+0530' }} }
+          </p>
         }
       </section>
+
+      <!-- Customer (the account that made the booking) -->
+      @if (receipt()?.customer; as customer) {
+        <section class="customer-details" aria-labelledby="receipt-customer-title">
+          <h2 id="receipt-customer-title" class="pricing-title">Customer Details</h2>
+          <dl class="customer-details__grid">
+            <div><dt>Name</dt><dd>{{ customer.name || 'Not provided' }}</dd></div>
+            <div><dt>Email</dt><dd>{{ customer.email || 'Not provided' }}</dd></div>
+            <div><dt>Phone</dt><dd class="sd-tabular">{{ customer.phone || 'Not provided' }}</dd></div>
+          </dl>
+        </section>
+      }
 
       <!-- Addresses Grid (Sender vs Recipient) -->
       <section class="addresses-section">
@@ -205,13 +226,38 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td>Delivery charge</td><td class="text-right">Booking price</td><td class="text-right sd-tabular">LKR {{ receipt()?.totalAmount | number:'1.2-2' }}</td></tr>
+            @if (receipt()?.feeBreakdown?.baseFee != null) {
+              <tr>
+                <td>Base handling fee</td>
+                <td class="text-right">{{ receipt()?.feeBreakdown?.pricingRuleCode || 'Pricing rule' }}</td>
+                <td class="text-right sd-tabular">{{ receipt()?.feeBreakdown?.baseFee | number:'1.2-2' }}</td>
+              </tr>
+              <tr>
+                <td>Weight charge</td>
+                <td class="text-right sd-tabular">{{ receipt()?.weightKg }} kg</td>
+                <td class="text-right sd-tabular">{{ receipt()?.feeBreakdown?.weightCharge | number:'1.2-2' }}</td>
+              </tr>
+              <tr>
+                <td>Zone charge</td>
+                <td class="text-right">{{ receipt()?.feeBreakdown?.zoneCode || 'Standard zone' }}</td>
+                <td class="text-right sd-tabular">{{ receipt()?.feeBreakdown?.zoneCharge | number:'1.2-2' }}</td>
+              </tr>
+              @if ((receipt()?.feeBreakdown?.urgentSurcharge ?? 0) > 0) {
+                <tr>
+                  <td>Urgent priority surcharge</td>
+                  <td class="text-right">Urgent</td>
+                  <td class="text-right sd-tabular">{{ receipt()?.feeBreakdown?.urgentSurcharge | number:'1.2-2' }}</td>
+                </tr>
+              }
+            } @else {
+              <tr><td>Delivery charge</td><td class="text-right">Booking price</td><td class="text-right sd-tabular">{{ receipt()?.totalAmount | number:'1.2-2' }}</td></tr>
+            }
           </tbody>
           <tfoot>
             <tr class="total-row">
               <th scope="row" colspan="2">Total Delivery Amount</th>
               <td class="text-right sd-tabular total-figure">
-                Rs. {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }} LKR
+                LKR {{ (receipt()?.totalAmount || parcel()?.estimatedFee) | number:'1.2-2' }}
               </td>
             </tr>
           </tfoot>

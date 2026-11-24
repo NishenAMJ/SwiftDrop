@@ -21,6 +21,14 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 public class PaymentService {
+    @org.springframework.beans.factory.annotation.Value("${payment.online.enabled:false}")
+    private boolean onlinePaymentsEnabled;
+
+    private void requireOnlinePayments() {
+        if (!onlinePaymentsEnabled)
+            throw new PaymentProblem(503, "ONLINE_PAYMENTS_DISABLED",
+                "Online payments and new online refunds are currently unavailable.");
+    }
     private static final Logger log=LoggerFactory.getLogger(PaymentService.class);
     private final PaymentRepository payments;
     private final JdbcTemplate db;
@@ -56,6 +64,7 @@ public class PaymentService {
         return new PaymentDtos.Page<>(result.map(PaymentService::view).getContent(),page,size,result.getTotalElements(),result.getTotalPages());
     }
     public Map<String,Object> create(Create request, String key, Actor actor) {
+        requireOnlinePayments();
         key(key);
         Payment previous=payments.findByInitiatedByAndIdempotencyKey(actor.id(),key).orElse(null);
         if(previous!=null) return replay(previous,request,actor);
@@ -98,6 +107,7 @@ public class PaymentService {
         return body;
     }
     public Checkout checkout(UUID id, Actor actor) {
+        requireOnlinePayments();
         Payment p=required(id,false); actor.requireOwner(p.getCustomerId(),p.getMerchantId());
         if(p.getStatus()!=PaymentStatus.PENDING || p.getPayerJson()==null) throw PaymentProblem.conflict("Payment is not awaiting checkout.");
         return provider.checkout(p,json.readValue(p.getPayerJson(),Payer.class));
@@ -148,6 +158,7 @@ public class PaymentService {
     }
     public Refund refund(UUID id, RefundRequest request, String key, Actor actor) {
         actor.requireAdmin(); key(key);
+        requireOnlinePayments();
         if(request.amount()==null || request.amount().signum()<=0 || request.amount().scale()>2
             || request.reason()==null || request.reason().isBlank() || request.reason().length()>500)
             throw new PaymentProblem(400,"VALIDATION_FAILED","A positive decimal amount and reason are required.");
@@ -166,19 +177,52 @@ public class PaymentService {
             if(p.getReservedAmount().signum()!=0) throw PaymentProblem.conflict("A refund is already pending reconciliation.");
             if(request.amount().compareTo(p.getAmount().subtract(p.getRefundedAmount()))>0)
                 throw PaymentProblem.conflict("Refund exceeds the remaining balance.");
-            UUID rid=UUID.randomUUID();
-            p.setReservedAmount(request.amount()); p.setUpdatedAt(now());
-            db.update("""
-                INSERT INTO payment_settlement.payment_transactions(id,payment_id,actor_id,idempotency_key,amount,reason,status,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,'PENDING',?,?)
-                """,rid,id,actor.id(),key,request.amount(),request.reason(),now(),now());
-            return rid;
+            return reserveRefund(p, request.amount(), request.reason(), actor.id(), key);
         });
         submitRefund(refundId);
         return refundView(refundId,id,actor);
     }
+
+    // Caller holds the payment row lock and an active transaction. Network I/O is worker-owned.
+    private UUID reserveRefund(Payment p, BigDecimal amount, String reason, UUID actorId, String key) {
+        UUID rid=UUID.randomUUID();
+        p.setReservedAmount(amount); p.setUpdatedAt(now());
+        db.update("""
+            INSERT INTO payment_settlement.payment_transactions(id,payment_id,actor_id,idempotency_key,amount,reason,status,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,'PENDING',?,?)
+            """,rid,p.getId(),actorId,key,amount,reason,now(),now());
+        return rid;
+    }
+
+    /** Internal trusted-event workflow; never grants a caller dispatcher permissions. */
+    public UUID reserveCancellation(CancellationEvent event) {
+        requireOnlinePayments();
+        Payment p=required(event.paymentId(),true);
+        if (!p.getBookingId().equals(event.bookingId().toString()) || !Objects.equals(p.getCustomerId(),event.customerId())
+                || !"LKR".equals(p.getCurrency()) || p.getAmount().compareTo(event.fee().add(event.target()))!=0)
+            throw PaymentProblem.conflict("Cancellation does not match the original payment.");
+        if (p.getStatus()==PaymentStatus.CHARGEBACKED || p.getRefundedAmount().compareTo(event.target())>0)
+            throw PaymentProblem.conflict("Payment needs dispatcher review before cancellation refund.");
+        if (p.getReservedAmount().signum()>0 || p.getStatus()==PaymentStatus.PENDING)
+            throw new PaymentProblem(503,"REFUND_DEFERRED","Waiting for the outstanding payment or refund.");
+        if (!Set.of(PaymentStatus.SUCCESS,PaymentStatus.PARTIALLY_REFUNDED,PaymentStatus.REFUNDED).contains(p.getStatus()) || p.getProviderReference()==null)
+            throw PaymentProblem.conflict("Payment is not eligible for cancellation refund.");
+        if (p.getRefundedAmount().compareTo(event.target())==0) {
+            // Reannounce an already confirmed refund if its first event preceded cancellation.
+            if (event.target().signum()>0) {
+                var prior=db.queryForList("SELECT id,amount FROM payment_settlement.payment_transactions WHERE payment_id=? AND status='SUCCESS' ORDER BY updated_at DESC LIMIT 1",p.getId());
+                if (prior.isEmpty()) throw PaymentProblem.conflict("Confirmed refund evidence is missing.");
+                event(p,"payment.refunded",Map.of("refundId",prior.getFirst().get("id"),"refundAmount",prior.getFirst().get("amount")));
+            }
+            return null;
+        }
+        return reserveRefund(p,event.target().subtract(p.getRefundedAmount()),"Booking cancellation",
+                UUID.fromString("00000000-0000-0000-0000-000000000008"),"cancellation:"+event.bookingId());
+    }
+
     public Refund retryRefund(UUID paymentId, UUID refundId, boolean confirmedNoRefundAtProvider, Actor actor) {
         actor.requireAdmin();
+        requireOnlinePayments();
         if(!confirmedNoRefundAtProvider)
             throw new PaymentProblem(400,"VALIDATION_FAILED","Confirm that PayHere shows no refund before retrying.");
         var rows=db.queryForList("SELECT * FROM payment_settlement.payment_transactions WHERE id=? AND payment_id=?",refundId,paymentId);
@@ -329,6 +373,8 @@ public class PaymentService {
             ((Timestamp)r.get("created_at")).toLocalDateTime().toInstant(ZoneOffset.UTC),((Timestamp)r.get("updated_at")).toLocalDateTime().toInstant(ZoneOffset.UTC));
     }
     public void submitRefund(UUID rid) {
+        // Keep existing reservations intact; disabling online operations is not a refund failure.
+        if (!onlinePaymentsEnabled) return;
         log.info("Refund submission started refundId={}",rid);
         // Claim once before network I/O. A crash afterwards leaves an uncertain attempt, never a blind resend.
         Map<String,Object> r=tx.execute(s->{

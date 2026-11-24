@@ -28,6 +28,9 @@ public class WarehouseParcel {
     @Column(name = "parcel_reference", nullable = false, unique = true, length = 50)
     private String parcelReference;
 
+    @Column(name = "parcel_id")
+    private UUID parcelId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
@@ -48,7 +51,9 @@ public class WarehouseParcel {
     protected WarehouseParcel() {
     }
 
-    public WarehouseParcel(String parcelReference, Warehouse warehouse, Instant arrivedAt, String arrivalNotes) {
+    public WarehouseParcel(UUID parcelId, String parcelReference, Warehouse warehouse, Instant arrivedAt,
+                           String arrivalNotes) {
+        this.parcelId = parcelId;
         this.parcelReference = parcelReference;
         this.warehouse = warehouse;
         this.arrivedAt = arrivedAt;
@@ -77,6 +82,7 @@ public class WarehouseParcel {
     }
 
     public UUID getId() { return id; }
+    public UUID getParcelId() { return parcelId; }
     public String getParcelReference() { return parcelReference; }
     public Warehouse getWarehouse() { return warehouse; }
     public WarehouseParcelState getState() { return state; }

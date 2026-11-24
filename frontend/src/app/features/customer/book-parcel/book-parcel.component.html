@@ -109,6 +109,19 @@
               placeholder="Postal code"
             />
           </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="pickup-zone">
+              Pickup Zone <span class="sd-label__optional">(optional)</span>
+            </label>
+            <select id="pickup-zone" class="sd-input" formControlName="zoneCode" aria-describedby="pickup-zone-help">
+              <option value="">Not sure</option>
+              @for (zone of zones(); track zone.code) {
+                <option [value]="zone.code">{{ zone.name }}</option>
+              }
+            </select>
+            <p id="pickup-zone-help" class="sd-help">Helps dispatchers plan the pickup route.</p>
+          </div>
         </div>
       </section>
 
@@ -203,6 +216,34 @@
               placeholder="Postal code"
             />
           </div>
+
+          <div class="sd-field">
+            <label class="sd-label" for="delivery-zone">
+              Delivery Zone <span class="required-star">*</span>
+            </label>
+            <select
+              id="delivery-zone"
+              class="sd-input"
+              formControlName="zoneCode"
+              aria-describedby="delivery-zone-help"
+              [attr.aria-invalid]="isFieldInvalid('deliveryAddress.zoneCode')"
+            >
+              <option value="" disabled>Select the recipient's zone</option>
+              @for (zone of zones(); track zone.code) {
+                <option [value]="zone.code">{{ zone.name }}</option>
+              }
+            </select>
+            <p id="delivery-zone-help" class="sd-help">The zone decides the zone charge in your delivery fee.</p>
+            @if (isFieldInvalid('deliveryAddress.zoneCode')) {
+              <p class="sd-error">Choose the delivery zone.</p>
+            }
+            @if (zonesError()) {
+              <p class="sd-error" role="alert">
+                {{ zonesError() }}
+                <button type="button" class="sd-link zone-retry" (click)="loadZones()">Retry</button>
+              </p>
+            }
+          </div>
         </div>
       </section>
 
@@ -226,12 +267,19 @@
               type="number"
               step="0.05"
               min="0.01"
-              max="500"
               class="sd-input"
               formControlName="weightKg"
+              inputmode="decimal"
+              aria-describedby="parcel-weight-help"
               [attr.aria-invalid]="isFieldInvalid('weightKg')"
             />
-            <p class="sd-help">Base calculation: Rs. 150.00 per kg</p>
+            <p id="parcel-weight-help" class="sd-help">
+              @if (feeBreakdown().ratePerKg) {
+                Charged at LKR {{ feeBreakdown().ratePerKg | number:'1.2-2' }} per kg under the current pricing.
+              } @else {
+                The weight charge is set by the current pricing rules.
+              }
+            </p>
             @if (isFieldInvalid('weightKg')) {
               <p class="sd-error">Weight must be greater than 0 kg.</p>
             }
@@ -306,7 +354,11 @@
               Tagged for immediate pickup and high-priority sorting. Same-day or next-available express courier dispatch.
             </p>
             <div class="urgency-card__tag urgency-card__tag--warning">
-              +Rs. 300.00 Priority Surcharge
+              @if (selectedUrgency === 'URGENT' && feeBreakdown().urgentSurchargeApplied) {
+                +LKR {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }} priority surcharge
+              } @else {
+                Any priority surcharge is shown in the fee summary
+              }
             </div>
           </div>
         </div>
@@ -325,9 +377,12 @@
         <div class="urgency-cards">
           <!-- Online Card Payment -->
           <div
+            *ngIf="onlinePaymentsEnabled"
             class="urgency-card"
             [class.urgency-card--selected]="selectedPaymentMethod === 'ONLINE'"
             (click)="setPaymentMethod('ONLINE')"
+            (keydown.enter)="setPaymentMethod('ONLINE')"
+            (keydown.space)="$event.preventDefault(); setPaymentMethod('ONLINE')"
             tabindex="0"
             role="radio"
             [attr.aria-checked]="selectedPaymentMethod === 'ONLINE'"
@@ -350,6 +405,8 @@
             class="urgency-card"
             [class.urgency-card--selected]="selectedPaymentMethod === 'COD'"
             (click)="setPaymentMethod('COD')"
+            (keydown.enter)="setPaymentMethod('COD')"
+            (keydown.space)="$event.preventDefault(); setPaymentMethod('COD')"
             tabindex="0"
             role="radio"
             [attr.aria-checked]="selectedPaymentMethod === 'COD'"
@@ -367,6 +424,7 @@
             <div class="urgency-card__tag">No online card required</div>
           </div>
         </div>
+        <p *ngIf="!onlinePaymentsEnabled" class="sd-help">Online payments are currently unavailable. Cash on delivery is available.</p>
       </section>
     </div>
 
@@ -376,21 +434,33 @@
         <h2 class="summary-card__title">Delivery Fee Summary</h2>
         <div class="summary-card__divider"></div>
 
-        @if (bookingForm.get('weightKg')?.value > 0) {
-        <dl class="summary-breakdown">
+        @if (quoteError()) {
+          <div class="sd-alert sd-alert--error" role="alert">{{ quoteError() }}</div>
+        } @else if (quoteLoading()) {
+          <p class="sd-help" role="status"><span class="sd-spinner" aria-hidden="true"></span> Calculating your fee...</p>
+        } @else if (bookingForm.get('weightKg')?.value > 0) {
+        <dl class="summary-breakdown" aria-live="polite">
           <div class="breakdown-row">
             <dt>Base Handling Fee</dt>
-            <dd class="sd-tabular">Rs. {{ feeBreakdown().baseFee | number:'1.2-2' }}</dd>
+            <dd class="sd-tabular">LKR {{ feeBreakdown().baseFee | number:'1.2-2' }}</dd>
           </div>
 
           <div class="breakdown-row">
             <dt>
               Weight Charge
               <span class="breakdown-sub sd-tabular">
-                ({{ bookingForm.get('weightKg')?.value || 0 }} kg &times; Rs. 150)
+                ({{ bookingForm.get('weightKg')?.value || 0 }} kg &times; LKR {{ feeBreakdown().ratePerKg | number:'1.2-2' }})
               </span>
             </dt>
-            <dd class="sd-tabular">Rs. {{ feeBreakdown().weightFee | number:'1.2-2' }}</dd>
+            <dd class="sd-tabular">LKR {{ feeBreakdown().weightFee | number:'1.2-2' }}</dd>
+          </div>
+
+          <div class="breakdown-row">
+            <dt>
+              Zone Charge
+              <span class="breakdown-sub">({{ zoneName(bookingForm.get('deliveryAddress.zoneCode')?.value) }})</span>
+            </dt>
+            <dd class="sd-tabular">LKR {{ feeBreakdown().zoneCharge | number:'1.2-2' }}</dd>
           </div>
 
           @if (selectedUrgency === 'URGENT') {
@@ -399,7 +469,13 @@
                 Urgent Priority Tag
                 <span class="sd-badge sd-badge--warning pill-small">Urgent</span>
               </dt>
-              <dd class="sd-tabular">+Rs. {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }}</dd>
+              <dd class="sd-tabular">
+                @if (feeBreakdown().urgentSurchargeApplied) {
+                  +LKR {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }}
+                } @else {
+                  No surcharge
+                }
+              </dd>
             </div>
           }
 
@@ -413,10 +489,13 @@
           <div class="summary-total">
             <dt>Total Estimated Fee</dt>
             <dd class="sd-tabular total-val">
-              Rs. {{ feeBreakdown().totalFee | number:'1.2-2' }}
+              LKR {{ feeBreakdown().totalFee | number:'1.2-2' }}
             </dd>
           </div>
         </dl>
+        @if (!bookingForm.get('deliveryAddress.zoneCode')?.value) {
+          <p class="sd-help">Choose the delivery zone to include its zone charge.</p>
+        }
         } @else { <p class="sd-help">Enter your parcel weight to view an estimate.</p> }
 
         <div class="summary-perks">
@@ -448,14 +527,17 @@
         >
           @if (submitting()) {
             <span class="sd-spinner" aria-hidden="true"></span>
-            Generating Booking Reference...
+            {{ draft() ? 'Processing payment...' : 'Creating your booking...' }}
+          } @else if (draft()) {
+            Resume payment
           } @else {
-            {{ draft() ? 'Resume payment' : 'Book a delivery' }}
+            {{ selectedPaymentMethod === 'ONLINE' ? 'Book and pay online' : 'Book a delivery' }}
           }
         </button>
 
         <p class="summary-footer-note">
-          By confirming, you agree to SwiftDrop courier terms of carriage. Online bookings require verified payment. COD bookings are payable to the courier.
+          By confirming, you agree to SwiftDrop courier terms of carriage. Online bookings are confirmed and
+          receive a receipt only after the payment is verified. COD bookings are payable to the courier.
         </p>
       </div>
     </aside>
@@ -463,22 +545,42 @@
 </div>
 
 
-<app-confirm-dialog [open]="paymentOpen()" title="Complete your booking" [wide]="true"
- [confirmLabel]="checkout() ? 'Check payment status' : 'Continue to secure payment'" cancelLabel="Close and resume later"
- [busy]="submitting()" (confirmed)="paymentAction()" (cancelled)="paymentOpen.set(false)">
- <p>Your online booking will be confirmed only after successful payment is verified.</p>
+<app-confirm-dialog [open]="paymentOpen()" [title]="paymentTitle" [wide]="true"
+ [confirmLabel]="paymentActionLabel" cancelLabel="Resume later"
+ [showConfirm]="paymentHasActions" [showCancel]="paymentHasActions"
+ [busy]="submitting()" (confirmed)="paymentAction()" (cancelled)="closePaymentDialog()" (dismissed)="closePaymentDialog()">
+ @if (paymentStep() === 'starting') {
+  <p>Your booking is confirmed and your receipt is issued only after the payment is verified.</p>
+ }
  @if (draft(); as booking) {
   <div class="checkout-summary">
+   <p>Reference: <span class="sd-font-mono">{{ booking.trackingNumber }}</span></p>
    <p><strong>{{ booking.urgency === 'URGENT' ? 'Urgent delivery' : 'Standard delivery' }}</strong> &middot; {{ booking.weightKg }} kg</p>
-   <p>Payment method: <strong>Online payment</strong></p>
-   <p class="checkout-amount">Amount to pay: <strong>LKR {{ booking.estimatedFee | number:'1.2-2' }}</strong></p>
+   <p class="checkout-amount">Amount to pay: <strong class="sd-tabular">LKR {{ booking.estimatedFee | number:'1.2-2' }}</strong></p>
   </div>
  }
- @if (paymentMessage()) { <div class="sd-alert sd-alert--info" role="status">{{ paymentMessage() }}</div> }
- @if (checkout()?.checkout) {
-  <button type="button" class="sd-button sd-button--primary" (click)="openGateway()">Open secure checkout</button>
-  <p class="sd-help">Payment opens in a separate tab. Return here after paying to verify your booking.</p>
- } @else if (checkout()) {
-  <p class="sd-help">Checking a saved payment. Use the original payment tab to finish payment; do not start another charge.</p>
+ @if (paymentMessage()) {
+  <div class="sd-alert" [class.sd-alert--info]="paymentStep() !== 'not-confirmed'"
+       [class.sd-alert--error]="paymentStep() === 'not-confirmed'"
+       [attr.role]="paymentStep() === 'not-confirmed' ? 'alert' : 'status'">
+   @if (paymentStep() === 'verifying' || paymentStep() === 'redirecting') { <span class="sd-spinner" aria-hidden="true"></span> }
+   {{ paymentMessage() }}
+  </div>
+ }
+ @if (paymentStep() === 'not-confirmed') {
+  <div class="checkout-actions">
+   <button type="button" class="sd-button sd-button--secondary" (click)="payNow()" [disabled]="submitting()">
+    Pay now
+   </button>
+   <button type="button" class="sd-button sd-button--danger-outline" (click)="discardCheckout()" [disabled]="submitting()">
+    Discard booking
+   </button>
+  </div>
+ } @else if (paymentStep() === 'starting' && !submitting()) {
+  <div class="checkout-actions">
+   <button type="button" class="sd-button sd-button--danger-outline" (click)="discardCheckout()">
+    Discard booking
+   </button>
+  </div>
  }
 </app-confirm-dialog>

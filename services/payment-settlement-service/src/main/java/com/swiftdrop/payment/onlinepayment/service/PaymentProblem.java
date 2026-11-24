@@ -7,6 +7,6 @@ public class PaymentProblem extends RuntimeException {
         super(message); this.status = status; this.code = code;
     }
     public static PaymentProblem conflict(String message) { return new PaymentProblem(409, "CONFLICT", message); }
-    public static PaymentProblem forbidden() { return new PaymentProblem(403, "FORBIDDEN", "This payment operation is not permitted."); }
+    public static PaymentProblem forbidden() { return new PaymentProblem(403, "FORBIDDEN", "This operation is not permitted."); }
     public static PaymentProblem unavailable() { return new PaymentProblem(502, "UPSTREAM_UNAVAILABLE", "The payment dependency is unavailable."); }
 }

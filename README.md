@@ -4,6 +4,11 @@ SwiftDrop is a delivery platform with customers, merchants, couriers and dispatc
 
 ## Repository layout
 
+For server hosting, HTTPS, private service access, health checks and backup/restore
+procedures, see [Production deployment and recovery](docs/deployment/production.md).
+The production configuration is separate from the local setup below and does not
+require Docker to be running while you prepare or statically validate it.
+
 | Folder | What is in it |
 |---|---|
 | `services/` | Backend services including API Gateway (8080), Identity (8081), Parcel & Pricing (8082), Delivery Operations (8083), Tracking (8084), Payment (8085), and Notification & Webhook (8086) |

@@ -29,6 +29,9 @@ public class ParcelTransfer {
     @Column(name = "parcel_reference", nullable = false, length = 50)
     private String parcelReference;
 
+    @Column(name = "parcel_id")
+    private UUID parcelId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "source_warehouse_id", nullable = false)
     private Warehouse sourceWarehouse;
@@ -62,7 +65,9 @@ public class ParcelTransfer {
     protected ParcelTransfer() {
     }
 
-    public ParcelTransfer(String parcelReference, Warehouse sourceWarehouse, Warehouse destinationWarehouse) {
+    public ParcelTransfer(UUID parcelId, String parcelReference, Warehouse sourceWarehouse,
+                          Warehouse destinationWarehouse) {
+        this.parcelId = parcelId;
         this.parcelReference = parcelReference;
         this.sourceWarehouse = sourceWarehouse;
         this.destinationWarehouse = destinationWarehouse;
@@ -107,6 +112,7 @@ public class ParcelTransfer {
     }
 
     public UUID getId() { return id; }
+    public UUID getParcelId() { return parcelId; }
     public String getParcelReference() { return parcelReference; }
     public Warehouse getSourceWarehouse() { return sourceWarehouse; }
     public Warehouse getDestinationWarehouse() { return destinationWarehouse; }

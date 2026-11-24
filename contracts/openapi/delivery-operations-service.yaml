@@ -1,10 +1,22 @@
 openapi: 3.1.0
 info:
   title: SwiftDrop Delivery Operations Service API
-  version: 0.1.0
-  description: Warehouse, sorting, and parcel-transfer contract owned by Delivery Operations.
+  version: 0.2.0
+  description: |
+    Warehouse, sorting and parcel-transfer operations, plus courier categories, courier profiles,
+    assignments, delivery attempts, proof of delivery and delivery issues, all owned by Delivery Operations.
+
+    Every endpoint except the health check needs an access token from identity-merchant-service
+    (see docs/architecture/authentication.md). Roles are shown on each operation, and the warehouse
+    endpoints need the DISPATCHER role. A courier only ever sees and changes their own assignments
+    and issues.
+
+    Delivery status changes are also published as events; see
+    contracts/events/delivery-operations/delivery-status-events.schema.json.
 servers:
   - url: http://localhost:8083
+security:
+  - bearerAuth: []
 paths:
   /api/v1/warehouses:
     get:
@@ -170,7 +182,414 @@ paths:
       responses:
         '200': { description: Transfer cancelled }
         '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/courier-categories:
+    get:
+      summary: List courier categories
+      description: Roles COURIER, DISPATCHER.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200': { description: Paginated courier categories }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create a courier category
+      description: Role DISPATCHER.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCourierCategory' }
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierCategory' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/courier-categories/{categoryId}:
+    parameters:
+      - $ref: '#/components/parameters/CategoryId'
+    get:
+      summary: Get a courier category
+      description: Roles COURIER, DISPATCHER.
+      responses:
+        '200':
+          description: Category details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierCategory' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Update a category's name, description and weight limit
+      description: Role DISPATCHER. The code cannot be changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCourierCategory' }
+      responses:
+        '200': { description: Category updated }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/courier-categories/{categoryId}/status:
+    parameters:
+      - $ref: '#/components/parameters/CategoryId'
+    patch:
+      summary: Activate or deactivate a category
+      description: Role DISPATCHER. Inactive categories cannot be given to new couriers or used for new assignments.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/CategoryStatus' }
+      responses:
+        '200': { description: Status changed }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/courier-profiles:
+    get:
+      summary: List delivery courier profiles
+      description: >
+        Role DISPATCHER. A courier profile adds the delivery category, phone and vehicle number to a
+        courier whose application identity-merchant-service has approved. It is separate from
+        /api/v1/couriers, which identity-merchant-service owns.
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/CourierProfileStatus' } }
+        - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200': { description: Paginated courier profiles }
+    post:
+      summary: Set up a courier for delivery work
+      description: Role DISPATCHER. The category must be active and the identity user must not already have a profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCourierProfile' }
+      responses:
+        '201':
+          description: Courier profile created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierProfile' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/courier-profiles/by-identity/{identityUserId}:
+    parameters:
+      - name: identityUserId
+        in: path
+        required: true
+        description: The user id in identity-merchant-service (the token subject).
+        schema: { type: string, format: uuid }
+    get:
+      summary: Find the courier profile of an identity user
+      description: Roles COURIER (own profile only), DISPATCHER.
+      responses:
+        '200':
+          description: Courier profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierProfile' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/courier-profiles/{courierId}:
+    parameters:
+      - $ref: '#/components/parameters/CourierId'
+    get:
+      summary: Get a courier profile
+      description: Role DISPATCHER.
+      responses:
+        '200':
+          description: Courier profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierProfile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Update a courier's name, phone, vehicle number and category
+      description: Role DISPATCHER.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCourierProfile' }
+      responses:
+        '200': { description: Courier profile updated }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/courier-profiles/{courierId}/status:
+    parameters:
+      - $ref: '#/components/parameters/CourierId'
+    patch:
+      summary: Change a courier's availability
+      description: Role DISPATCHER. Only AVAILABLE couriers can receive new assignments.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/CourierProfileStatus' }
+      responses:
+        '200': { description: Status changed }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/assignments:
+    get:
+      summary: List assignments
+      description: >
+        Roles COURIER, DISPATCHER. A courier always gets only their own assignments; asking for another
+        courier's returns 403.
+      parameters:
+        - { name: parcelReference, in: query, schema: { type: string } }
+        - { name: courierId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/AssignmentStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200': { description: Paginated assignments }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Assign a parcel to a courier
+      description: >
+        Role DISPATCHER. The parcel is looked up in Parcel & Pricing by tracking number, using the
+        dispatcher's own token, so it must exist. The courier must be AVAILABLE in an ACTIVE category,
+        and the parcel must not already have an active assignment. Publishes delivery.assigned.
+        Refused with 422 and a code in the problem body: PARCEL_CANCELLED (the booking was cancelled)
+        or PARCEL_TOO_HEAVY (the parcel's weight is over the courier category's maxWeightKg; a category
+        with no limit, or a parcel with no known weight, is not checked).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignParcel' }
+      responses:
+        '201':
+          description: Parcel assigned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+        '503': { $ref: '#/components/responses/ParcelServiceUnavailable' }
+  /api/v1/assignments/{assignmentId}:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Get an assignment
+      description: Roles COURIER (own only), DISPATCHER.
+      responses:
+        '200':
+          description: Assignment details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/assignments/{assignmentId}/status:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    patch:
+      summary: Move an assignment forward
+      description: >
+        Role COURIER (own only). Allowed steps are ASSIGNED to PICKED_UP, PICKED_UP to IN_TRANSIT or
+        OUT_FOR_DELIVERY, and IN_TRANSIT to OUT_FOR_DELIVERY. DELIVERED and DELIVERY_FAILED are not
+        accepted here: use the proof and attempts endpoints so the details are always recorded.
+        Publishes the matching delivery.* event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/AssignmentStatus' }
+                occurredAt: { type: [string, 'null'], format: date-time }
+      responses:
+        '200': { description: Assignment updated }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/attempts:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: List delivery attempts for an assignment
+      description: Roles COURIER (own only), DISPATCHER.
+      responses:
+        '200': { description: 'Attempts, oldest first' }
+    post:
+      summary: Record a failed delivery attempt
+      description: >
+        Role COURIER (own only). The assignment must be OUT_FOR_DELIVERY; it becomes DELIVERY_FAILED
+        and delivery.failed is published with a customer-safe failureCode. Notes stay internal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordAttempt' }
+      responses:
+        '201': { description: Attempt recorded }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/history:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Audit trail of an assignment
+      description: >
+        Role DISPATCHER only. Every status change, oldest first, with who made it. changedBy is the
+        identity user id from the access token (sub) and changedByRole is the role on that token; neither
+        is supplied by the caller. Couriers do not read this.
+      responses:
+        '200':
+          description: Status changes, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StatusChange' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/assignments/{assignmentId}/proof:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Get proof of delivery
+      description: Roles COURIER (own only), DISPATCHER.
+      responses:
+        '200':
+          description: Proof of delivery
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProofOfDelivery' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: Record proof of delivery
+      description: >
+        Role COURIER (own only). The assignment must be OUT_FOR_DELIVERY; it becomes DELIVERED and
+        delivery.delivered is published. Proof is recorded once.
+        The proof can be sent as plain JSON, or as multipart/form-data with a `proof` part (the same JSON)
+        and an optional `file` part: a JPEG, PNG or PDF of at most 5 MB. The type is decided from the file's
+        own bytes, not its name or Content-Type header. A refused file saves nothing, so the parcel is not
+        marked delivered. The server keeps the file under a random reference that is never returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordProof' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [proof]
+              properties:
+                proof: { $ref: '#/components/schemas/RecordProof' }
+                file: { type: string, format: binary, description: 'JPEG, PNG or PDF, at most 5 MB' }
+            encoding:
+              proof: { contentType: application/json }
+              file: { contentType: 'image/jpeg, image/png, application/pdf' }
+      responses:
+        '201':
+          description: Proof recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProofOfDelivery' }
+        '400': { description: 'FILE_EMPTY or FILE_UNREADABLE (problem body carries `code`)' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { description: 'FILE_TOO_LARGE: the file is over 5 MB' }
+        '415': { description: 'UNSUPPORTED_FILE_TYPE: not a real JPEG, PNG or PDF' }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
+  /api/v1/assignments/{assignmentId}/proof/file:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      summary: Download the uploaded proof file
+      description: >
+        Roles COURIER (own assignment only) and DISPATCHER. It is never available to the public, to customers
+        or to other couriers, and public tracking never receives it. Sent with nosniff, a sandboxing
+        Content-Security-Policy and no-store caching.
+      responses:
+        '200':
+          description: The file, with its stored content type
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'No proof, or no file was uploaded for it' }
+  /api/v1/delivery-issues:
+    get:
+      summary: List delivery issues
+      description: Roles COURIER (own only), DISPATCHER.
+      parameters:
+        - { name: courierId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/IssueStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200': { description: Paginated issues }
+    post:
+      summary: Report a delivery issue
+      description: Role COURIER. courierId must be the caller's own courier profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportIssue' }
+      responses:
+        '201':
+          description: Issue reported
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryIssue' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/delivery-issues/{issueId}:
+    parameters:
+      - name: issueId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get a delivery issue
+      description: Roles COURIER (own only), DISPATCHER.
+      responses:
+        '200':
+          description: Issue details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryIssue' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/delivery-issues/{issueId}/review:
+    parameters:
+      - name: issueId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      summary: Review an issue
+      description: Role DISPATCHER. OPEN may go to UNDER_REVIEW, RESOLVED or DISMISSED; UNDER_REVIEW to RESOLVED or DISMISSED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewIssue' }
+      responses:
+        '200': { description: Issue updated }
+        '422': { $ref: '#/components/responses/InvalidOperation' }
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   parameters:
     WarehouseId:
       name: warehouseId
@@ -179,6 +598,22 @@ components:
       schema: { type: string, format: uuid }
     TransferId:
       name: transferId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CourierId:
+      name: courierId
+      in: path
+      required: true
+      description: Courier profile id (not the identity user id)
+      schema: { type: string, format: uuid }
+    AssignmentId:
+      name: assignmentId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -266,7 +701,195 @@ components:
         receivedAt: { type: [string, 'null'], format: date-time }
         receivedBy: { type: string, maxLength: 120 }
         notes: { type: [string, 'null'], maxLength: 500 }
+    CategoryStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    CourierProfileStatus:
+      type: string
+      enum: [AVAILABLE, OFF_DUTY, INACTIVE]
+    AssignmentStatus:
+      type: string
+      description: CANCELLED is set only when Parcel & Pricing cancels the booking (parcel.cancelled), never by a person, and publishes no delivery event.
+      enum: [ASSIGNED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED, CANCELLED]
+    FailureReason:
+      type: string
+      enum: [RECIPIENT_UNAVAILABLE, INCORRECT_ADDRESS, RECIPIENT_REFUSED, OTHER]
+    IssueType:
+      type: string
+      enum: [DAMAGED_PARCEL, ADDRESS_PROBLEM, VEHICLE_BREAKDOWN, ACCIDENT, SAFETY_CONCERN, OTHER]
+    IssueStatus:
+      type: string
+      enum: [OPEN, UNDER_REVIEW, RESOLVED, DISMISSED]
+    CreateCourierCategory:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 30, pattern: '^[A-Za-z0-9_-]+$', example: MOTORCYCLE }
+        name: { type: string, maxLength: 80, example: Motorcycle }
+        description: { type: [string, 'null'], maxLength: 300 }
+        maxWeightKg: { type: [number, 'null'], exclusiveMinimum: 0, description: 'Null means no limit' }
+    UpdateCourierCategory:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 80 }
+        description: { type: [string, 'null'], maxLength: 300 }
+        maxWeightKg: { type: [number, 'null'], exclusiveMinimum: 0 }
+    CourierCategory:
+      allOf:
+        - $ref: '#/components/schemas/CreateCourierCategory'
+        - type: object
+          required: [id, status, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            status: { $ref: '#/components/schemas/CategoryStatus' }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    CreateCourierProfile:
+      type: object
+      required: [identityUserId, fullName, phone, categoryId]
+      properties:
+        identityUserId: { type: string, format: uuid, description: "The approved courier's user id in identity-merchant-service" }
+        fullName: { type: string, maxLength: 120 }
+        phone: { type: string, maxLength: 30 }
+        vehicleNumber: { type: [string, 'null'], maxLength: 30 }
+        categoryId: { type: string, format: uuid }
+    UpdateCourierProfile:
+      type: object
+      required: [fullName, phone, categoryId]
+      properties:
+        fullName: { type: string, maxLength: 120 }
+        phone: { type: string, maxLength: 30 }
+        vehicleNumber: { type: [string, 'null'], maxLength: 30 }
+        categoryId: { type: string, format: uuid }
+    CourierProfile:
+      type: object
+      required: [id, identityUserId, fullName, phone, categoryId, categoryCode, categoryName, status]
+      properties:
+        id: { type: string, format: uuid }
+        identityUserId: { type: string, format: uuid }
+        fullName: { type: string }
+        phone: { type: string }
+        vehicleNumber: { type: [string, 'null'] }
+        categoryId: { type: string, format: uuid }
+        categoryCode: { type: string }
+        categoryName: { type: string }
+        status: { $ref: '#/components/schemas/CourierProfileStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AssignParcel:
+      type: object
+      required: [parcelReference, courierId, assignedBy]
+      properties:
+        parcelReference: { type: string, maxLength: 50, description: "The parcel's tracking number", example: SWD-2026-000125 }
+        courierId: { type: string, format: uuid }
+        assignedBy: { type: string, maxLength: 120, description: 'Name of the dispatcher, kept for the audit trail' }
+        notes: { type: [string, 'null'], maxLength: 500 }
+    Assignment:
+      type: object
+      required: [id, parcelReference, courierId, courierName, status, assignedAt]
+      properties:
+        id: { type: string, format: uuid }
+        parcelReference: { type: string }
+        courierId: { type: string, format: uuid }
+        courierName: { type: string }
+        categoryCode: { type: string }
+        assignedBy: { type: string }
+        status: { $ref: '#/components/schemas/AssignmentStatus' }
+        notes: { type: [string, 'null'] }
+        codAmount: { type: [number, 'null'], description: 'Cash the courier collects at the door; merchant Cash on Delivery orders only' }
+        currency: { type: [string, 'null'], description: 'Currency of codAmount' }
+        pickup: { $ref: '#/components/schemas/ParcelContact' }
+        delivery: { $ref: '#/components/schemas/ParcelContact' }
+        assignedAt: { type: string, format: date-time }
+        pickedUpAt: { type: [string, 'null'], format: date-time }
+        outForDeliveryAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    StatusChange:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { oneOf: [ { $ref: '#/components/schemas/AssignmentStatus' }, { type: 'null' } ], description: 'Null for the first entry, when the parcel was assigned' }
+        toStatus: { $ref: '#/components/schemas/AssignmentStatus' }
+        changedBy: { type: [string, 'null'], format: uuid, description: 'Identity user id from the access token sub' }
+        changedByRole: { type: string, enum: [DISPATCHER, COURIER, SYSTEM, UNKNOWN] }
+        changedAt: { type: string, format: date-time }
+    ParcelContact:
+      type: [object, 'null']
+      description: Who to meet and where. Present only while the assignment is open, and only to the assigned courier and dispatchers. Never published in events.
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
+    RecordAttempt:
+      type: object
+      required: [reason]
+      properties:
+        reason: { $ref: '#/components/schemas/FailureReason' }
+        notes: { type: [string, 'null'], maxLength: 500, description: 'Internal only; never published' }
+        attemptedAt: { type: [string, 'null'], format: date-time }
+    RecordProof:
+      type: object
+      required: [recipientName]
+      properties:
+        recipientName: { type: string, maxLength: 120 }
+        notes: { type: [string, 'null'], maxLength: 500 }
+        mediaUrl: { type: [string, 'null'], maxLength: 500 }
+        deliveredAt: { type: [string, 'null'], format: date-time }
+        collectedAmount: { type: [number, 'null'], exclusiveMinimum: 0, description: 'Cash handed over. Required for Cash on Delivery parcels (409/422 otherwise) and refused for all others' }
+    ProofOfDelivery:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        assignmentId: { type: string, format: uuid }
+        parcelReference: { type: string }
+        recipientName: { type: string }
+        notes: { type: [string, 'null'] }
+        mediaUrl: { type: [string, 'null'] }
+        deliveredAt: { type: string, format: date-time }
+        collectedAmount: { type: [number, 'null'] }
+        hasFile: { type: boolean, description: 'True when a proof file was uploaded; fetch it from .../proof/file' }
+        fileName: { type: [string, 'null'], description: 'A safe display name; never a path' }
+        fileContentType: { type: [string, 'null'], enum: [image/jpeg, image/png, application/pdf, null] }
+        fileSizeBytes: { type: [integer, 'null'] }
+    ReportIssue:
+      type: object
+      required: [courierId, issueType, description]
+      properties:
+        courierId: { type: string, format: uuid }
+        assignmentId: { type: [string, 'null'], format: uuid }
+        parcelReference: { type: [string, 'null'], maxLength: 50 }
+        issueType: { $ref: '#/components/schemas/IssueType' }
+        description: { type: string, maxLength: 1000 }
+    ReviewIssue:
+      type: object
+      required: [status, reviewedBy]
+      properties:
+        status: { type: string, enum: [UNDER_REVIEW, RESOLVED, DISMISSED] }
+        reviewedBy: { type: string, maxLength: 120 }
+        resolutionNotes: { type: [string, 'null'], maxLength: 1000 }
+    DeliveryIssue:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        courierId: { type: string, format: uuid }
+        courierName: { type: string }
+        assignmentId: { type: [string, 'null'], format: uuid }
+        parcelReference: { type: [string, 'null'] }
+        issueType: { $ref: '#/components/schemas/IssueType' }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/IssueStatus' }
+        reportedAt: { type: string, format: date-time }
+        reviewedBy: { type: [string, 'null'] }
+        resolutionNotes: { type: [string, 'null'] }
+        reviewedAt: { type: [string, 'null'], format: date-time }
   responses:
+    Forbidden:
+      description: The caller's role, or the record's owner, does not allow this
+    ParcelServiceUnavailable:
+      description: Parcel & Pricing could not be reached, so the parcel could not be checked. Safe to retry.
     NotFound:
       description: Resource not found
     Conflict:

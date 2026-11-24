@@ -16,6 +16,11 @@ export const routes: Routes = [
       import('./features/landing/landing-page/landing-page').then((m) => m.LandingPage),
   },
   {
+    path: 'tracking',
+    loadChildren: () =>
+      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
+  },
+  {
     // Login, register and the Google callback share the Arctic Frost auth layout.
     path: '',
     loadComponent: () => import('./core/layout/auth-layout/auth-layout').then((m) => m.AuthLayout),
@@ -56,6 +61,8 @@ export const routes: Routes = [
   },
   {
     path: 'tracking',
+    path: 'dispatcher',
+    canActivate: [roleGuard('DISPATCHER')],
     loadChildren: () =>
       import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
   },
@@ -91,12 +98,20 @@ export const routes: Routes = [
           import('./features/courier/courier.routes').then((m) => m.COURIER_ROUTES),
       },
       {
-        path: 'dispatcher',
+        // Merchant webhooks and the dispatcher's failed-webhook view (notification-webhook-service).
+        path: 'webhooks',
+        loadChildren: () =>
+          import('./features/notifications/notifications.routes').then((m) => m.NOTIFICATION_ROUTES),
+      },
+      {
+        path: 'warehouse',
         canActivate: [roleGuard('DISPATCHER')],
         loadChildren: () =>
-          import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
+          import('./features/warehouse/warehouse.routes').then((m) => m.WAREHOUSE_ROUTES),
       },
     ],
   },
+  // Old merchant dashboard URL
+  { path: 'account/merchant/dashboard', redirectTo: '/merchant/dashboard', pathMatch: 'full' },
   { path: '**', redirectTo: 'account' },
 ];

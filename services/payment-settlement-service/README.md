@@ -1,7 +1,8 @@
-# Payment & Settlement service — Member 8
+# Payment & Settlement service — Members 8 and 9
 
-Java 21 / Spring Boot 4.1.2, port **8085**. Online payments use PayHere; COD, ledger,
-cash reconciliation and merchant settlements remain Member 9 responsibilities.
+Java 21 / Spring Boot 4.1.2, port **8085**. Member 8 owns online payments through
+PayHere. Member 9 owns COD collection, courier cash reconciliation, the merchant
+ledger and merchant settlements.
 
 ## Current state and references
 
@@ -9,12 +10,14 @@ cash reconciliation and merchant settlements remain Member 9 responsibilities.
 - [Payment events](../../contracts/events/payment-settlement-service/README.md)
 - [Pricing integration proposal and provider notes](../../docs/architecture/payment-integrations.md)
 - [Authentication agreement](../../docs/architecture/authentication.md)
+- [Member 9 COD and ledger contract proposal](../../docs/architecture/member9-cod-ledger-contract.md)
 
-On 2026-11-15 `mvn -B clean test` against the isolated payment test database and
-RabbitMQ reported **32 tests, 0 failures, 0 errors, 0 skipped**, including Flyway
-migrations and simulated outbox recovery. This does not establish live PayHere,
-actual identity/pricing integration, gateway routing or Docker-image end-to-end
-readiness. The pricing endpoint is still a proposal.
+On 2026-11-15, before Member 9's implementation, `mvn -B clean test` against the
+isolated payment test database and RabbitMQ reported **32 tests, 0 failures, 0 errors,
+0 skipped**. The combined suite now defines 53 tests and must be rerun with Java 21
+and isolated infrastructure. Historical results do not verify the new V5 migration,
+COD workflows, live PayHere, actual identity/pricing integration, gateway routing or
+Docker-image end-to-end readiness.
 
 ## Run locally (PowerShell)
 
@@ -43,7 +46,7 @@ The service imports the root `.env` when launched from either directory. Environ
 variables override file values. The PostgreSQL initialization scripts create the
 service role/schema only on an empty database volume; existing installations must
 already have `payment_settlement_user` and `payment_settlement`. Do not erase a
-development database to fix a missing schema. Flyway applies V1/V2; Hibernate validates.
+development database to fix a missing schema. Flyway applies V1 through V5; Hibernate validates.
 
 In another terminal:
 
@@ -74,6 +77,9 @@ routes are denied. Authentication is not implemented by this service.
 | PAYMENT_PAYHERE_NOTIFY_URL | Public callback URL ending /api/v1/payments/callbacks/payhere |
 | PAYMENT_PAYHERE_RETURN_URL / PAYMENT_PAYHERE_CANCEL_URL | localhost:4200/payments/return and /payments/cancel (frontend routes must be implemented) |
 | PAYMENT_WORKERS_ENABLED | true; disables outbox and recovery workers when false |
+| PAYMENT_COD_CONSUMER_ENABLED | false; set true to consume `delivery.cod-collected` (needs PAYMENT_COD_VERIFICATION_MODE=parcel) |
+| PAYMENT_COD_VERIFICATION_MODE | pending (default, fail-closed: the consumer refuses to start); `parcel` checks every event against Parcel & Pricing before posting |
+| PAYMENT_PARCEL_INTERNAL_KEY | Shared key sent as `X-Internal-Key` to Parcel & Pricing's internal COD lookup; must equal its PARCEL_INTERNAL_API_KEY. Required when the mode is `parcel` |
 
 JWT issuer is `swiftdrop-identity`, audience `swiftdrop-api`. Role checks use `roles`,
 ownership uses `sub` and `merchant_id`. No locally fabricated JWT bypass exists.
@@ -147,6 +153,67 @@ Creation/replays return 201; non-pending replays omit checkout. Refund/replays r
 GET checkout allows a customer to complete a dispatcher-created payment; frontend
 checkout screens and the notification/handoff to the customer are still separate work.
 
+## Member 9 COD and settlement flow
+
+1. Delivery Operations publishes `delivery.cod-collected` with a stable eventId and
+   the approved COD data contract.
+2. `CodCollectionService` validates the event and an approved `CodAmountVerifier`
+   validates its pricing snapshot. Collection and positive `COD_COLLECTION` ledger
+   entry are stored in one transaction; duplicate eventIds have no additional effect.
+3. The courier submits their own unassigned collections in a cash handover.
+4. A dispatcher records received cash. Exact reconciliation confirms the handover and
+   makes its COD ledger entries settlement-eligible. Short/excess handovers are
+   flagged with an investigation note and remain ineligible.
+5. A dispatcher calculates a settlement from eligible, unsettled signed ledger entries,
+   approves the frozen result, then separately records an externally confirmed payout.
+6. Recording payment posts one negative `SETTLEMENT` ledger entry. The service never
+   claims to initiate or complete the external bank transfer.
+
+The ledger sign is from the merchant-payable perspective: COD is positive; delivery
+charges and paid settlements are negative; audited adjustments may use either sign.
+Posted financial fields and deletion are protected by a PostgreSQL trigger. Corrections
+must be new `ADJUSTMENT` entries.
+
+| Method / path | Access |
+|---|---|
+| POST `/api/v1/cod-handovers` | Courier; own collections only |
+| GET `/api/v1/cod-handovers`, GET `/api/v1/cod-handovers/{id}` | Owning courier or dispatcher |
+| POST `/api/v1/cod-handovers/{id}/confirm` | Dispatcher only |
+| GET `/api/v1/merchant-ledger/entries` | JWT merchant or dispatcher-selected merchant |
+| POST `/api/v1/merchant-ledger/adjustments` | Dispatcher only |
+| POST `/api/v1/merchant-settlements/calculate` | Dispatcher only |
+| GET `/api/v1/merchant-settlements/{id}` | Owning merchant or dispatcher |
+| POST `/api/v1/merchant-settlements/{id}/approve` | Dispatcher only |
+| POST `/api/v1/merchant-settlements/{id}/record-payment` | Dispatcher only; external evidence required |
+
+All Member 9 financial POST routes require `Idempotency-Key`. See the OpenAPI document
+for bodies, status values and error responses.
+
+### COD RabbitMQ boundary
+
+- Topic exchange: `swiftdrop.delivery-operations`
+- Routing key: `delivery.cod-collected`
+- Consumer queue: `payment-settlement-service.cod`
+- Dead-letter exchange/routing key: `swiftdrop.payment.dlx` / `cod.failed`
+- Dead-letter queue: `payment-settlement-service.cod.dlq`
+
+Manual acknowledgements occur only after the transactional service returns (and its
+database transaction has committed). Malformed, invalid and conflicting messages are
+dead-lettered. Transient failures are requeued. `PAYMENT_COD_CONSUMER_ENABLED` remains
+false by default, and pending verification mode fails startup if someone enables it. To
+enable it, set `PAYMENT_COD_VERIFICATION_MODE=parcel`, `PAYMENT_PARCEL_INTERNAL_KEY` (the
+same value as Parcel & Pricing's `PARCEL_INTERNAL_API_KEY`) and the consumer flag. Each
+event is then checked against Parcel & Pricing before posting (see
+`docs/architecture/member9-cod-ledger-contract.md`). The exchange, queue, bindings and DLQ
+are declared even while the consumer is off, so COD events are kept until it is enabled.
+
+### Member 9 persistence
+
+Flyway `V5__cod_reconciliation_and_merchant_ledger.sql` creates `cod_collections`,
+`cash_handovers`, `cash_handover_items`, `cash_reconciliations`,
+`merchant_ledger_entries`, `merchant_settlements` and `merchant_settlement_entries`.
+It follows V4 from Member 8; do not create another V5 or edit an already-applied V5.
+
 ## Recovery limits
 
 Uncertain refunds keep their reservation and are not blindly submitted again.
@@ -189,16 +256,17 @@ file. Override their URLs if the integration owner puts them on a shared network
 The payment image uses Dockerfile.payment. These commands are startup instructions,
 not evidence that the current image has completed end-to-end testing.
 
-The gateway owner should forward `/api/v1/payments` and `/api/v1/payments/**` unchanged
-to port 8085 and preserve Authorization and Idempotency-Key. Permit only the POST
-provider callback without a customer JWT. Preserve form encoding; do not retry
-payment/refund POST requests automatically. Keep payment logic in this service.
-No gateway configuration has been installed by this module.
+The gateway owner should forward `/api/v1/payments/**`, `/api/v1/cod-handovers/**`,
+`/api/v1/merchant-ledger/**` and `/api/v1/merchant-settlements/**` unchanged to port
+8085 and preserve Authorization and Idempotency-Key. Permit only the POST provider
+callback without a customer JWT. Preserve form encoding; do not automatically retry
+financial POST requests. Keep payment and settlement logic in this service. No gateway
+configuration has been installed by this module.
 
 ## Tests with isolated infrastructure
 
 Never point PAYMENT_TEST_DB_URL at a development/shared database: integration tests
-TRUNCATE payment tables. From the service directory, start these containers only if
+TRUNCATE all payment, COD, ledger and settlement tables. From the service directory, start these containers only if
 they do not already exist (`docker ps -a`); reuse healthy existing test containers.
 
 ```powershell
@@ -217,8 +285,9 @@ $env:PAYMENT_TEST_RABBIT = 'true'
 mvn clean test
 ```
 
-The current suite has 32 tests, including 15 PostgreSQL-backed integration tests.
-Without the database variable, those 15 tests skip; without
+The suite defines 53 tests, including 20 PostgreSQL-backed integration tests. These
+counts describe the source, not a successful run. Without the database variable, the
+20 integration tests skip; without
 `PAYMENT_TEST_RABBIT=true`, the broker recovery test skips. Provider/pricing
 dependencies are mocked in the database tests; no live money is moved. A retry
 warning is expected in the broker test because its first publication deliberately
@@ -227,6 +296,8 @@ fails.
 ```powershell
 # Only the RabbitMQ recovery test:
 mvn test '-Dtest=PaymentIntegrationTest#eventSurvivesPublishFailureThenReachesDurableQueue'
+# Member 9 unit/security/database tests (requires PAYMENT_TEST_DB_URL for the integration class):
+mvn test '-Dtest=CodCollectionServiceTest,CashHandoverServiceTest,MerchantLedgerServiceTest,MerchantSettlementServiceTest,Member9SecurityTest,Member9IntegrationTest'
 # After testing (only these disposable containers):
 Remove-Item Env:PAYMENT_TEST_DB_URL -ErrorAction SilentlyContinue
 Remove-Item Env:PAYMENT_TEST_RABBIT -ErrorAction SilentlyContinue
@@ -237,3 +308,109 @@ Their --rm flag removes them on stop. RabbitMQ test UI: http://localhost:15685,
 paymenttest / payment-test-only. The test consumes its message, so the queue can be
 empty afterward. For sandbox acceptance still test real checkout, cancellation,
 callbacks, repeated partial refunds and ambiguous outcomes with PayHere credentials.
+
+
+## Member 8 cancellation refunds
+
+### COD-only release
+
+`PAYMENT_ONLINE_ENABLED` defaults to `false`. Payment creation, checkout retrieval,
+new online refunds, refund retries and cancellation refund reservations reject requests
+with `ONLINE_PAYMENTS_DISABLED`. The refund worker leaves existing reservations intact
+without submitting them while disabled. History, verified callbacks and existing recovery
+records remain available; disabling the feature does not erase or settle past payments.
+
+Parcel & Pricing uses the same environment flag to reject new ONLINE bookings, including
+the shared merchant booking writer, and to prevent new online cancellations from promising
+an unavailable refund. COD bookings and eligible COD cancellations retain their existing rules.
+The Angular `ONLINE_PAYMENTS_ENABLED` injection token defaults to false: checkout is hidden,
+new bookings default to COD, and saved online checkout references are preserved without
+reopening checkout. Dispatcher refund creation/retry controls are hidden while disabled.
+
+Production Compose explicitly keeps online payments disabled in both services. Future
+enablement requires coordinated backend configuration, frontend configuration and provider
+verification. Existing provider integration tests explicitly opt in with a mocked provider.
+
+COD cancellation inbox processing completes without contacting the online provider.
+Already-queued online cancellation refunds stay pending when the feature is disabled;
+they must not be reported as refunded. COD events referencing an online payment are rejected.
+The cancellation consumer remains opt-in until PostgreSQL/RabbitMQ integration is verified.
+
+The COD-only changes and test updates have **not been run or verified**, at the user's request.
+When ready, run the following from each indicated directory:
+
+```powershell
+# services/payment-settlement-service (unit/security tests; DB suites require their test environment)
+mvn -B test
+
+# services/parcel-pricing-service (focused tests without starting Docker)
+mvn -B test '-Dtest=BookingServiceTest,BookingServiceEdgeCaseTest,BookingCancellationServiceTest,OnlineBookingDisabledTest'
+
+# frontend
+npm test -- --no-watch
+npm run build
+```
+
+Before enabling the cancellation consumer, separately verify durable inbox persistence,
+duplicate delivery, broker acknowledgement/retry and the complete cancellation flow against
+disposable PostgreSQL/RabbitMQ instances. Unit mocks do not establish those guarantees.
+
+### Customer COD payment status
+
+For direct customer COD bookings, the courier collects the frozen delivery fee in full.
+Delivery publishes `customer-cod.collected` on `swiftdrop.delivery-operations`; Payment consumes
+it from `payment-settlement-service.customer-cod` using the existing `PAYMENT_COD_CONSUMER_ENABLED`
+switch and Parcel verification mode/internal key. The queue and its DLQ are declared even when disabled.
+The separate routing key avoids merchant COD consumers and Tracking's `delivery.*` subscription.
+
+Payment verifies a direct, non-cancelled COD booking, its owner, tracking number, pricing snapshot,
+currency and amount against Parcel's internal COD endpoint. Migration V7 stores the receipt in
+`customer_cod_receipts` and the transaction writes `payment.customer-cod-collected` to the payment
+outbox. Duplicate events/booking receipts are idempotent; conflicting evidence or non-full amounts
+are dead-lettered; verification outages retry. Neither a PayHere payment nor a merchant ledger
+credit is created. Parcel independently matches the verified receipt and marks payment PAID,
+preserving delivery status and the first collection time. It does not wait for cash reconciliation.
+
+Member 3 owns the booking projection, Member 6 the cash capture, Member 8 the verified payment
+receipt/event, and Member 9 owns subsequent cash reconciliation. Customer receipt reconciliation
+is not implemented by the existing merchant-only handover APIs; do not mix these fees into
+merchant payouts. Existing assignments made before this change need to be checked: assignments
+with a null cash amount are not automatically backfilled.
+
+Deploy Parcel's additive lookup/projection changes and Payment's V7/consumer before enabling
+Delivery's customer cash event. The courier UI already displays/collects any assignment COD amount.
+Contracts: `customer-cod-collected.schema.json` (Delivery) and `customer-cod-paid.schema.json` (Payment).
+
+### Automatic online refunds
+
+`parcel.cancelled` is stored in the V6 cancellation inbox before RabbitMQ acknowledges it.
+The durable `payment-settlement-service.cancellations` queue is bound even when
+`PAYMENT_CANCELLATION_CONSUMER_ENABLED=false` (the default). Enable only after the
+Parcel/Pricing cancellation contract and assignment/cancellation coordination have been verified.
+Messages published before the queue was first declared need producer-side replay; they cannot be recovered from an absent queue.
+
+ONLINE events must include paymentId, customerUserId, parcelId, cancellationFee and refundAmount.
+Payment checks ownership, booking, currency and fee-plus-target against its own payment record.
+The requested amount is the total cancellation refund target; confirmed prior refunds are subtracted.
+An outstanding refund defers reservation. COD cancellations move no money.
+The system actor UUID `00000000-0000-0000-0000-000000000008` identifies automatic reservations,
+with idempotency key `cancellation:<booking UUID>`; this identity has no login or dispatcher role.
+Provider calls use the existing refund worker, outside database transactions.
+Uncertain submissions remain pending and are never automatically resent.
+
+Dispatchers inspect `GET /api/v1/payments/cancellations?page=0&size=20` and
+`GET /api/v1/payments/cancellations/{eventId}` or the cancellation section in Payments and Refunds.
+Open a linked payment/refund to use existing evidence-based recovery controls.
+Malformed/conflicting events go to `payment-settlement-service.cancellations.dlq`.
+Inspect the original event and correct its producer before replay; never modify financial records
+or generate fresh refund requests merely because a provider response timed out.
+
+Deployment order: apply migrations; start Payment to declare queues with consumption disabled;
+verify event contracts and isolated tests; then enable consumption. Turning consumption off
+preserves queued events and already persisted work. `PAYMENT_WORKERS_ENABLED=false` pauses
+all payment workers, including cancellation processing, without deleting reservations.
+Monitor inbox PENDING age, ATTENTION_REQUIRED records and dead-letter queue depth.
+
+Acceptance evidence still required before release: PayHere sandbox checkout/callback/refund,
+actual identity/pricing/gateway integration, and assignment-versus-cancellation race tests owned
+jointly with Members 3?4 and 6. Automated provider mocks do not establish sandbox success.

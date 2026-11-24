@@ -79,8 +79,19 @@ services:
       PARCEL_DB_USER: parcel_pricing_user
       PARCEL_DB_PASSWORD: ${PARCEL_DB_PASSWORD:?Set PARCEL_DB_PASSWORD}
       IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+      SWIFTDROP_IDENTITY_BASE_URL: http://identity-merchant-service:8081
+      SWIFTDROP_PAYMENT_BASE_URL: ${SWIFTDROP_PAYMENT_BASE_URL:-http://payment-settlement-service:8085}
+      SWIFTDROP_CANCELLATION_FEE: ${SWIFTDROP_CANCELLATION_FEE:-0.00}
+      PAYMENT_ONLINE_ENABLED: ${PAYMENT_ONLINE_ENABLED:-false}
+      # Shared key for the internal COD lookup Payment & Settlement calls. Empty = that endpoint is off.
+      PARCEL_INTERNAL_API_KEY: ${PARCEL_INTERNAL_API_KEY:-}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       identity-merchant-service:
         condition: service_healthy
@@ -134,6 +145,7 @@ services:
       PAYMENT_PRICING_BASE_URL: ${PAYMENT_PRICING_BASE_URL:-http://parcel-pricing-service:8082}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
       PAYMENT_PRICING_STUB_ENABLED: ${PAYMENT_PRICING_STUB_ENABLED:-false}
+      PAYMENT_ONLINE_ENABLED: ${PAYMENT_ONLINE_ENABLED:-false}
       PAYMENT_PAYHERE_MERCHANT_ID: ${PAYMENT_PAYHERE_MERCHANT_ID:-}
       PAYMENT_PAYHERE_MERCHANT_SECRET: ${PAYMENT_PAYHERE_MERCHANT_SECRET:-}
       PAYMENT_PAYHERE_APP_ID: ${PAYMENT_PAYHERE_APP_ID:-}
@@ -142,6 +154,12 @@ services:
       PAYMENT_PAYHERE_NOTIFY_URL: ${PAYMENT_PAYHERE_NOTIFY_URL:-}
       PAYMENT_PAYHERE_RETURN_URL: ${PAYMENT_PAYHERE_RETURN_URL:-http://localhost:4200/payments/return}
       PAYMENT_PAYHERE_CANCEL_URL: ${PAYMENT_PAYHERE_CANCEL_URL:-http://localhost:4200/payments/cancel}
+      # COD collection events from Delivery Operations. Off by default; to enable set the consumer to true,
+      # the verification mode to parcel, and PARCEL_INTERNAL_API_KEY (the same value is sent to Parcel & Pricing).
+      PAYMENT_CANCELLATION_CONSUMER_ENABLED: ${PAYMENT_CANCELLATION_CONSUMER_ENABLED:-false}
+      PAYMENT_COD_CONSUMER_ENABLED: ${PAYMENT_COD_CONSUMER_ENABLED:-false}
+      PAYMENT_COD_VERIFICATION_MODE: ${PAYMENT_COD_VERIFICATION_MODE:-pending}
+      PAYMENT_PARCEL_INTERNAL_KEY: ${PARCEL_INTERNAL_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -165,8 +183,20 @@ services:
       DELIVERY_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
       DELIVERY_DB_USER: delivery_user
       DELIVERY_DB_PASSWORD: ${DELIVERY_DB_PASSWORD:?Set DELIVERY_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      # Access tokens are checked against identity's keys; parcels are looked up in Parcel & Pricing.
+      IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+      DELIVERY_PARCEL_BASE_URL: http://parcel-pricing-service:8082
+      # Uploaded proof-of-delivery files live on a named volume, so they survive rebuilds.
+      DELIVERY_PROOF_STORAGE_DIR: /data/proofs
+    volumes:
+      - delivery_proofs:/data/proofs
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   api-gateway:
@@ -184,6 +214,7 @@ services:
       DELIVERY_SERVICE_URI: ${GATEWAY_DELIVERY_SERVICE_URI:-http://delivery-operations-service:8083}
       TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://tracking-reporting-service:8084}
       PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
+      NOTIFICATION_SERVICE_URI: ${GATEWAY_NOTIFICATION_SERVICE_URI:-http://notification-webhook-service:8086}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -198,12 +229,51 @@ services:
       delivery-operations-service:
         condition: service_started
 
+  notification-webhook-service:
+    build:
+      context: ./services/notification-webhook-service
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8086:8086"
+    environment:
+      COMMUNICATION_DB_URL: jdbc:postgresql://postgres:5432/swiftdrop
+      COMMUNICATION_DB_USER: communication_user
+      COMMUNICATION_DB_PASSWORD: ${COMMUNICATION_DB_PASSWORD:?Set COMMUNICATION_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      IDENTITY_JWKS_URI: http://identity-merchant-service:8081/.well-known/jwks.json
+      NOTIFICATION_FROM_EMAIL: ${NOTIFICATION_FROM_EMAIL:-noreply@swiftdrop.dev}
+      TRACKING_BASE_URL: ${TRACKING_BASE_URL:-http://localhost:4200/track}
+      # Not ":?" on purpose: a missing key must not stop teammates' "docker compose up".
+      # The service itself refuses to start with a clear message when it is missing.
+      WEBHOOK_ENCRYPTION_KEY: ${WEBHOOK_ENCRYPTION_KEY:-}
+      WEBHOOK_ALLOW_HTTP: ${WEBHOOK_ALLOW_HTTP:-true}
+      WEBHOOK_ALLOW_PRIVATE_ADDRESSES: ${WEBHOOK_ALLOW_PRIVATE_ADDRESSES:-true}
+      # Set NOTIFICATION_PROFILES=dev in .env to enable the demo webhook receiver.
+      SPRING_PROFILES_ACTIVE: ${NOTIFICATION_PROFILES:-default}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8086'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   mailpit:
     image: axllent/mailpit
     ports:
-      - "127.0.0.1:1025:1025"     # SMTP: the service sends email here
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1026"     # SMTP host port (override if 1025 is blocked on Windows)
       - "127.0.0.1:8025:8025"     # web UI: http://localhost:8025 (see sent emails)
 
 volumes:
   postgres_data:
   rabbitmq_data:
+  delivery_proofs:

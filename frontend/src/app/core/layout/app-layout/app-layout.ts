@@ -16,6 +16,7 @@ import { AuthService } from '../../auth/auth.service';
 interface NavItem {
   label: string;
   path: string;
+  exact?: boolean;
 }
 
 interface NavGroup {
@@ -62,12 +63,26 @@ export class AppLayout {
       groups.push({
         heading: 'Dispatcher',
         items: [
+          { label: 'Overview', path: '/dispatcher', exact: true },
+          { label: 'Warehouse overview', path: '/warehouse' },
+          { label: 'Warehouses', path: '/warehouse/warehouses' },
+          { label: 'Parcel intake', path: '/warehouse/intake' },
+          { label: 'Parcel sorting', path: '/warehouse/sorting' },
+          { label: 'Parcel transfers', path: '/warehouse/transfers' },
+          { label: 'Courier categories', path: '/dispatcher/courier-categories' },
+          { label: 'Couriers', path: '/dispatcher/courier-fleet' },
+          { label: 'Courier assignments', path: '/dispatcher/assignments' },
+          { label: 'Delivery issues', path: '/dispatcher/delivery-issues' },
           { label: 'Merchant applications', path: '/dispatcher/merchants' },
           { label: 'Courier applications', path: '/dispatcher/couriers' },
           { label: 'Users', path: '/dispatcher/users' },
           { label: 'Delivery zones', path: '/dispatcher/delivery-zones' },
           { label: 'Pricing rules', path: '/dispatcher/pricing-rules' },
+          { label: 'Payments and refunds', path: '/dispatcher/payments' },
+          { label: 'Cash reconciliation', path: '/dispatcher/cash-reconciliation' },
+          { label: 'Merchant finance', path: '/dispatcher/merchant-finance' },
           { label: 'Tracking reports', path: '/tracking/reports' },
+          { label: 'Failed webhooks', path: '/webhooks/failed' },
         ],
       });
     }
@@ -76,6 +91,12 @@ export class AppLayout {
         heading: 'Merchant',
         items: [
           { label: 'API keys', path: '/merchant/api-keys' },
+          { label: 'Merchant dashboard', path: '/merchant/dashboard' },
+          { label: 'Create order', path: '/merchant/create-order' },
+          { label: 'Orders', path: '/merchant/orders' },
+          { label: 'Webhooks', path: '/webhooks' },
+          { label: 'Payment history', path: '/merchant/payments' },
+          { label: 'Ledger and settlements', path: '/merchant/finance' },
           { label: 'Merchant account', path: '/merchant/application' },
         ],
       });
@@ -83,7 +104,11 @@ export class AppLayout {
     if (has('COURIER')) {
       groups.push({
         heading: 'Courier',
-        items: [{ label: 'Courier account', path: '/courier/application' }],
+        items: [
+          { label: 'My deliveries', path: '/courier/deliveries' },
+          { label: 'COD cash handovers', path: '/courier/cash-handovers' },
+          { label: 'Courier account', path: '/courier/application' },
+        ],
       });
     }
     if (has('CUSTOMER')) {

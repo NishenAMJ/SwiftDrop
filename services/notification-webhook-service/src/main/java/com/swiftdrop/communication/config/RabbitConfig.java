@@ -23,6 +23,7 @@ public class RabbitConfig {
 
     public static final String IDENTITY_QUEUE = "notification-webhook-service.identity-events";
     public static final String PARCEL_QUEUE = "notification-webhook-service.parcel-notifications";
+    public static final String PARCEL_WEBHOOKS_QUEUE = "notification-webhook-service.parcel-webhooks";
     public static final String DEAD_LETTER_QUEUE = "notification-webhook-service.dead-letter";
 
     public static final String ROUTING_KEY_PARCEL_STATUS_CHANGED = "parcel.status-changed";
@@ -64,6 +65,14 @@ public class RabbitConfig {
     }
 
     @Bean
+    public Queue parcelWebhooksQueue() {
+        return QueueBuilder.durable(PARCEL_WEBHOOKS_QUEUE)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(DEAD_LETTER_QUEUE)
+                .build();
+    }
+
+    @Bean
     public Binding userEventsBinding(Queue identityEventsQueue, TopicExchange identityExchange) {
         return BindingBuilder.bind(identityEventsQueue).to(identityExchange).with("user.*");
     }
@@ -81,6 +90,16 @@ public class RabbitConfig {
     @Bean
     public Binding parcelStatusFromDeliveryExchangeBinding(Queue parcelNotificationsQueue, TopicExchange deliveryExchange) {
         return BindingBuilder.bind(parcelNotificationsQueue).to(deliveryExchange).with(ROUTING_KEY_PARCEL_STATUS_CHANGED);
+    }
+
+    @Bean
+    public Binding parcelWebhooksFromParcelExchangeBinding(Queue parcelWebhooksQueue, TopicExchange parcelExchange) {
+        return BindingBuilder.bind(parcelWebhooksQueue).to(parcelExchange).with(ROUTING_KEY_PARCEL_STATUS_CHANGED);
+    }
+
+    @Bean
+    public Binding parcelWebhooksFromDeliveryExchangeBinding(Queue parcelWebhooksQueue, TopicExchange deliveryExchange) {
+        return BindingBuilder.bind(parcelWebhooksQueue).to(deliveryExchange).with(ROUTING_KEY_PARCEL_STATUS_CHANGED);
     }
 
     @Bean

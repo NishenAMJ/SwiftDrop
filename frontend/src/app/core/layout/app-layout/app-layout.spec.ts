@@ -32,15 +32,26 @@ describe('AppLayout', () => {
 
   it('shows a customer how to become a merchant or courier', async () => {
     const page = (await signedInAs(exampleUser)).nativeElement as HTMLElement;
-    expect(links(page)).toEqual(['Customer portal', 'Become a merchant', 'Become a courier', 'Your account']);
+    expect(links(page)).toEqual([
+      'Customer portal',
+      'Become a merchant',
+      'Become a courier',
+      'Your account',
+    ]);
     expect(page.querySelector('.app-header__role')?.textContent).toContain('Customer');
   });
 
-  it('shows a merchant their keys instead of the merchant application', async () => {
+  it('shows a merchant only Dashboard and My Bookings', async () => {
     const page = (await signedInAs({ ...exampleUser, roles: ['CUSTOMER', 'MERCHANT'] }))
       .nativeElement as HTMLElement;
     expect(links(page)).toEqual([
       'API keys',
+      'Merchant dashboard',
+      'Create order',
+      'Orders',
+      'Webhooks',
+      'Payment history',
+      'Ledger and settlements',
       'Merchant account',
       'Customer portal',
       'Become a courier',
@@ -50,21 +61,37 @@ describe('AppLayout', () => {
   });
 
   it('shows dispatchers their tools and nothing for customers', async () => {
-    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'] })).nativeElement as HTMLElement;
+    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'] }))
+      .nativeElement as HTMLElement;
     expect(links(page)).toEqual([
+      'Overview',
+      'Warehouse overview',
+      'Warehouses',
+      'Parcel intake',
+      'Parcel sorting',
+      'Parcel transfers',
+      'Courier categories',
+      'Couriers',
+      'Courier assignments',
+      'Delivery issues',
       'Merchant applications',
       'Courier applications',
       'Users',
       'Delivery zones',
       'Pricing rules',
+      'Payments and refunds',
+      'Cash reconciliation',
+      'Merchant finance',
       'Tracking reports',
+      'Failed webhooks',
       'Your account',
     ]);
   });
 
   it('hides dispatcher tools until the initial password is replaced', async () => {
-    const page = (await signedInAs({ ...exampleUser, roles: ['DISPATCHER'], mustChangePassword: true }))
-      .nativeElement as HTMLElement;
+    const page = (
+      await signedInAs({ ...exampleUser, roles: ['DISPATCHER'], mustChangePassword: true })
+    ).nativeElement as HTMLElement;
     expect(links(page)).toEqual(['Your account']);
   });
 
@@ -85,8 +112,8 @@ describe('AppLayout', () => {
     const fixture = await signedInAs(exampleUser);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
 
-    const logout = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Log out'),
+    const logout = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+      (b) => b.textContent?.includes('Log out'),
     )!;
     logout.click();
     http.expectOne('/api/v1/auth/logout').flush(null, { status: 204, statusText: 'No Content' });

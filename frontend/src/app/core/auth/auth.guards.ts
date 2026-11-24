@@ -21,7 +21,7 @@ export function homeFor(user: AuthUser | null | undefined): string {
     return '/dispatcher';
   }
   if (roles.includes('MERCHANT')) {
-    return '/merchant';
+    return '/merchant/dashboard';
   }
   if (roles.includes('COURIER')) {
     return '/courier';

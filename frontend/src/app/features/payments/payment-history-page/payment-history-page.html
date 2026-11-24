@@ -1,0 +1,236 @@
+<section class="payments-page" aria-labelledby="payments-title">
+  <header class="payments-page__header">
+    <div>
+      <p class="eyebrow">{{ dispatcher ? 'Dispatcher tools' : 'Account' }}</p>
+      <h1 id="payments-title">{{ dispatcher ? 'Payments and refunds' : 'Payment history' }}</h1>
+      <p class="intro">
+        {{ dispatcher
+          ? 'Review payment records and manage refunds or verified recovery actions.'
+          : 'Review payments linked to your bookings and track their current status.' }}
+      </p>
+    </div>
+    <button class="sd-button sd-button--secondary" type="button" (click)="load()" [disabled]="loading()">
+      @if (loading()) { <span class="sd-spinner" aria-hidden="true"></span> Refreshing } @else { Refresh payments }
+    </button>
+  </header>
+  @if (!onlinePaymentsEnabled) {
+    <p class="sd-help">Online payments and new online refunds are currently unavailable. Existing records remain available for review.</p>
+  }
+
+@if (dispatcher) {
+  <section class="sd-card cancellation-panel" aria-labelledby="cancellation-heading" [attr.aria-busy]="cancellationsLoading()">
+    <h2 id="cancellation-heading">Cancellation refunds</h2>
+    <p>Refunds requested by cancelled bookings. Pending means the provider outcome is not yet confirmed.</p>
+    <button class="sd-button sd-button--secondary" (click)="loadCancellations(cancellations()?.page ?? 0)" [disabled]="cancellationsLoading()">Refresh cancellation refunds</button>
+    @if (cancellationsError(); as error) { <p class="sd-alert sd-alert--error" role="alert">{{ error }}</p> }
+    @if (cancellationsLoading()) { <p role="status">Loading cancellation refunds...</p> }
+    @if (cancellations(); as results) {
+      <p role="status">{{ results.totalElements }} cancellation requests</p>
+      @for (row of results.content; track row.eventId) {
+        <article class="cancellation-row">
+          <h3>Booking {{ row.bookingId }}</h3>
+          <span class="sd-badge" [class.sd-badge--success]="row.status === 'COMPLETED'" [class.sd-badge--warning]="row.status !== 'COMPLETED'">{{ row.status.replaceAll('_', ' ') }}</span>
+          <p>Updated {{ row.updatedAt | date:'medium':'+0530' }} (Asia/Colombo)</p>
+          @if (row.failureReason) { <p>{{ row.failureReason }}</p> }
+          @if (row.paymentId) { <button class="sd-button sd-button--secondary" (click)="openCancellation(row)">Open payment and recovery controls</button> }
+        </article>
+      } @empty { <p>No cancellation refunds have been received.</p> }
+      <nav aria-label="Cancellation refund pages" class="page__actions">
+        <button class="sd-button sd-button--secondary" [disabled]="results.page === 0 || cancellationsLoading()" (click)="loadCancellations(results.page - 1)">Previous</button>
+        <span>Page {{ results.page + 1 }} of {{ results.totalPages || 1 }}</span>
+        <button class="sd-button sd-button--secondary" [disabled]="results.page + 1 >= results.totalPages || cancellationsLoading()" (click)="loadCancellations(results.page + 1)">Next</button>
+      </nav>
+    }
+  </section>
+}
+
+
+  @if (loading()) {
+    <div class="sd-card state" role="status"><span class="sd-spinner" aria-hidden="true"></span> Loading payment history…</div>
+  } @else if (error()) {
+    <div class="sd-alert sd-alert--error" role="alert">
+      {{ error() }} <button class="sd-link" type="button" (click)="load()">Try again</button>
+    </div>
+  } @else if (!visiblePayments().length) {
+    <section class="sd-card empty-state">
+      <h2>No payments yet</h2>
+      <p>Payments will appear here after an online payment is created for one of your bookings.</p>
+      @if (!dispatcher) { <a class="sd-button sd-button--primary" routerLink="/customer/book">Create a booking</a> }
+    </section>
+  } @else {
+    <p class="result-count" aria-live="polite">{{ result()?.totalElements }} payment records</p>
+    <div class="payment-list">
+      @for (payment of visiblePayments(); track payment.id) {
+        <article class="sd-card payment-card">
+          <div class="payment-card__main">
+            <div class="payment-card__heading">
+              <div>
+                <h2>Booking {{ payment.bookingId }}</h2>
+                <p class="payment-id">Payment <span>{{ payment.id }}</span></p>
+              </div>
+              <span class="sd-badge" [class.sd-badge--success]="payment.status === 'SUCCESS' || payment.status === 'REFUNDED'"
+                [class.sd-badge--warning]="payment.status === 'PENDING' || payment.status === 'PARTIALLY_REFUNDED'"
+                [class.sd-badge--danger]="payment.status === 'FAILED' || payment.status === 'CHARGEBACKED'">
+                {{ payment.status.replace('_', ' ') }}
+              </span>
+            </div>
+            <dl class="payment-facts">
+              <div><dt>Amount</dt><dd>{{ payment.currency }} {{ payment.amount | number:'1.2-2' }}</dd></div>
+              <div><dt>Refunded</dt><dd>{{ payment.currency }} {{ payment.refundedAmount | number:'1.2-2' }}</dd></div>
+              <div><dt>Provider</dt><dd>{{ payment.provider || 'Online payment' }}</dd></div>
+              <div><dt>Created (Colombo time)</dt><dd>{{ payment.createdAt | date:'medium':'+0530' }}</dd></div>
+            </dl>
+            <button class="sd-button sd-button--secondary details-button" type="button"
+              (click)="openPayment(payment)" [attr.aria-expanded]="selectedPayment()?.id === payment.id">
+              {{ selectedPayment()?.id === payment.id ? 'Hide details' : (dispatcher ? 'Manage payment' : 'View details') }}
+            </button>
+          </div>
+
+          @if (selectedPayment()?.id === payment.id) {
+            <div class="payment-details" aria-label="Payment actions and details">
+              @if (message()) { <p class="sd-alert sd-alert--success" role="status">{{ message() }}</p> }
+              @if (actionError()) { <p class="sd-alert sd-alert--error" role="alert">{{ actionError() }}</p> }
+
+              @if (dispatcher && canRefund(payment)) {
+                <section class="action-section" aria-labelledby="refund-heading">
+                  <h3 id="refund-heading">Create a full or partial refund</h3>
+                  <p class="sd-help">Refunds go through PayHere. The amount is in {{ payment.currency }}; the service checks the refundable balance and blocks conflicting requests.</p>
+                  <form [formGroup]="refundForm" (ngSubmit)="createRefund()" class="form-grid">
+                    <div class="sd-field">
+                      <label class="sd-label" [for]="'refund-amount-' + payment.id">Refund amount ({{ payment.currency }})</label>
+                      <input class="sd-input" [id]="'refund-amount-' + payment.id" type="number" min="0.01" step="0.01" inputmode="decimal"
+                        formControlName="amount" [attr.aria-invalid]="refundForm.controls.amount.invalid && refundForm.controls.amount.touched"
+                        [attr.aria-describedby]="'refund-amount-help-' + payment.id" />
+                      <p class="sd-help" [id]="'refund-amount-help-' + payment.id">For a full refund, enter the remaining refundable amount.</p>
+                      @if (refundForm.controls.amount.invalid && refundForm.controls.amount.touched) { <p class="sd-error">Enter a valid amount with up to two decimal places.</p> }
+                    </div>
+                    <div class="sd-field">
+                      <label class="sd-label" [for]="'refund-reason-' + payment.id">Reason</label>
+                      <textarea class="sd-input" [id]="'refund-reason-' + payment.id" rows="2" maxlength="500" formControlName="reason"
+                        [attr.aria-invalid]="refundForm.controls.reason.invalid && refundForm.controls.reason.touched"></textarea>
+                      @if (refundForm.controls.reason.invalid && refundForm.controls.reason.touched) { <p class="sd-error">Provide a reason (maximum 500 characters).</p> }
+                    </div>
+                    <button class="sd-button sd-button--primary" type="submit" [disabled]="busy()" [attr.aria-busy]="busy()">
+                      @if (busy()) { <span class="sd-spinner" aria-hidden="true"></span> Submitting } @else { Submit refund }
+                    </button>
+                  </form>
+                </section>
+              }
+
+              @if (currentRefund(); as refund) {
+                <section class="refund-result" aria-labelledby="refund-result-heading" aria-live="polite">
+                  <h3 id="refund-result-heading">Refund status</h3>
+                  <dl class="payment-facts">
+                    <div><dt>Refund ID</dt><dd class="id-value">{{ refund.id }}</dd></div>
+                    <div><dt>Amount</dt><dd>{{ refund.currency }} {{ refund.amount | number:'1.2-2' }}</dd></div>
+                    <div><dt>Status</dt><dd><span class="sd-badge" [class.sd-badge--success]="refund.status === 'SUCCESS'"
+                      [class.sd-badge--warning]="refund.status === 'PENDING'" [class.sd-badge--danger]="refund.status === 'FAILED'">{{ refund.status }}</span></dd></div>
+                    <div><dt>Updated (Colombo time)</dt><dd>{{ refund.updatedAt | date:'medium':'+0530' }}</dd></div>
+                  </dl>
+                  <button class="sd-button sd-button--secondary" type="button" (click)="refreshRefund()" [disabled]="busy()">Refresh refund status</button>
+                  @if (dispatcher && refund.status === 'PENDING') {
+                    <div class="recovery-grid">
+                      @if (onlinePaymentsEnabled) {
+                      <form [formGroup]="retryForm" (ngSubmit)="retryRefund()" class="recovery-card">
+                        <h4>Retry uncertain refund</h4>
+                        <p class="sd-help">Only continue after checking PayHere and confirming that no refund is recorded there. The service also checks provider status.</p>
+                        <label class="check-row"><input type="checkbox" formControlName="confirmNoRefundAtProvider" /> I checked PayHere and no refund is listed.</label>
+                        <button class="sd-button sd-button--secondary" type="submit" [disabled]="busy() || retryForm.invalid">Retry after provider check</button>
+                      </form>
+                      }
+                      <form [formGroup]="resolutionForm" (ngSubmit)="resolveRefund()" class="recovery-card">
+                        <h4>Record reviewed provider outcome</h4>
+                        <p class="sd-help">Use only after reviewing PayHere dashboard or support evidence. This action records a decision; it does not contact PayHere.</p>
+                        <div class="sd-field"><label class="sd-label" [for]="'resolution-' + payment.id">Reviewed outcome</label>
+                          <select class="sd-input" [id]="'resolution-' + payment.id" formControlName="resolution" (change)="onResolutionChange()">
+                            <option value="CONFIRMED_SUCCESS">Provider confirms refund</option><option value="CONFIRMED_FAILURE">Provider confirms no refund</option>
+                          </select>
+                        </div>
+                        <div class="sd-field"><label class="sd-label" [for]="'evidence-type-' + payment.id">Evidence source</label>
+                          <select class="sd-input" [id]="'evidence-type-' + payment.id" formControlName="evidenceType">
+                            <option value="PAYHERE_DASHBOARD">PayHere dashboard</option><option value="PAYHERE_SUPPORT_CASE">PayHere support case</option>
+                          </select>
+                        </div>
+                        <div class="sd-field"><label class="sd-label" [for]="'evidence-ref-' + payment.id">Evidence reference</label>
+                          <input class="sd-input" [id]="'evidence-ref-' + payment.id" formControlName="evidenceReference" maxlength="200" />
+                        </div>
+                        @if (resolutionForm.controls.resolution.value === 'CONFIRMED_SUCCESS') {
+                          <div class="sd-field"><label class="sd-label" [for]="'provider-ref-' + payment.id">PayHere refund reference</label>
+                            <input class="sd-input" [id]="'provider-ref-' + payment.id" inputmode="numeric" formControlName="providerRefundReference" maxlength="30" />
+                          </div>
+                        }
+                        <div class="sd-field"><label class="sd-label" [for]="'resolution-reason-' + payment.id">Reason</label>
+                          <textarea class="sd-input" [id]="'resolution-reason-' + payment.id" formControlName="reason" maxlength="500" rows="2"></textarea>
+                        </div>
+                        <label class="check-row"><input type="checkbox" formControlName="confirmProviderEvidence" /> I reviewed this evidence and confirm the selected outcome.</label>
+                        <button class="sd-button sd-button--secondary" type="submit" [disabled]="busy() || resolutionForm.invalid">Record reviewed outcome</button>
+                      </form>
+                    </div>
+                  }
+                </section>
+              }
+
+              @if (dispatcher) {
+                <section class="action-section" aria-labelledby="refund-lookup-heading">
+                  <h3 id="refund-lookup-heading">Find an existing refund</h3>
+                  <p class="sd-help">The payment API does not provide a refund list. Enter the refund ID returned when it was created to check or recover it.</p>
+                  <form [formGroup]="refundLookupForm" (ngSubmit)="lookupRefund()" class="lookup-form">
+                    <div class="sd-field"><label class="sd-label" [for]="'refund-id-' + payment.id">Refund ID</label>
+                      <input class="sd-input id-input" [id]="'refund-id-' + payment.id" formControlName="refundId" autocomplete="off"
+                        [attr.aria-invalid]="refundLookupForm.controls.refundId.invalid && refundLookupForm.controls.refundId.touched" />
+                      @if (refundLookupForm.controls.refundId.invalid && refundLookupForm.controls.refundId.touched) { <p class="sd-error">Enter a valid refund ID.</p> }
+                    </div>
+                    <button class="sd-button sd-button--secondary" type="submit" [disabled]="busy()">Find refund</button>
+                  </form>
+                  @if (refundLookupError()) { <p class="sd-error" role="alert">{{ refundLookupError() }}</p> }
+                </section>
+              }
+
+              @if (dispatcher && payment.status === 'FAILED' && !payment.providerReference) {
+                <section class="action-section" aria-labelledby="claim-release-heading">
+                  <h3 id="claim-release-heading">Release a failed payment booking claim</h3>
+                  <p class="sd-help">This only applies after a verified terminal PayHere failure and reviewed dashboard or support evidence. Do not use for uncertain payment outcomes.</p>
+                  <form [formGroup]="releaseForm" (ngSubmit)="releaseBookingClaim()" class="form-grid">
+                    <div class="sd-field"><label class="sd-label" [for]="'release-evidence-type-' + payment.id">Evidence source</label>
+                      <select class="sd-input" [id]="'release-evidence-type-' + payment.id" formControlName="evidenceType">
+                        <option value="PAYHERE_DASHBOARD">PayHere dashboard</option><option value="PAYHERE_SUPPORT_CASE">PayHere support case</option>
+                      </select>
+                    </div>
+                    <div class="sd-field"><label class="sd-label" [for]="'release-evidence-ref-' + payment.id">Evidence reference</label>
+                      <input class="sd-input" [id]="'release-evidence-ref-' + payment.id" formControlName="evidenceReference" maxlength="200" />
+                    </div>
+                    <div class="sd-field"><label class="sd-label" [for]="'release-reason-' + payment.id">Reason</label>
+                      <textarea class="sd-input" [id]="'release-reason-' + payment.id" formControlName="reason" maxlength="500" rows="2"></textarea>
+                    </div>
+                    <label class="check-row"><input type="checkbox" formControlName="confirmProviderTerminalFailure" /> I verified the terminal failure and provider evidence.</label>
+                    <button class="sd-button sd-button--secondary" type="submit" [disabled]="busy() || releaseForm.invalid">Release booking claim</button>
+                  </form>
+                </section>
+              }
+
+              @if (dispatcher) {
+                <section class="audit" aria-labelledby="audit-heading">
+                  <h3 id="audit-heading">Recovery audit</h3>
+                  @if (audit().length) {
+                    <ul>
+                      @for (entry of audit(); track entry.id) {
+                        <li><strong>{{ entry.action.replaceAll('_', ' ') }}</strong> · {{ entry.priorStatus }} → {{ entry.resultingStatus }}
+                          <span>{{ entry.evidenceType.replaceAll('_', ' ') }}: {{ entry.evidenceReference }} · {{ entry.createdAt | date:'medium':'+0530' }} Colombo time</span>
+                        </li>
+                      }
+                    </ul>
+                  } @else { <p class="sd-help">No recovery actions have been recorded for this payment.</p> }
+                </section>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+    <nav class="pagination" aria-label="Payment history pages">
+      <button type="button" class="sd-button sd-button--secondary" (click)="load(pageIndex() - 1)" [disabled]="pageIndex() <= 0 || loading()">Previous</button>
+      <span>Page {{ pageIndex() + 1 }} of {{ totalPages() || 1 }}</span>
+      <button type="button" class="sd-button sd-button--secondary" (click)="load(pageIndex() + 1)" [disabled]="pageIndex() + 1 >= totalPages() || loading()">Next</button>
+    </nav>
+  }
+</section>

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swiftdrop.dev/contracts/events/parcel-pricing/parcel-cancelled.schema.json",
+  "title": "Parcel cancelled",
+  "description": "Proposal for team review. Published to the swiftdrop.parcel-pricing topic exchange, routing key parcel.cancelled, after a customer cancellation is committed. A booking can be cancelled only while its status is BOOKED (no courier scheduled yet). Consumers: Tracking & Reporting shows CANCELLED on the public timeline; Delivery Operations must not schedule the parcel; Payment & Settlement refunds refundAmount to paymentId for ONLINE bookings. customerUserId, paymentId and the amounts are internal and must not be shown on public tracking.",
+  "allOf": [
+    {
+      "$ref": "../envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "parcel.cancelled"
+        },
+        "version": {
+          "const": 1
+        },
+        "producer": {
+          "const": "parcel-pricing-service"
+        },
+        "data": {
+          "type": "object",
+          "required": [
+            "parcelId",
+            "trackingNumber",
+            "deliveryStatus",
+            "publicDescription",
+            "customerUserId",
+            "paymentMethod",
+            "cancelledAt",
+            "cancellationFee",
+            "refundAmount"
+          ],
+          "properties": {
+            "parcelId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Parcel identifier assigned by Parcel & Pricing (the bookingId used by Payment)"
+            },
+            "trackingNumber": {
+              "type": "string",
+              "pattern": "^SWD-[0-9]{4}-[0-9]{6,}$"
+            },
+            "deliveryStatus": {
+              "const": "CANCELLED"
+            },
+            "publicDescription": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Customer-safe timeline text without personal data"
+            },
+            "customerUserId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Identity user id of the customer who made and cancelled the booking"
+            },
+            "paymentMethod": {
+              "enum": [
+                "ONLINE",
+                "COD"
+              ]
+            },
+            "paymentId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Payment & Settlement payment to refund. Present for paid ONLINE bookings."
+            },
+            "cancellationFee": {
+              "type": "number",
+              "minimum": 0,
+              "multipleOf": 0.01,
+              "description": "LKR kept as a cancellation fee. Always 0 for COD."
+            },
+            "refundAmount": {
+              "type": "number",
+              "minimum": 0,
+              "multipleOf": 0.01,
+              "description": "LKR to refund to the original payment method. 0 when nothing was paid."
+            },
+            "cancelledAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "paymentMethod": {
+                    "const": "COD"
+                  }
+                },
+                "required": [
+                  "paymentMethod"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "refundAmount": {
+                    "const": 0
+                  },
+                  "cancellationFee": {
+                    "const": 0
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "paymentMethod": {
+                    "const": "ONLINE"
+                  }
+                },
+                "required": [
+                  "paymentMethod"
+                ]
+              },
+              "then": {
+                "required": [
+                  "paymentId",
+                  "cancellationFee",
+                  "refundAmount"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -70,10 +70,13 @@
         >
           <option value="ALL">All Statuses</option>
           <option value="BOOKED">Booked</option>
-          <option value="IN_TRANSIT">In Transit</option>
-          <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+          <option value="ASSIGNED">Courier scheduled</option>
+          <option value="PICKED_UP">Picked up</option>
+          <option value="AT_WAREHOUSE">At warehouse</option>
+          <option value="IN_TRANSIT">In transit</option>
+          <option value="OUT_FOR_DELIVERY">Out for delivery</option>
           <option value="DELIVERED">Delivered</option>
-          <option value="FAILED">Failed</option>
+          <option value="DELIVERY_FAILED">Delivery failed</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
       </div>
@@ -169,30 +172,14 @@
                   }
                 </td>
                 <td>
-                  @switch (booking.status?.toUpperCase()) {
-                    @case ('DELIVERED') {
-                      <span class="sd-badge sd-badge--success">Delivered</span>
-                    }
-                    @case ('IN_TRANSIT') {
-                      <span class="sd-badge sd-badge--info">In Transit</span>
-                    }
-                    @case ('OUT_FOR_DELIVERY') {
-                      <span class="sd-badge sd-badge--accent">Out for Delivery</span>
-                    }
-                    @case ('FAILED') {
-                      <span class="sd-badge sd-badge--danger">Failed</span>
-                    }
-                    @default {
-                      <span class="sd-badge sd-badge--info">{{ booking.status }}</span>
-                    }
-                  }
+                  <span class="sd-badge" [ngClass]="statusBadgeClass(booking.status)">{{ statusLabel(booking.status) }}</span>
                 </td>
                 <td class="text-right sd-tabular amount-cell">
-                  Rs. {{ booking.estimatedFee | number:'1.2-2' }}
+                  LKR {{ booking.estimatedFee | number:'1.2-2' }}
                 </td>
                 <td class="text-right">
                  <div class="booking-actions">
-                  @if (booking.status !== 'CANCELLED') {
+                  @if (booking.cancellable) {
                     <button type="button" class="sd-button sd-button--danger-outline" (click)="openCancelModal(booking.id)" [attr.aria-label]="'Cancel booking ' + booking.trackingNumber">Cancel</button>
                   }
                   <a

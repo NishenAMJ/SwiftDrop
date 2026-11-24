@@ -33,7 +33,7 @@ class WarehouseOperationsIntegrationTest {
         var destination = createWarehouse("KDY-01", "Kandy Hub", "Kandy");
 
         var arrival = operationsService.recordArrival(
-                new RecordArrivalRequest("swd-2026-000125", source.id(), null, "Received at loading bay"));
+                new RecordArrivalRequest("swd-2026-000125", source.id(), null, "Received at loading bay"), "token");
         assertThat(arrival.state()).isEqualTo(WarehouseParcelState.ARRIVED);
 
         operationsService.sort(new CreateSortingRecordRequest(arrival.parcelReference(), source.id(),
@@ -42,7 +42,7 @@ class WarehouseOperationsIntegrationTest {
                 .isEqualTo(WarehouseParcelState.SORTED);
 
         var transfer = operationsService.createTransfer(
-                new CreateTransferRequest(arrival.parcelReference(), source.id(), destination.id()));
+                new CreateTransferRequest(arrival.parcelReference(), source.id(), destination.id()), "token");
         assertThat(transfer.status()).isEqualTo(TransferStatus.CREATED);
 
         transfer = operationsService.dispatch(transfer.id());
@@ -69,10 +69,10 @@ class WarehouseOperationsIntegrationTest {
     void parcelMustBeSortedBeforeTransfer() {
         var source = createWarehouse("JAF-01", "Jaffna Hub", "Jaffna");
         var destination = createWarehouse("VAV-01", "Vavuniya Hub", "Vavuniya");
-        operationsService.recordArrival(new RecordArrivalRequest("SWD-2026-000999", source.id(), null, null));
+        operationsService.recordArrival(new RecordArrivalRequest("SWD-2026-000999", source.id(), null, null), "token");
 
         assertThatThrownBy(() -> operationsService.createTransfer(
-                new CreateTransferRequest("SWD-2026-000999", source.id(), destination.id())))
+                new CreateTransferRequest("SWD-2026-000999", source.id(), destination.id()), "token"))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("sorted");
     }

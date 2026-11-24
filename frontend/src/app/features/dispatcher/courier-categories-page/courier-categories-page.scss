@@ -1,0 +1,9 @@
+@use '../../../shared/styles/page';
+
+.category-code {
+  font-family: var(--sd-font-mono);
+}
+
+.category-number {
+  font-variant-numeric: tabular-nums;
+}

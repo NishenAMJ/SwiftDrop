@@ -1,0 +1,164 @@
+<div class="page">
+  <header class="page__header">
+    <h1 class="page__title">Courier categories</h1>
+    <p class="page__intro">
+      Group couriers by vehicle type, such as motorcycle, three-wheeler or van. Inactive categories
+      cannot be given to new couriers or used for new assignments.
+    </p>
+  </header>
+
+  @if (notice(); as message) {
+    <div class="sd-alert sd-alert--success" role="status">{{ message }}</div>
+  }
+  @if (error(); as message) {
+    <div class="sd-alert sd-alert--error" role="alert">{{ message }}</div>
+  }
+
+  <section class="sd-card page__section" aria-labelledby="new-category-title">
+    <h2 id="new-category-title" class="page__section-title">Add a category</h2>
+    <p class="form__note">Fields marked * are required.</p>
+    <form class="form" [formGroup]="form" (ngSubmit)="create()" novalidate>
+      <div class="form__grid">
+        <div class="sd-field">
+          @let codeError = fieldError('code');
+          <label class="sd-label" for="category-code">Code *</label>
+          <input
+            id="category-code"
+            class="sd-input category-code"
+            formControlName="code"
+            maxlength="30"
+            autocomplete="off"
+            [attr.aria-invalid]="!!codeError"
+            [attr.aria-describedby]="codeError ? 'category-code-error' : 'category-code-help'"
+          />
+          <p id="category-code-help" class="sd-help">For example MOTORCYCLE. It cannot be changed later.</p>
+          @if (codeError) {
+            <p id="category-code-error" class="sd-error">{{ codeError }}</p>
+          }
+        </div>
+        <div class="sd-field">
+          @let nameError = fieldError('name');
+          <label class="sd-label" for="category-name">Name *</label>
+          <input
+            id="category-name"
+            class="sd-input"
+            formControlName="name"
+            maxlength="80"
+            [attr.aria-invalid]="!!nameError"
+            [attr.aria-describedby]="nameError ? 'category-name-error' : null"
+          />
+          @if (nameError) {
+            <p id="category-name-error" class="sd-error">{{ nameError }}</p>
+          }
+        </div>
+        <div class="sd-field">
+          @let weightError = fieldError('maxWeightKg');
+          <label class="sd-label" for="category-weight">
+            Maximum parcel weight (kg) <span class="sd-label__optional">Optional</span>
+          </label>
+          <input
+            id="category-weight"
+            class="sd-input"
+            formControlName="maxWeightKg"
+            inputmode="decimal"
+            autocomplete="off"
+            [attr.aria-invalid]="!!weightError"
+            [attr.aria-describedby]="weightError ? 'category-weight-error' : null"
+          />
+          @if (weightError) {
+            <p id="category-weight-error" class="sd-error">{{ weightError }}</p>
+          }
+        </div>
+        <div class="sd-field form__full">
+          @let descriptionError = fieldError('description');
+          <label class="sd-label" for="category-description">
+            Description <span class="sd-label__optional">Optional</span>
+          </label>
+          <textarea
+            id="category-description"
+            class="sd-input"
+            formControlName="description"
+            maxlength="300"
+            [attr.aria-invalid]="!!descriptionError"
+            [attr.aria-describedby]="descriptionError ? 'category-description-error' : null"
+          ></textarea>
+          @if (descriptionError) {
+            <p id="category-description-error" class="sd-error">{{ descriptionError }}</p>
+          }
+        </div>
+      </div>
+      <div class="page__actions">
+        <button
+          class="sd-button sd-button--primary"
+          type="submit"
+          [disabled]="saving()"
+          [attr.aria-busy]="saving()"
+        >
+          @if (saving()) {
+            <span class="sd-spinner" aria-hidden="true"></span> Adding…
+          } @else {
+            Add category
+          }
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="sd-card page__section" aria-labelledby="category-list-title">
+    <h2 id="category-list-title" class="page__section-title">All categories</h2>
+    @if (loading()) {
+      <p class="page__loading" role="status">
+        <span class="sd-spinner" aria-hidden="true"></span> Loading categories…
+      </p>
+    } @else if (categories().length === 0) {
+      <p class="page__muted">No categories yet. Add the first one above.</p>
+    } @else {
+      <div class="sd-table-wrap" role="region" aria-labelledby="category-list-title" tabindex="0">
+        <table class="sd-table">
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col">Code</th>
+              <th scope="col">Max weight (kg)</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (category of categories(); track category.id) {
+              <tr>
+                <td>
+                  {{ category.name }}
+                  @if (category.description) {
+                    <br /><span class="page__muted">{{ category.description }}</span>
+                  }
+                </td>
+                <td class="category-code">{{ category.code }}</td>
+                <td class="category-number">{{ category.maxWeightKg ?? 'No limit' }}</td>
+                <td>
+                  <span
+                    class="sd-badge"
+                    [class.sd-badge--success]="category.status === 'ACTIVE'"
+                  >
+                    {{ category.status === 'ACTIVE' ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    class="sd-button sd-button--secondary"
+                    type="button"
+                    (click)="toggle(category)"
+                    [disabled]="actionId() === category.id"
+                  >
+                    {{ category.status === 'ACTIVE' ? 'Deactivate' : 'Activate' }}
+                    <span class="sd-visually-hidden">{{ category.name }}</span>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>

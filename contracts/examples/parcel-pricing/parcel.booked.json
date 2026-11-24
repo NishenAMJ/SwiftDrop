@@ -1,0 +1,14 @@
+{
+  "eventId": "1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b",
+  "eventType": "parcel.booked",
+  "version": 1,
+  "occurredAt": "2026-11-21T08:40:12Z",
+  "producer": "parcel-pricing-service",
+  "data": {
+    "parcelId": "3f6b8e2c-1d4a-4b9e-8c7f-5a2d9e0b1c34",
+    "trackingNumber": "SWD-2026-000125",
+    "deliveryStatus": "BOOKED",
+    "publicDescription": "Booking confirmed. Waiting for courier pickup.",
+    "publicLocation": "Colombo"
+  }
+}

@@ -1,0 +1,30 @@
+@use '../../../shared/styles/page';
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-3);
+}
+
+.mono {
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.num {
+  text-align: right;
+}
+
+.retry {
+  margin-top: var(--sd-space-3);
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3);
+}

@@ -1,0 +1,48 @@
+@use '../../../shared/styles/page';
+
+.issue-reference {
+  font-family: var(--sd-font-mono);
+}
+
+.issue-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+}
+
+.issue-filters__actions,
+.issue-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sd-space-2);
+}
+
+.issue-pagination {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.issue-pagination p {
+  margin: 0;
+  color: var(--sd-text-secondary);
+}
+
+.issue-panel-row td {
+  padding: 0;
+}
+
+.issue-review {
+  padding: var(--sd-space-5);
+  background: var(--sd-surface-subtle);
+}
+
+.issue-review h3 {
+  margin: 0;
+}
+
+@media (min-width: 48rem) {
+  .issue-filters {
+    grid-template-columns: minmax(10rem, 20rem) auto;
+  }
+}

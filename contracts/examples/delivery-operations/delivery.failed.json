@@ -1,0 +1,17 @@
+{
+  "eventId": "e6b4c1f8-2a79-4d35-b0e1-3f9a7c5d8e24",
+  "eventType": "delivery.failed",
+  "version": 1,
+  "occurredAt": "2026-11-21T11:15:00Z",
+  "producer": "delivery-operations-service",
+  "data": {
+    "parcelId": "7e1a3b5c-9d2f-4a8b-b6e1-2f5c8d0a7e99",
+    "trackingNumber": "SWD-2026-001234",
+    "deliveryStatus": "DELIVERY_FAILED",
+    "publicDescription": "Delivery attempt was unsuccessful",
+    "assignmentId": "d4f7a9b2-3c1e-4d68-9a05-6e8b2c4f1a70",
+    "courierId": "a93c5e17-8b2d-4f46-b1a9-0c7d3e5f2b84",
+    "attemptId": "3b8f0d6a-5e2c-4a91-87d3-9c1e4f7b2a58",
+    "failureCode": "RECIPIENT_UNAVAILABLE"
+  }
+}

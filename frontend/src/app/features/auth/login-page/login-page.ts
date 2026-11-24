@@ -64,7 +64,13 @@ export class LoginPage {
       next: (user) => {
         // Back to the page that asked for login, otherwise to this user's own start page.
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-        void this.router.navigateByUrl(safeReturnUrl(returnUrl, homeFor(user)));
+        const roles = user?.roles ?? [];
+        const isMerchant = roles.includes('MERCHANT');
+        let target = safeReturnUrl(returnUrl, homeFor(user));
+        if (isMerchant && (target === '/customer' || target.startsWith('/customer/'))) {
+          target = '/merchant/dashboard';
+        }
+        void this.router.navigateByUrl(target);
       },
       error: (error: unknown) => {
         this.submitting.set(false);

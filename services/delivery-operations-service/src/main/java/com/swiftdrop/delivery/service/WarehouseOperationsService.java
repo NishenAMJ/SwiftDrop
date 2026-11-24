@@ -9,6 +9,7 @@ import com.swiftdrop.delivery.api.TransferResponse;
 import com.swiftdrop.delivery.api.WarehouseDashboardResponse;
 import com.swiftdrop.delivery.api.WarehouseParcelResponse;
 import com.swiftdrop.delivery.api.WarehouseResponse;
+import com.swiftdrop.delivery.courier.parcel.ParcelLookup;
 import com.swiftdrop.delivery.domain.ParcelTransfer;
 import com.swiftdrop.delivery.domain.SortingRecord;
 import com.swiftdrop.delivery.domain.TransferStatus;
@@ -22,6 +23,7 @@ import com.swiftdrop.delivery.exception.ResourceNotFoundException;
 import com.swiftdrop.delivery.repository.ParcelTransferRepository;
 import com.swiftdrop.delivery.repository.SortingRecordRepository;
 import com.swiftdrop.delivery.repository.WarehouseParcelRepository;
+import com.swiftdrop.delivery.warehouse.events.WarehouseEventRecorder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,27 +42,36 @@ public class WarehouseOperationsService {
     private final WarehouseParcelRepository warehouseParcelRepository;
     private final SortingRecordRepository sortingRecordRepository;
     private final ParcelTransferRepository parcelTransferRepository;
+    private final ParcelLookup parcelLookup;
+    private final WarehouseEventRecorder events;
 
     public WarehouseOperationsService(WarehouseService warehouseService,
                                       WarehouseParcelRepository warehouseParcelRepository,
                                       SortingRecordRepository sortingRecordRepository,
-                                      ParcelTransferRepository parcelTransferRepository) {
+                                      ParcelTransferRepository parcelTransferRepository,
+                                      ParcelLookup parcelLookup,
+                                      WarehouseEventRecorder events) {
         this.warehouseService = warehouseService;
         this.warehouseParcelRepository = warehouseParcelRepository;
         this.sortingRecordRepository = sortingRecordRepository;
         this.parcelTransferRepository = parcelTransferRepository;
+        this.parcelLookup = parcelLookup;
+        this.events = events;
     }
 
     @Transactional
-    public WarehouseParcelResponse recordArrival(RecordArrivalRequest request) {
+    public WarehouseParcelResponse recordArrival(RecordArrivalRequest request, String bearerToken) {
         var reference = normalizeReference(request.parcelReference());
         if (warehouseParcelRepository.findByParcelReferenceIgnoreCase(reference).isPresent()) {
             throw new ConflictException("Parcel is already registered in warehouse operations: " + reference);
         }
         var warehouse = requireOperationalWarehouse(request.warehouseId());
-        var arrival = new WarehouseParcel(reference, warehouse,
-                request.arrivedAt() == null ? Instant.now() : request.arrivedAt(), cleanNullable(request.notes()));
-        return WarehouseParcelResponse.from(warehouseParcelRepository.save(arrival));
+        var parcel = parcelLookup.find(reference, bearerToken);
+        var arrivedAt = request.arrivedAt() == null ? Instant.now() : request.arrivedAt();
+        var arrival = warehouseParcelRepository.save(new WarehouseParcel(parcel.parcelId(), reference, warehouse,
+                arrivedAt, cleanNullable(request.notes())));
+        events.receivedAtWarehouse(arrival, warehouse, arrivedAt);
+        return WarehouseParcelResponse.from(arrival);
     }
 
     public WarehouseParcelResponse getParcel(String parcelReference) {
@@ -94,7 +105,7 @@ public class WarehouseOperationsService {
     }
 
     @Transactional
-    public TransferResponse createTransfer(CreateTransferRequest request) {
+    public TransferResponse createTransfer(CreateTransferRequest request, String bearerToken) {
         if (request.sourceWarehouseId().equals(request.destinationWarehouseId())) {
             throw new InvalidOperationException("Source and destination warehouses must differ");
         }
@@ -114,15 +125,19 @@ public class WarehouseOperationsService {
             throw new ConflictException("Parcel already has an active transfer: " + reference);
         }
 
-        return TransferResponse.from(parcelTransferRepository.save(new ParcelTransfer(reference, source, destination)));
+        var parcelDetails = parcelLookup.find(reference, bearerToken);
+        return TransferResponse.from(parcelTransferRepository.save(
+                new ParcelTransfer(parcelDetails.parcelId(), reference, source, destination)));
     }
 
     @Transactional
     public TransferResponse dispatch(UUID transferId) {
         var transfer = requireTransfer(transferId);
         var parcel = requireParcel(transfer.getParcelReference());
-        transfer.dispatch(Instant.now());
+        var dispatchedAt = Instant.now();
+        transfer.dispatch(dispatchedAt);
         parcel.markInTransfer();
+        events.transferred(transfer, dispatchedAt);
         return TransferResponse.from(transfer);
     }
 
@@ -133,6 +148,7 @@ public class WarehouseOperationsService {
         transfer.receive(receivedAt, request.receivedBy().trim(), cleanNullable(request.notes()));
         var parcel = requireParcel(transfer.getParcelReference());
         parcel.receiveAt(transfer.getDestinationWarehouse(), receivedAt);
+        events.receivedAtWarehouse(parcel, transfer.getDestinationWarehouse(), receivedAt);
         return TransferResponse.from(transfer);
     }
 

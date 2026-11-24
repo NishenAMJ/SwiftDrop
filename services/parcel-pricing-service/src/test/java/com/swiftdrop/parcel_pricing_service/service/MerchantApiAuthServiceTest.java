@@ -3,6 +3,7 @@ package com.swiftdrop.parcel_pricing_service.service;
 import com.swiftdrop.parcel_pricing_service.exception.ApiKeyVerificationUnavailableException;
 import com.swiftdrop.parcel_pricing_service.exception.InvalidApiKeyException;
 import com.swiftdrop.parcel_pricing_service.security.MerchantApiKeyVerifier;
+import com.swiftdrop.parcel_pricing_service.security.MerchantPrincipal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -10,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,10 +53,11 @@ class MerchantApiAuthServiceTest {
     }
 
     @Test
-    void authenticate_validKey_returnsOwningMerchantId() {
-        when(verifier.verify("key-1")).thenReturn(Optional.of(7L));
+    void authenticate_validKey_returnsOwningMerchant() {
+        MerchantPrincipal merchant = new MerchantPrincipal(UUID.randomUUID(), UUID.randomUUID(), "token");
+        when(verifier.verify("key-1")).thenReturn(Optional.of(merchant));
 
-        assertThat(authService.authenticate("  key-1 ")).isEqualTo(7L);
+        assertThat(authService.authenticate("  key-1 ")).isEqualTo(merchant);
     }
 
     @Test

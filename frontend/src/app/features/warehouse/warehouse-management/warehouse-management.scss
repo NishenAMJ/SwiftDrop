@@ -1,0 +1,42 @@
+@use '../../../shared/styles/page';
+
+.management-header {
+  justify-content: space-between;
+}
+.management-code {
+  font-family: var(--sd-font-mono);
+  color: var(--sd-text-secondary);
+}
+.management-secondary {
+  color: var(--sd-text-secondary);
+}
+.management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+.management-status {
+  width: auto;
+  min-width: 9rem;
+}
+.management-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sd-space-3);
+}
+.management-empty h3,
+.management-empty p {
+  margin: 0;
+}
+.management-empty p {
+  color: var(--sd-text-secondary);
+}
+
+@media (min-width: 48rem) {
+  .management-header {
+    flex-direction: row;
+    align-items: center;
+  }
+}

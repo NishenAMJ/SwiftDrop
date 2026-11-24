@@ -1,0 +1,146 @@
+@use '../../../shared/styles/page';
+
+.delivery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+.delivery__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+}
+
+.delivery__reference {
+  margin: 0;
+  font-family: var(--sd-font-mono);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.delivery__notes {
+  margin: 0;
+}
+
+.delivery__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+// Delivered and Failed sit apart from each other so they cannot be tapped by mistake.
+.delivery__outcome {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-4);
+}
+
+.delivery__main {
+  width: 100%;
+}
+
+.delivery__panel {
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-control);
+  background: var(--sd-surface-subtle);
+}
+
+.delivery__panel--danger {
+  border-color: var(--sd-danger);
+}
+
+.delivery__panel h4,
+.delivery__panel p {
+  margin: 0;
+}
+
+.finished {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-type {
+  font-weight: 600;
+}
+
+.finished__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3);
+}
+
+@media (min-width: 40rem) {
+  .delivery__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .delivery__outcome {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex: 1 1 100%;
+  }
+
+  .delivery__main {
+    width: auto;
+  }
+}
+
+.delivery__cod {
+  margin: 0;
+  padding: var(--sd-space-3) var(--sd-space-4);
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-control);
+  background: var(--sd-surface-subtle);
+}
+
+.delivery__place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius-control);
+}
+
+.delivery__place h4,
+.delivery__place p {
+  margin: 0;
+}
+
+.delivery__who {
+  font-weight: 600;
+}
+
+.delivery__where {
+  overflow-wrap: anywhere;
+}
+
+// Stacked and full width on a phone so each is an easy tap; side by side only when there is room.
+.delivery__links {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sd-space-2);
+}
+
+@media (min-width: 40rem) {
+  .delivery__links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.proof-file__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2) var(--sd-space-3);
+}

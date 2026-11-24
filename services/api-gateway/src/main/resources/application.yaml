@@ -27,7 +27,7 @@ spring:
             - id: delivery-operations-service
               uri: ${DELIVERY_SERVICE_URI:http://localhost:8083}
               predicates:
-                - Path=/api/v1/sorting-records/**,/api/v1/transfers/**,/api/v1/warehouses/**,/api/v1/warehouse-parcels/**
+                - Path=/api/v1/sorting-records/**,/api/v1/transfers/**,/api/v1/warehouses/**,/api/v1/warehouse-parcels/**,/api/v1/courier-categories/**,/api/v1/courier-profiles/**,/api/v1/assignments/**,/api/v1/delivery-issues/**
             - id: tracking-reporting-service
               uri: ${TRACKING_SERVICE_URI:http://localhost:8084}
               predicates:
@@ -35,7 +35,11 @@ spring:
             - id: payment-settlement-service
               uri: ${PAYMENT_SERVICE_URI:http://localhost:8085}
               predicates:
-                - Path=/api/v1/payments,/api/v1/payments/**
+                - Path=/api/v1/payments,/api/v1/payments/**,/api/v1/cod-handovers,/api/v1/cod-handovers/**,/api/v1/merchant-ledger,/api/v1/merchant-ledger/**,/api/v1/merchant-settlements,/api/v1/merchant-settlements/**
+            - id: notification-webhook-service
+              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8086}
+              predicates:
+                - Path=/api/v1/webhooks,/api/v1/webhooks/**
 
 management:
   endpoints:

@@ -6,6 +6,8 @@ import com.swiftdrop.parcel_pricing_service.dto.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +27,7 @@ import java.util.Map;
  * Credentials, SQL and stack traces are never returned to the client.
  */
 @RestControllerAdvice(assignableTypes = {MerchantOrderController.class, MerchantIntegrationController.class})
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class MerchantOrderExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(MerchantOrderExceptionHandler.class);
@@ -32,11 +35,6 @@ public class MerchantOrderExceptionHandler {
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(OrderNotFoundException ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
-    }
-
-    @ExceptionHandler(OrderAccessDeniedException.class)
-    public ResponseEntity<ApiError> handleAccessDenied(OrderAccessDeniedException ex, HttpServletRequest request) {
-        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
     }
 
     @ExceptionHandler({InvalidApiKeyException.class, UnauthenticatedMerchantException.class})
@@ -73,7 +71,7 @@ public class MerchantOrderExceptionHandler {
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST,
                 "Request body is missing, malformed, or contains an invalid value "
-                        + "(deliveryType: NORMAL, URGENT; paymentMethod: ONLINE, COD)",
+                        + "(urgency: NORMAL, URGENT; paymentMethod: ONLINE, COD)",
                 request, null);
     }
 

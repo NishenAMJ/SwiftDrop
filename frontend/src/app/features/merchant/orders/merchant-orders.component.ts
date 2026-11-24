@@ -1,61 +1,115 @@
-import { Component, ChangeDetectionStrategy, signal, computed, inject } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { MerchantOrderService, Order } from '../services/merchant-order.service';
+import { CancelBookingComponent } from '../../customer/cancel-booking/cancel-booking.component';
+import { BookingSummaryDto } from '../../customer/models/customer-booking.models';
+import { CustomerBookingService } from '../../customer/services/customer-booking.service';
 
-/**
- * Merchant Orders page – lists all orders for the logged‑in merchant.
- * Mirrors the UI/UX of the Customer booking‑history component.
- */
 @Component({
   selector: 'app-merchant-orders',
-  standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, ReactiveFormsModule, DecimalPipe],
+  imports: [CommonModule, RouterLink, FormsModule, DecimalPipe, CancelBookingComponent],
   templateUrl: './merchant-orders.component.html',
   styleUrl: './merchant-orders.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class MerchantOrdersComponent {
-  private readonly orderService = inject(MerchantOrderService);
-  private readonly fb = inject(FormBuilder);
+export class MerchantOrdersComponent implements OnInit {
+  private readonly bookingService = inject(CustomerBookingService);
 
-  // State signals
-  readonly orders = signal<Order[]>([]);
-  readonly loading = signal(true);
+  // State for cancel modal
+  readonly isCancelModalOpen = signal<boolean>(false);
+  readonly cancelTargetId = signal<string>('');
+
+  readonly bookings = signal<BookingSummaryDto[]>([]);
+  readonly loading = signal<boolean>(true);
   readonly errorMessage = signal<string | null>(null);
 
   // Filters
-  readonly searchCtrl = this.fb.control('');
-  readonly statusCtrl = this.fb.control('ALL');
+  readonly searchTerm = signal<string>('');
+  readonly selectedUrgency = signal<string>('ALL');
+  readonly selectedStatus = signal<string>('ALL');
 
-  // Derived filtered list
-  readonly filteredOrders = computed(() => {
-    const term = this.searchCtrl.value?.toLowerCase() ?? '';
-    const status = this.statusCtrl.value;
-    return this.orders()
-      .filter((o) => {
-        const matchesTerm =
-          o.id.toLowerCase().includes(term) ||
-          (o.deliveryAddress && o.deliveryAddress.toLowerCase().includes(term)) ||
-          (o.recipientName && o.recipientName.toLowerCase().includes(term));
-        const matchesStatus = status === 'ALL' || o.status === status;
-        return matchesTerm && matchesStatus;
-      })
-      .sort((a, b) => a.id.localeCompare(b.id));
+  // Clipboard copy state
+  readonly copiedRef = signal<string | null>(null);
+
+  readonly filteredBookings = computed(() => {
+    let list = this.bookings();
+    const query = this.searchTerm().trim().toLowerCase();
+    const urgency = this.selectedUrgency();
+    const status = this.selectedStatus();
+
+    if (query) {
+      list = list.filter(
+        (b) =>
+          b.trackingNumber.toLowerCase().includes(query) ||
+          (b.recipientName && b.recipientName.toLowerCase().includes(query)) ||
+          (b.destinationCity && b.destinationCity.toLowerCase().includes(query)) ||
+          (b.description && b.description.toLowerCase().includes(query)),
+      );
+    }
+
+    if (urgency !== 'ALL') {
+      list = list.filter((b) => b.urgency?.toUpperCase() === urgency);
+    }
+
+    if (status !== 'ALL') {
+      list = list.filter((b) => b.status?.toUpperCase() === status);
+    }
+
+    return list;
   });
 
-  constructor() {
-    this.loadOrders();
+  ngOnInit(): void {
+    this.loadHistory();
   }
 
-  loadOrders(): void {
+  loadHistory(): void {
     this.loading.set(true);
     this.errorMessage.set(null);
-    this.orderService.getOrders().subscribe({
-      next: (data) => this.orders.set(data),
-      error: () => this.errorMessage.set('Failed to load orders'),
-      complete: () => this.loading.set(false),
+
+    this.bookingService.getMyBookings().subscribe({
+      next: (data) => {
+        this.bookings.set(data);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load merchant booking history:', err);
+        this.errorMessage.set('Could not fetch your booking history. Please try again.');
+        this.loading.set(false);
+      },
     });
+  }
+
+  setUrgencyFilter(filter: string): void {
+    this.selectedUrgency.set(filter);
+  }
+
+  setStatusFilter(filter: string): void {
+    this.selectedStatus.set(filter);
+  }
+
+  copyTracking(trackingNumber: string): void {
+    navigator.clipboard?.writeText(trackingNumber);
+    this.copiedRef.set(trackingNumber);
+    setTimeout(() => {
+      if (this.copiedRef() === trackingNumber) {
+        this.copiedRef.set(null);
+      }
+    }, 2000);
+  }
+
+  openCancelModal(bookingId: string): void {
+    this.cancelTargetId.set(bookingId);
+    this.isCancelModalOpen.set(true);
+  }
+
+  onCancelled(bookingId: string): void {
+    this.isCancelModalOpen.set(false);
+    this.loadHistory();
+  }
+
+  onCancelError(error: unknown): void {
+    console.error('Cancellation error:', error);
+    this.isCancelModalOpen.set(false);
   }
 }

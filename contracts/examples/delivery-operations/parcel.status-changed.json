@@ -1,0 +1,16 @@
+{
+  "eventId": "c8d2e5a1-4f37-4b69-a0c3-7e1d9b5f2a46",
+  "eventType": "parcel.status-changed",
+  "version": 1,
+  "occurredAt": "2026-11-21T11:15:00Z",
+  "producer": "delivery-operations-service",
+  "data": {
+    "parcelId": "7e1a3b5c-9d2f-4a8b-b6e1-2f5c8d0a7e99",
+    "trackingNumber": "SWD-2026-001234",
+    "status": "FAILED",
+    "previousStatus": "OUT_FOR_DELIVERY",
+    "customerUserId": "8f3c2a10-4b7d-4e9a-a1c2-5d6e7f809a1b",
+    "failureReason": "The recipient was not available",
+    "changedAt": "2026-11-21T11:15:00Z"
+  }
+}

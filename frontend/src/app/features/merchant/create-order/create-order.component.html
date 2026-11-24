@@ -74,6 +74,18 @@
             </label>
             <input id="pickup-postal" type="text" class="sd-input" formControlName="postalCode" placeholder="00300" />
           </div>
+          <div class="sd-field">
+            <label class="sd-label" for="pickup-zone">
+              Pickup Zone <span class="sd-label__optional">(optional)</span>
+            </label>
+            <select id="pickup-zone" class="sd-input" formControlName="zoneCode" aria-describedby="pickup-zone-help">
+              <option value="">Not specified</option>
+              @for (zone of zones(); track zone.code) {
+                <option [value]="zone.code">{{ zone.name }}</option>
+              }
+            </select>
+            <p id="pickup-zone-help" class="sd-help">Helps dispatchers plan the pickup route.</p>
+          </div>
         </div>
       </section>
 
@@ -133,6 +145,33 @@
             </label>
             <input id="delivery-postal" type="text" class="sd-input" formControlName="postalCode" placeholder="20000" />
           </div>
+          <div class="sd-field">
+            <label class="sd-label" for="delivery-zone">
+              Delivery Zone <span class="required-star">*</span>
+            </label>
+            <select
+              id="delivery-zone"
+              class="sd-input"
+              formControlName="zoneCode"
+              [attr.aria-describedby]="isFieldInvalid('deliveryAddress.zoneCode') ? 'delivery-zone-help delivery-zone-error' : 'delivery-zone-help'"
+              [attr.aria-invalid]="isFieldInvalid('deliveryAddress.zoneCode')"
+            >
+              <option value="" disabled>Select the recipient's zone</option>
+              @for (zone of zones(); track zone.code) {
+                <option [value]="zone.code">{{ zone.name }}</option>
+              }
+            </select>
+            <p id="delivery-zone-help" class="sd-help">The zone decides the zone charge in your delivery fee.</p>
+            @if (isFieldInvalid('deliveryAddress.zoneCode')) {
+              <p id="delivery-zone-error" class="sd-error">Choose the delivery zone.</p>
+            }
+            @if (zonesError()) {
+              <p class="sd-error" role="alert">
+                {{ zonesError() }}
+                <button type="button" class="sd-link" (click)="loadZones()">Retry</button>
+              </p>
+            }
+          </div>
         </div>
       </section>
 
@@ -150,11 +189,12 @@
             <label class="sd-label" for="parcel-weight">
               Weight (kg) <span class="required-star">*</span>
             </label>
-            <input id="parcel-weight" type="number" step="0.05" min="0.01" max="500" class="sd-input" formControlName="weightKg"
+            <input id="parcel-weight" type="number" inputmode="decimal" step="0.05" min="0.01" max="50" class="sd-input" formControlName="weightKg"
+              [attr.aria-describedby]="isFieldInvalid('weightKg') ? 'parcel-weight-help parcel-weight-error' : 'parcel-weight-help'"
               [attr.aria-invalid]="isFieldInvalid('weightKg')" />
-            <p class="sd-help">Base calculation: Rs. 150.00 per kg</p>
+            <p id="parcel-weight-help" class="sd-help">Between 0.01 and 50 kg. Priced by the current SwiftDrop pricing rule.</p>
             @if (isFieldInvalid('weightKg')) {
-              <p class="sd-error">Weight must be greater than 0 kg.</p>
+              <p id="parcel-weight-error" class="sd-error">Weight must be between 0.01 and 50 kg.</p>
             }
           </div>
           <div class="sd-field">
@@ -163,6 +203,30 @@
             </label>
             <input id="parcel-desc" type="text" class="sd-input" formControlName="description" placeholder="e.g. Documents, Electronic accessories, Apparel" />
             <p class="sd-help">Short summary of parcel contents</p>
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="cod-amount">
+              COD amount (LKR) <span class="required-star">*</span>
+            </label>
+            <input id="cod-amount" type="number" inputmode="decimal" step="0.01" min="0.01" class="sd-input" formControlName="codAmount"
+              [attr.aria-describedby]="isFieldInvalid('codAmount') ? 'cod-amount-help cod-amount-error' : 'cod-amount-help'"
+              [attr.aria-invalid]="isFieldInvalid('codAmount')" />
+            <p id="cod-amount-help" class="sd-help">Cash the courier collects from the recipient at delivery.</p>
+            @if (isFieldInvalid('codAmount')) {
+              <p id="cod-amount-error" class="sd-error">Enter the amount to collect, greater than 0.</p>
+            }
+          </div>
+          <div class="sd-field">
+            <label class="sd-label" for="merchant-reference">
+              Your order number <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input id="merchant-reference" type="text" class="sd-input" formControlName="merchantReference" placeholder="e.g. SHOP-1001"
+              [attr.aria-describedby]="isFieldInvalid('merchantReference') ? 'merchant-reference-help merchant-reference-error' : 'merchant-reference-help'"
+              [attr.aria-invalid]="isFieldInvalid('merchantReference')" />
+            <p id="merchant-reference-help" class="sd-help">Your own reference. Each number can be used once.</p>
+            @if (isFieldInvalid('merchantReference')) {
+              <p id="merchant-reference-error" class="sd-error">Use letters, digits, '.', '_', '/' or '-' (up to 100).</p>
+            }
           </div>
         </div>
       </section>
@@ -176,10 +240,11 @@
             <p class="form-section__desc">Select dispatch priority according to SwiftDrop service levels</p>
           </div>
         </div>
-        <div class="urgency-cards">
+        <div class="urgency-cards" role="radiogroup" aria-label="Delivery speed">
           <!-- Standard Delivery Card -->
           <div class="urgency-card" [class.urgency-card--selected]="selectedUrgency === 'NORMAL'"
-               (click)="setUrgency('NORMAL')" tabindex="0" role="radio" [attr.aria-checked]="selectedUrgency === 'NORMAL'">
+               (click)="setUrgency('NORMAL')" (keydown.enter)="setUrgency('NORMAL')" (keydown.space)="$event.preventDefault(); setUrgency('NORMAL')"
+               tabindex="0" role="radio" [attr.aria-checked]="selectedUrgency === 'NORMAL'">
             <div class="urgency-card__top">
               <span class="sd-badge">Standard Service</span>
               <span class="urgency-card__radio"><span class="radio-inner" *ngIf="selectedUrgency === 'NORMAL'"></span></span>
@@ -190,16 +255,27 @@
           </div>
           <!-- Urgent Delivery Card -->
           <div class="urgency-card urgency-card--urgent" [class.urgency-card--selected]="selectedUrgency === 'URGENT'"
-               (click)="setUrgency('URGENT')" tabindex="0" role="radio" [attr.aria-checked]="selectedUrgency === 'URGENT'">
+               (click)="setUrgency('URGENT')" (keydown.enter)="setUrgency('URGENT')" (keydown.space)="$event.preventDefault(); setUrgency('URGENT')"
+               tabindex="0" role="radio" [attr.aria-checked]="selectedUrgency === 'URGENT'">
             <div class="urgency-card__top">
               <span class="sd-badge sd-badge--warning">Urgent - requested today</span>
               <span class="urgency-card__radio urgency-card__radio--urgent"><span class="radio-inner radio-inner--urgent" *ngIf="selectedUrgency === 'URGENT'"></span></span>
             </div>
             <h3 class="urgency-card__name">Urgent Priority Dispatch</h3>
             <p class="urgency-card__desc">Tagged for immediate pickup and high-priority sorting. Same-day or next-available express courier dispatch.</p>
-            <div class="urgency-card__tag urgency-card__tag--warning">+Rs. 300.00 Priority Surcharge</div>
+            <div class="urgency-card__tag urgency-card__tag--warning">Urgent surcharge shown in the fee summary</div>
           </div>
         </div>
+        @if (selectedUrgency === 'URGENT') {
+          <div class="sd-field">
+            <label class="sd-label" for="urgent-note">
+              Note for the courier <span class="sd-label__optional">(optional)</span>
+            </label>
+            <input id="urgent-note" type="text" class="sd-input" formControlName="urgentNote" placeholder="e.g. Deliver before 5 pm"
+              aria-describedby="urgent-note-help" />
+            <p id="urgent-note-help" class="sd-help">An urgent tag is a request, not a same-day guarantee.</p>
+          </div>
+        }
       </section>
     </div>
 
@@ -208,32 +284,54 @@
       <div class="sd-card summary-card">
         <h2 class="summary-card__title">Delivery Fee Summary</h2>
         <div class="summary-card__divider"></div>
-        <dl class="summary-breakdown">
+        <dl class="summary-breakdown" aria-live="polite" [attr.aria-busy]="quoteLoading()">
           <div class="breakdown-row">
             <dt>Base Handling Fee</dt>
-            <dd class="sd-tabular">Rs. {{ feeBreakdown().baseFee | number:'1.2-2' }}</dd>
+            <dd class="sd-tabular">LKR {{ feeBreakdown().baseFee | number:'1.2-2' }}</dd>
           </div>
           <div class="breakdown-row">
             <dt>
               Weight Charge
-              <span class="breakdown-sub sd-tabular">({{ bookingForm.get('weightKg')?.value || 0 }} kg × Rs. 150)</span>
+              <span class="breakdown-sub sd-tabular">({{ bookingForm.get('weightKg')?.value || 0 }} kg × LKR {{ (feeBreakdown().ratePerKg ?? 0) | number:'1.2-2' }})</span>
             </dt>
-            <dd class="sd-tabular">Rs. {{ feeBreakdown().weightFee | number:'1.2-2' }}</dd>
+            <dd class="sd-tabular">LKR {{ feeBreakdown().weightFee | number:'1.2-2' }}</dd>
+          </div>
+          <div class="breakdown-row">
+            <dt>
+              Zone Charge
+              <span class="breakdown-sub">({{ zoneName(bookingForm.get('deliveryAddress.zoneCode')?.value) }})</span>
+            </dt>
+            <dd class="sd-tabular">LKR {{ (feeBreakdown().zoneCharge ?? 0) | number:'1.2-2' }}</dd>
           </div>
           @if (selectedUrgency === 'URGENT') {
             <div class="breakdown-row breakdown-row--urgent">
               <dt>
-                Urgent Priority Tag
-                <span class="sd-badge sd-badge--warning pill-small">Urgent</span>
+                Urgent Surcharge
+                <span class="sd-badge sd-badge--warning pill-small">Urgent - requested today</span>
               </dt>
-              <dd class="sd-tabular">+Rs. {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }}</dd>
+              <dd class="sd-tabular">+LKR {{ feeBreakdown().urgencySurcharge | number:'1.2-2' }}</dd>
             </div>
           }
           <div class="summary-total">
-            <dt>Total Estimated Fee</dt>
-            <dd class="sd-tabular total-val">Rs. {{ feeBreakdown().totalFee | number:'1.2-2' }}</dd>
+            <dt>Total Delivery Fee</dt>
+            <dd class="sd-tabular total-val">LKR {{ feeBreakdown().totalFee | number:'1.2-2' }}</dd>
           </div>
+          @if (bookingForm.get('codAmount')?.value) {
+            <div class="breakdown-row">
+              <dt>COD to collect from recipient</dt>
+              <dd class="sd-tabular">LKR {{ bookingForm.get('codAmount')?.value | number:'1.2-2' }}</dd>
+            </div>
+          }
         </dl>
+        @if (quoteLoading()) {
+          <p class="sd-help">Updating the fee...</p>
+        }
+        @if (quoteError()) {
+          <p class="sd-error" role="alert">{{ quoteError() }}</p>
+        }
+        @if (!bookingForm.get('deliveryAddress.zoneCode')?.value) {
+          <p class="sd-help">Choose the delivery zone to include its zone charge.</p>
+        }
         <div class="summary-perks">
           <div class="perk-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -258,7 +356,8 @@
           }
         </button>
         <p class="summary-footer-note">
-          By confirming, you agree to SwiftDrop courier terms of carriage. Fee will be collected at pickup or via online payment.
+          By confirming, you agree to SwiftDrop courier terms of carriage. The courier collects the COD amount from the
+          recipient at delivery. The order then appears in My Bookings with its tracking number and receipt.
         </p>
       </div>
     </aside>

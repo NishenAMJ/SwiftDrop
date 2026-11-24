@@ -16,7 +16,7 @@ export class AiChatbotService {
         'You can book a parcel from the Book Parcel page. Enter the pickup and delivery details, parcel weight, and preferred delivery urgency before confirming.';
     } else if (normalizedMessage.includes('payment')) {
       response =
-        'SwiftDrop supports secure online payments through the available payment options at checkout. Your payment status is shown on the booking receipt.';
+        'Cash on delivery is available. Online payments are currently unavailable. Your payment status is shown on the booking receipt.';
     } else if (normalizedMessage.includes('deliver')) {
       response =
         'Delivery updates appear in your booking history as the parcel moves through pickup, transit, and delivery. The latest status is shown on each booking.';
