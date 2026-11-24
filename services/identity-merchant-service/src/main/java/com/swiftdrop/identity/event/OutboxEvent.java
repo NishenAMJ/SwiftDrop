@@ -59,4 +59,8 @@ public class OutboxEvent {
     public Instant getPublishedAt() {
         return publishedAt;
     }
+
+    void markPublished(Instant when) {
+        this.publishedAt = when;
+    }
 }

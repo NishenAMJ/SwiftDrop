@@ -55,6 +55,10 @@ services:
       DISPATCHER_BOOTSTRAP_NAME: ${DISPATCHER_BOOTSTRAP_NAME:-SwiftDrop Dispatcher}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Not in depends_on on purpose: events wait in the outbox until RabbitMQ is reachable.
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
