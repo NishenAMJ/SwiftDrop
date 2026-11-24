@@ -11,7 +11,14 @@ import com.swiftdrop.identity.ratelimit.Limit;
  */
 @ConfigurationProperties("swiftdrop.identity")
 public record IdentityProperties(Jwt jwt, RefreshToken refreshToken, Bootstrap bootstrap, RateLimit rateLimit,
-        Google google, String frontendBaseUrl) {
+        Google google, String frontendBaseUrl, Outbox outbox) {
+
+    /**
+     * Sending outbox events to RabbitMQ. {@code publishEnabled} turns the background publisher
+     * off (tests call it directly); events are still recorded either way.
+     */
+    public record Outbox(boolean publishEnabled, int batchSize, Duration maxRetryDelay) {
+    }
 
     /**
      * @param privateKeyPath PEM file (PKCS#8) with the RSA signing key. Empty means a temporary key.

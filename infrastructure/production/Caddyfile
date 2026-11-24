@@ -1,0 +1,45 @@
+{
+    email {$ACME_EMAIL}
+    admin off
+}
+
+# Container-local liveness check, deliberately not a published port.
+http://:8088 {
+    bind 127.0.0.1
+    respond /healthz "ok" 200
+}
+
+{$APP_DOMAIN} {
+    root * /srv
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+    # Do not retain request URLs (tracking numbers/OAuth codes) in access logs.
+    # Caddy's operational and TLS errors still go to container stderr.
+    @private path /actuator /actuator/* /internal /internal/* /dev /dev/*
+    handle @private {
+        respond "Not found" 404
+    }
+    @api path /api /api/* /oauth2/* /login/oauth2/* /.well-known/jwks.json
+    handle @api {
+        reverse_proxy api-gateway:8080 {
+            header_up -Forwarded
+            header_up -X-Forwarded-Prefix
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Port 443
+        }
+    }
+    handle {
+        # Client-side Angular routes must return index.html, not a server 404.
+        try_files {path} /index.html
+        header Cache-Control "no-cache"
+        file_server
+    }
+}

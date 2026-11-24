@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ONLINE_PAYMENTS_ENABLED } from '../../../core/config/payment-features';
 import { PaymentService } from '../payment.service';
 import { CancellationRefund, CancellationRefundPage, EvidenceType, Payment, PaymentPage, RecoveryAudit, Refund } from '../payment.models';
 
@@ -14,6 +15,7 @@ import { CancellationRefund, CancellationRefundPage, EvidenceType, Payment, Paym
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PaymentHistoryPage implements OnInit {
+  readonly onlinePaymentsEnabled = inject(ONLINE_PAYMENTS_ENABLED);
   private readonly api = inject(PaymentService);
   private readonly auth = inject(AuthService);
   private readonly fb = inject(FormBuilder);
@@ -141,10 +143,11 @@ export class PaymentHistoryPage implements OnInit {
   }
 
   canRefund(payment: Payment): boolean {
-    return this.dispatcher && ['SUCCESS', 'PARTIALLY_REFUNDED'].includes(payment.status);
+    return this.onlinePaymentsEnabled && this.dispatcher && ['SUCCESS', 'PARTIALLY_REFUNDED'].includes(payment.status);
   }
 
   createRefund(): void {
+    if (!this.onlinePaymentsEnabled) return;
     const payment = this.selectedPayment();
     if (!payment || this.refundForm.invalid || this.busy()) {
       this.refundForm.markAllAsTouched();
@@ -190,6 +193,7 @@ export class PaymentHistoryPage implements OnInit {
   }
 
   retryRefund(): void {
+    if (!this.onlinePaymentsEnabled) return;
     const payment = this.selectedPayment();
     const refund = this.currentRefund();
     if (!payment || !refund || refund.status !== 'PENDING' || this.retryForm.invalid || this.busy()) {

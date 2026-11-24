@@ -377,9 +377,12 @@
         <div class="urgency-cards">
           <!-- Online Card Payment -->
           <div
+            *ngIf="onlinePaymentsEnabled"
             class="urgency-card"
             [class.urgency-card--selected]="selectedPaymentMethod === 'ONLINE'"
             (click)="setPaymentMethod('ONLINE')"
+            (keydown.enter)="setPaymentMethod('ONLINE')"
+            (keydown.space)="$event.preventDefault(); setPaymentMethod('ONLINE')"
             tabindex="0"
             role="radio"
             [attr.aria-checked]="selectedPaymentMethod === 'ONLINE'"
@@ -402,6 +405,8 @@
             class="urgency-card"
             [class.urgency-card--selected]="selectedPaymentMethod === 'COD'"
             (click)="setPaymentMethod('COD')"
+            (keydown.enter)="setPaymentMethod('COD')"
+            (keydown.space)="$event.preventDefault(); setPaymentMethod('COD')"
             tabindex="0"
             role="radio"
             [attr.aria-checked]="selectedPaymentMethod === 'COD'"
@@ -419,6 +424,7 @@
             <div class="urgency-card__tag">No online card required</div>
           </div>
         </div>
+        <p *ngIf="!onlinePaymentsEnabled" class="sd-help">Online payments are currently unavailable. Cash on delivery is available.</p>
       </section>
     </div>
 

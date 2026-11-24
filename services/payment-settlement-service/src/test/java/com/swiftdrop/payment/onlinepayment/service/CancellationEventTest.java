@@ -15,6 +15,11 @@ class CancellationEventTest {
         "cancellationFee":0,"refundAmount":0}}
         """; }
     @Test void acceptsCodWithoutPaymentId() { assertNull(CancellationEvent.parse(body(),json).paymentId()); }
+    @Test void rejectsCodReferencingAnOnlinePayment() {
+        String input = body().replace("\"paymentMethod\":\"COD\"",
+            "\"paymentId\":\"00000000-0000-0000-0000-000000000004\",\"paymentMethod\":\"COD\"");
+        assertThrows(IllegalArgumentException.class, () -> CancellationEvent.parse(input,json));
+    }
     @Test void rejectsOnlineWithoutPaymentId() { assertThrows(IllegalArgumentException.class,()->CancellationEvent.parse(body().replace("COD","ONLINE"),json)); }
     @Test void rejectsMalformedEnvelopeAndDates() {
         for(String input:new String[]{"null","{}","{",body().replace("2026-11-22T00:00:00Z","bad"),body().replace("\"version\":1","\"version\":1.5")})

@@ -60,6 +60,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Skipped automatically when Docker is not running.
  */
 @SpringBootTest(properties = {
+        "swiftdrop.bookings.online-payments-enabled=true",
         // Never read the developer's local .env passwords in tests.
         "spring.config.import=",
         "swiftdrop.events.publisher.delay-ms=200",

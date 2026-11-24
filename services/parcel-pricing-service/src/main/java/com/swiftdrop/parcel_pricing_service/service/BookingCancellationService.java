@@ -31,6 +31,8 @@ import java.util.UUID;
 @Service
 @Transactional
 public class BookingCancellationService {
+    @Value("${swiftdrop.bookings.online-payments-enabled:false}")
+    private boolean onlinePaymentsEnabled;
 
     private final ParcelRepository parcels;
     private final ParcelEventPublisher events;
@@ -118,9 +120,11 @@ public class BookingCancellationService {
     }
 
     /** @return null when the booking can be cancelled, otherwise a reason for the customer. */
-    private static String ineligibleReason(Parcel parcel) {
+    private String ineligibleReason(Parcel parcel) {
         String status = parcel.getStatus();
         if (BookingStatus.CANCELLED.equals(status)) return "This booking is already cancelled.";
+        if (PaymentMethod.ONLINE.name().equals(parcel.getPaymentMethod()) && !onlinePaymentsEnabled)
+            return "Online refunds are currently unavailable. Contact support about cancelling this paid booking.";
         if (BookingStatus.UNPAID_DRAFTS.contains(status) || !BookingService.isVisibleBooking(parcel)) {
             return "This booking was never confirmed, so there is nothing to cancel.";
         }

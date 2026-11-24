@@ -24,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest(properties = {"payment.workers.enabled=false", "payment.cod.consumer.enabled=false",
+@SpringBootTest(properties = {"payment.online.enabled=true", "payment.workers.enabled=false", "payment.cod.consumer.enabled=false",
     "payment.cancellation.consumer.enabled=false", "spring.rabbitmq.host=localhost", "spring.rabbitmq.port=56785",
     "spring.rabbitmq.username=paymenttest", "spring.rabbitmq.password=payment-test-only", "spring.config.import=", "spring.flyway.create-schemas=true", "debug=false"})
 @EnabledIfEnvironmentVariable(named = "PAYMENT_TEST_DB_URL", matches = ".+")

@@ -63,6 +63,8 @@ management:
           include: readinessState,db,rabbit
 
 payment:
+  online:
+    enabled: ${PAYMENT_ONLINE_ENABLED:false}
   cancellation:
     consumer:
       enabled: ${PAYMENT_CANCELLATION_CONSUMER_ENABLED:false}

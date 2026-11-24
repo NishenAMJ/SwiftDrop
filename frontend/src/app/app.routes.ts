@@ -50,6 +50,8 @@ export const routes: Routes = [
     ],
   },
   {
+    // Customer portal (parcel-pricing team), with its own layout. Dispatcher accounts have no
+    // CUSTOMER role, so they are sent to their account page instead.
     path: 'customer',
     canActivate: [roleGuard('CUSTOMER')],
     loadComponent: () =>
@@ -64,6 +66,16 @@ export const routes: Routes = [
       import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   {
+    path: 'warehouse',
+    title: 'Warehouse operations | SwiftDrop',
+    canActivate: [roleGuard('DISPATCHER')],
+    loadComponent: () =>
+      import('./features/warehouse/warehouse-dashboard/warehouse-dashboard').then(
+        (m) => m.WarehouseDashboard,
+      ),
+  },
+  {
+    // Signed-in screens in the role-aware app layout. Every child also checks its own role.
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./core/layout/app-layout/app-layout').then((m) => m.AppLayout),

@@ -34,6 +34,17 @@ spring:
       pageable:
         max-page-size: 100
 
+  # Identity events (user.*, merchant.*, courier.*) go to the swiftdrop.identity exchange.
+  # If RabbitMQ is down they wait in the outbox table; login and registration keep working.
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    connection-timeout: 5s
+    # An event counts as sent only once RabbitMQ confirms it.
+    publisher-confirm-type: correlated
+
 swiftdrop:
   identity:
     jwt:
@@ -70,8 +81,16 @@ swiftdrop:
       refresh-per-ip: { requests: 120, per: 1m }
       api-key-exchange-per-ip: { requests: 60, per: 1m }
       password-failures-per-user: { requests: 5, per: 15m }
+    outbox:
+      publish-enabled: ${IDENTITY_OUTBOX_PUBLISH_ENABLED:true}
+      batch-size: 50
+      max-retry-delay: 60s
 
 management:
+  health:
+    # Health stays UP while RabbitMQ is down: events wait in the outbox, and login still works.
+    rabbit:
+      enabled: false
   endpoints:
     web:
       exposure:

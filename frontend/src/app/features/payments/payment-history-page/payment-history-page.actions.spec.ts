@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { CancellationRefund, Payment, PaymentPage, Refund } from '../payment.models';
 import { PaymentService } from '../payment.service';
 import { PaymentHistoryPage } from './payment-history-page';
+import { ONLINE_PAYMENTS_ENABLED } from '../../../core/config/payment-features';
 
 const REFUND_ID = '3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 
@@ -63,6 +64,7 @@ function setup(roles: string[], overrides: Partial<Record<keyof PaymentService, 
   TestBed.configureTestingModule({
     imports: [PaymentHistoryPage],
     providers: [
+      { provide: ONLINE_PAYMENTS_ENABLED, useValue: true },
       provideRouter([]),
       { provide: AuthService, useValue: { roles: () => roles } },
       { provide: PaymentService, useValue: api },

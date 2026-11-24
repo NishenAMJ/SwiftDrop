@@ -1,2 +1,5 @@
 # Maven shell wrappers must use Unix line endings for Linux containers.
 mvnw text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
