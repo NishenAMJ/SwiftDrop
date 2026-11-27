@@ -55,7 +55,7 @@ class DispatcherBootstrapTests {
 
     private DispatcherBootstrap bootstrap(String email, String password) {
         IdentityProperties properties = new IdentityProperties(null, null,
-                new IdentityProperties.Bootstrap(email, password, "SwiftDrop Dispatcher"), null, null, null);
+                new IdentityProperties.Bootstrap(email, password, "SwiftDrop Dispatcher"), null, null, null, null);
         return new DispatcherBootstrap(userService, properties);
     }
 }

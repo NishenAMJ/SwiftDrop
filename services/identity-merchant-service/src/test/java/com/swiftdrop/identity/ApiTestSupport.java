@@ -34,7 +34,11 @@ import com.swiftdrop.identity.user.UserService;
 @SpringBootTest
 @AutoConfigureMockMvc
 // Tests make many requests from one address; RateLimitTests turns limiting back on.
-@TestPropertySource(properties = "swiftdrop.identity.rate-limit.enabled=false")
+// The background outbox publisher is off so tests decide when events are sent (OutboxPublisherTests).
+@TestPropertySource(properties = {
+    "swiftdrop.identity.rate-limit.enabled=false",
+    "swiftdrop.identity.outbox.publish-enabled=false",
+})
 public abstract class ApiTestSupport {
 
     protected static final String PASSWORD = "Correct-horse-42";
