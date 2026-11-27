@@ -305,11 +305,16 @@ class PaymentIntegrationTest {
 
     @Test void codCancellationDoesNotReserveRefund() {
         UUID event=UUID.randomUUID();
-        String body=cancellation(event,UUID.randomUUID(),UUID.randomUUID(),"0.00")
-                .replace("ONLINE","COD").replace("100.00","0.00");
+        String body="""
+            {"eventId":"%s","eventType":"parcel.cancelled","version":1,"producer":"parcel-pricing-service",
+             "occurredAt":"2026-11-22T00:00:00Z","data":{"parcelId":"%s",
+             "customerUserId":"%s","paymentMethod":"COD","deliveryStatus":"CANCELLED",
+             "cancelledAt":"2026-11-22T00:00:00Z","cancellationFee":0.00,"refundAmount":0.00}}
+            """.formatted(event,UUID.randomUUID(),customerId);
         cancellations.accept(body); cancellations.processNext();
         assertEquals("COMPLETED",cancellations.get(event,admin).get("status"));
         assertEquals(0,db.queryForObject("SELECT count(*) FROM payment_settlement.payment_transactions",Integer.class));
+        verify(provider,never()).refund(anyString(),any(),anyString());
     }
     @Test void zeroTargetValidatesPaymentButDoesNotMoveMoney() {
         UUID payment=paid(), booking=UUID.randomUUID(), event=UUID.randomUUID();
