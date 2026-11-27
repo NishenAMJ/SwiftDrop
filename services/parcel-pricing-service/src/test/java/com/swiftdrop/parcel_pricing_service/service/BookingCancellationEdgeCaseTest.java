@@ -30,6 +30,12 @@ class BookingCancellationEdgeCaseTest {
         return new BookingCancellationService(repo, events, new BigDecimal(fee));
     }
 
+    private BookingCancellationService onlineService(String fee) {
+        BookingCancellationService service = service(fee);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "onlinePaymentsEnabled", true);
+        return service;
+    }
+
     private static Jwt jwt(UUID id) {
         return Jwt.withTokenValue("test").header("alg", "RS256").subject(id.toString()).build();
     }
@@ -74,11 +80,11 @@ class BookingCancellationEdgeCaseTest {
     @Test
     void cancellationFeeIsCappedAtWhatWasPaid() {
         Parcel p = parcel("BOOKED", "ONLINE", "PAID");
-        var eligibility = service("900.00").eligibility(p.getId(), jwt(p.getCustomerId()));
+        var eligibility = onlineService("900.00").eligibility(p.getId(), jwt(p.getCustomerId()));
         assertThat(eligibility.cancellationFee()).isEqualByComparingTo("550.00");
         assertThat(eligibility.refundableAmount()).isEqualByComparingTo("0");
 
-        var result = service("900.00").initiate(p.getId(), jwt(p.getCustomerId()));
+        var result = onlineService("900.00").initiate(p.getId(), jwt(p.getCustomerId()));
         assertThat(result.refundAmount()).isEqualByComparingTo("0");
         assertThat(result.cancellationStatus()).isEqualTo("COMPLETED");
     }
@@ -86,7 +92,7 @@ class BookingCancellationEdgeCaseTest {
     @Test
     void negativeConfiguredFeeIsTreatedAsZero() {
         Parcel p = parcel("BOOKED", "ONLINE", "PAID");
-        var result = service("-50").initiate(p.getId(), jwt(p.getCustomerId()));
+        var result = onlineService("-50").initiate(p.getId(), jwt(p.getCustomerId()));
         assertThat(result.cancellationFee()).isEqualByComparingTo("0");
         assertThat(result.refundAmount()).isEqualByComparingTo("550.00");
         assertThat(result.cancellationStatus()).isEqualTo("REFUND_PENDING");

@@ -123,8 +123,6 @@ public class BookingCancellationService {
     private String ineligibleReason(Parcel parcel) {
         String status = parcel.getStatus();
         if (BookingStatus.CANCELLED.equals(status)) return "This booking is already cancelled.";
-        if (PaymentMethod.ONLINE.name().equals(parcel.getPaymentMethod()) && !onlinePaymentsEnabled)
-            return "Online refunds are currently unavailable. Contact support about cancelling this paid booking.";
         if (BookingStatus.UNPAID_DRAFTS.contains(status) || !BookingService.isVisibleBooking(parcel)) {
             return "This booking was never confirmed, so there is nothing to cancel.";
         }
@@ -132,6 +130,8 @@ public class BookingCancellationService {
         if (!BookingStatus.BOOKED.equals(status)) {
             return "A courier has already been scheduled for this parcel, so it can no longer be cancelled.";
         }
+        if (PaymentMethod.ONLINE.name().equals(parcel.getPaymentMethod()) && !onlinePaymentsEnabled)
+            return "Online refunds are currently unavailable. Contact support about cancelling this paid booking.";
         return null;
     }
 }
