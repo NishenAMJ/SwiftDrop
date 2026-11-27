@@ -1,9 +1,5 @@
 import { Routes } from '@angular/router';
 
-/**
- * Dispatcher screens. The parent route in app.routes.ts already requires the DISPATCHER role and
- * renders these inside the role-aware app layout, whose sidebar links to each page.
- * Identity: merchant/courier approvals and users. Parcel pricing: delivery zones and pricing rules.
 import { AppLayout } from '../../core/layout/app-layout/app-layout';
 
 /**

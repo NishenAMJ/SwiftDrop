@@ -60,11 +60,10 @@ export const routes: Routes = [
       import('./features/customer/customer.routes').then((m) => m.CUSTOMER_ROUTES),
   },
   {
-    path: 'tracking',
     path: 'dispatcher',
     canActivate: [roleGuard('DISPATCHER')],
     loadChildren: () =>
-      import('./features/tracking/tracking.routes').then((m) => m.TRACKING_ROUTES),
+      import('./features/dispatcher/dispatcher.routes').then((m) => m.DISPATCHER_ROUTES),
   },
   {
     path: 'warehouse',
