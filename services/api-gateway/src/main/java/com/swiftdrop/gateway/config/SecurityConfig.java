@@ -29,6 +29,7 @@ public class SecurityConfig {
                                 "/api/v1/public/tracking/{trackingNumber}",
                                 "/api/v1/public/tracking/{trackingNumber}/history").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/v1/payments/callbacks/payhere").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/ai/chat").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> { }))
                 .requestCache(requestCache -> requestCache.requestCache(NoOpServerRequestCache.getInstance()))

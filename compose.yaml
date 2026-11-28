@@ -215,6 +215,9 @@ services:
       TRACKING_SERVICE_URI: ${GATEWAY_TRACKING_SERVICE_URI:-http://tracking-reporting-service:8084}
       PAYMENT_SERVICE_URI: http://payment-settlement-service:8085
       NOTIFICATION_SERVICE_URI: ${GATEWAY_NOTIFICATION_SERVICE_URI:-http://notification-webhook-service:8086}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
