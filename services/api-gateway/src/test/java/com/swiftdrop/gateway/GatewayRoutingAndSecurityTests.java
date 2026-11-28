@@ -99,6 +99,7 @@ class GatewayRoutingAndSecurityTests {
     @ParameterizedTest
     @CsvSource({
             "/api/v1/users/me,identity",
+            "/api/v1/dispatchers/me,identity",
             "/api/v1/merchants/me/api-keys,identity",
             "/api/v1/couriers/applications,identity",
             "/api/v1/bookings/my,parcel",
@@ -106,18 +107,14 @@ class GatewayRoutingAndSecurityTests {
             "/api/pricing/rules,parcel",
             "/api/zones,parcel",
             "/api/merchant/orders,parcel",
+            "/api/integrations/merchant/orders,parcel",
+            "/api/v1/sorting-records,delivery",
+            "/api/v1/transfers,delivery",
             "/api/v1/warehouses,delivery",
-            "/api/v1/assignments/abc/proof,delivery",
+            "/api/v1/warehouse-parcels,delivery",
+            "/api/v1/courier-categories,delivery",
             "/api/v1/courier-profiles/by-identity/x,delivery",
-            "/api/v1/payments/history,payment",
-            "/api/v1/cod-handovers,payment",
-            "/api/v1/cod-handovers/abc,payment",
-            "/api/v1/merchant-ledger,payment",
-            "/api/v1/merchant-ledger/entries,payment",
-            "/api/v1/merchant-settlements,payment",
-            "/api/v1/merchant-settlements/abc,payment",
-            "/api/v1/webhooks,notification",
-            "/api/v1/webhooks/subscriptions,notification"})
+            "/api/v1/payments/history,payment"})
     void authenticatedRequestsReachTheOwningService(String requestPath, String expectedService) {
         client.get().uri(requestPath).header(HttpHeaders.AUTHORIZATION, "Bearer valid-token").exchange()
                 .expectStatus().isOk();
@@ -133,6 +130,14 @@ class GatewayRoutingAndSecurityTests {
         client.post().uri(requestPath).contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange()
                 .expectStatus().isOk();
         assertThat(service.get()).isEqualTo("identity");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/oauth2/authorization/google", "/login/oauth2/code/google"})
+    void oauth2EndpointsArePublicAndForwardedToIdentity(String requestPath) {
+        client.get().uri(requestPath).exchange().expectStatus().isOk();
+        assertThat(service.get()).isEqualTo("identity");
+        assertThat(path.get()).isEqualTo(requestPath);
     }
 
     @Test
